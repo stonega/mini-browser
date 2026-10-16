@@ -5,6 +5,7 @@ A native GNOME web browser with a small footprint on your screen.
 - A native GNOME header bar with the page title and close button, plus web content.
 - One page per window, including links that open a new window.
 - A resizable **420 × 780** portrait window by default.
+- A home page with a search/address bar and recently opened site tiles.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
 - Shared, persistent website sessions across Mini Browser windows.
@@ -18,7 +19,7 @@ Build and install the native system package:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-*.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.2-1.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 
@@ -43,8 +44,9 @@ From this directory:
 ./scripts/run 'weather in Taipei'
 ```
 
-Each argument opens its own window. The start page lets you enter an address,
-import Chrome data, or open your library. While browsing, the header bar sits
+Each argument opens its own window. The home page has a search/address field
+and tiles for recently opened sites. The header bar's gear button opens Settings
+for imports, passwords, and your library. While browsing, the header bar sits
 above the page. The narrow window lets responsive websites use their compact
 layout; the browser keeps WebKit's normal user agent.
 
@@ -53,6 +55,8 @@ layout; the browser keeps WebKit's normal user agent.
 | Action | Shortcut |
 | --- | --- |
 | Open an address or search | Ctrl+L |
+| Home page | Alt+Home |
+| Settings | Ctrl+, |
 | New window | Ctrl+N |
 | Close window | Ctrl+W |
 | Back / forward | Alt+Left / Alt+Right |
@@ -71,7 +75,7 @@ Drag the native header bar to move the window. Resize from the window edges as u
 
 ## Import from Chrome
 
-Use **Import from Chrome** on the start page or **Ctrl+Shift+I**. Select a detected
+Use **Settings → Import bookmarks and history** or **Ctrl+Shift+I**. Select a detected
 profile, or choose a profile folder containing `Bookmarks` and/or `History`.
 Choose the data types and click **Import selected data**. Open imported items
 with **Ctrl+B**. Imports merge by URL and can be repeated.
@@ -88,7 +92,7 @@ files are changed. See [the user guide](docs/user/usage.md).
 
 ## Password vault
 
-Open **Passwords** on the start page or press **Ctrl+Shift+P**. Create a
+Open **Settings → Passwords** or press **Ctrl+Shift+P**. Create a
 **six-digit PIN**, then import Chrome's password CSV. Leading zeroes are supported.
 The vault
 uses Argon2id and AES-256-GCM through `cryptography` 44+; it does not use GNOME

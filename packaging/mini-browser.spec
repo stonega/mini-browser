@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.2.1
+Version:        0.2.2
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later
@@ -55,5 +55,8 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_mandir}/man1/mini-browser.1*
 
 %changelog
+* Fri Oct 16 2026 Mini Browser contributors - 0.2.2-1
+- Simplify home to search and recent sites; move import controls into Settings.
+
 * Fri Oct 16 2026 Mini Browser contributors - 0.2.1-1
 - Package native header bar, six-digit PIN vault and Chrome data import.

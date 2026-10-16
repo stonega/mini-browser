@@ -1,4 +1,4 @@
-.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.2.1" "User Commands"
+.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.2.2" "User Commands"
 .SH NAME
 mini-browser \- a small native GNOME web browser
 .SH SYNOPSIS
@@ -8,6 +8,8 @@ mini-browser \- a small native GNOME web browser
 Mini Browser opens one page per resizable portrait window, with a native
 GNOME header bar. Each command-line argument opens a separate window.
 Quote search terms containing spaces. Without arguments, the start page opens.
+It contains an address/search field and tiles for recently opened sites.
+The header bar's gear button opens Settings, including Chrome data import.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help
@@ -19,6 +21,12 @@ Show the application version.
 .TP
 .B Ctrl+L
 Open the address and search dialog.
+.TP
+.B Alt+Home
+Return to the home page.
+.TP
+.B Ctrl+,
+Open Settings.
 .TP
 .B Ctrl+N / Ctrl+W
 Open a new window / close the current window.

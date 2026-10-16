@@ -64,6 +64,8 @@ class BrowserApplication(Adw.Application):
             "app.new-window": ["<Primary>n"],
             "app.quit": ["<Primary>q"],
             "win.address": ["<Primary>l"],
+            "win.home": ["<Alt>Home"],
+            "win.settings": ["<Primary>comma"],
             "win.close": ["<Primary>w"],
             "win.reload": ["<Primary>r", "F5"],
             "win.back": ["<Alt>Left"],

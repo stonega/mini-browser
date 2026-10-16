@@ -1,8 +1,14 @@
 """One WebView per portrait window with a native GNOME header bar."""
 
 from . import APP_NAME, autofill
-from .dialogs import address_dialog, import_dialog, library_dialog, shortcuts_dialog
-from .gtk import Adw, Gio, Gtk, WebKit
+from .dialogs import (
+    address_dialog,
+    import_dialog,
+    library_dialog,
+    settings_dialog,
+    shortcuts_dialog,
+)
+from .gtk import Adw, Gio, Gtk, Pango, WebKit
 from .navigation import address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
 
@@ -72,70 +78,135 @@ class BrowserWindow(Adw.ApplicationWindow):
 
         self.toasts = Adw.ToastOverlay(child=self.stack)
         self.headerbar = Adw.HeaderBar(decoration_layout=":close")
+        self.headerbar.pack_end(
+            Gtk.Button(
+                icon_name="emblem-system-symbolic",
+                tooltip_text="Settings (Ctrl+,)",
+                action_name="win.settings",
+            )
+        )
         toolbar = Adw.ToolbarView(content=self.toasts)
         toolbar.add_top_bar(self.headerbar)
         self.set_content(toolbar)
         self._add_actions()
+        self.set_focus(self.home_entry)
         self.connect("close-request", self._close_requested)
 
     def _home(self):
         content = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=16,
-            valign=Gtk.Align.CENTER,
-            margin_top=64,
-            margin_bottom=40,
+            spacing=32,
+            margin_top=40,
+            margin_bottom=24,
             margin_start=24,
             margin_end=24,
         )
-        content.append(Gtk.Image(icon_name="web-browser-symbolic", pixel_size=56))
-        title = Gtk.Label(label="Mini Browser", css_classes=["title-1"])
-        content.append(title)
-        content.append(
-            Gtk.Label(
-                label="One page. One little window.",
-                css_classes=["dim-label"],
-            )
-        )
-        entry = Gtk.Entry(
+        self.home_entry = Gtk.Entry(
             placeholder_text="Search or enter an address",
             primary_icon_name="system-search-symbolic",
-            margin_top=16,
+            secondary_icon_name="go-next-symbolic",
+            height_request=48,
         )
-        content.append(entry)
-        open_button = Gtk.Button(label="Open website", css_classes=["suggested-action", "pill"])
+        self.home_entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, False)
+        self.home_entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, "Open website")
+        content.append(self.home_entry)
 
         def open_address(*_):
             try:
-                self.load_uri(address_to_uri(entry.get_text()))
+                self.load_uri(address_to_uri(self.home_entry.get_text()))
             except ValueError as exc:
                 self.toast(str(exc))
 
-        entry.connect("activate", open_address)
-        open_button.connect("clicked", open_address)
-        content.append(open_button)
-        import_button = Gtk.Button(label="Import from Chrome", css_classes=["flat"], margin_top=12)
-        import_button.connect("clicked", lambda *_: import_dialog(self))
-        content.append(import_button)
-        library_button = Gtk.Button(label="Bookmarks & history", css_classes=["flat"])
-        library_button.connect("clicked", lambda *_: library_dialog(self))
-        content.append(library_button)
-        password_button = Gtk.Button(label="Passwords", css_classes=["flat"])
-        password_button.connect("clicked", lambda *_: passwords_dialog(self))
-        content.append(password_button)
-        help_button = Gtk.Button(
-            label="Keyboard shortcuts",
-            css_classes=["flat", "dim-label"],
-            margin_top=12,
+        self.home_entry.connect("activate", open_address)
+        self.home_entry.connect(
+            "icon-press",
+            lambda _entry, position: (
+                open_address() if position == Gtk.EntryIconPosition.SECONDARY else None
+            ),
         )
-        help_button.connect("clicked", lambda *_: shortcuts_dialog(self))
-        content.append(help_button)
-        clamp = Adw.Clamp(maximum_size=380, tightening_threshold=300, child=content)
+        recent = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        recent.append(Gtk.Label(label="Recently opened", xalign=0, css_classes=["heading"]))
+        self.recent_tiles = Gtk.FlowBox(
+            selection_mode=Gtk.SelectionMode.NONE,
+            homogeneous=True,
+            min_children_per_line=2,
+            max_children_per_line=3,
+            column_spacing=12,
+            row_spacing=12,
+        )
+        self.recent_empty = Gtk.Label(
+            label="Sites you open will appear here.",
+            xalign=0,
+            wrap=True,
+            css_classes=["dim-label"],
+        )
+        recent.append(self.recent_tiles)
+        recent.append(self.recent_empty)
+        content.append(recent)
+        self.refresh_recents()
+        clamp = Adw.Clamp(maximum_size=420, tightening_threshold=360, child=content)
         return Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp)
+
+    def refresh_recents(self):
+        self.recent_tiles.remove_all()
+        records = self.library.recent_apps()
+        self.recent_empty.set_visible(not records)
+        self.recent_tiles.set_visible(bool(records))
+        for record in records:
+            host = record["site"].split("://", 1)[1].removeprefix("www.")
+            title = " ".join((record["title"] or host).split())
+            body = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                spacing=8,
+                margin_top=12,
+                margin_bottom=12,
+                margin_start=4,
+                margin_end=4,
+                halign=Gtk.Align.CENTER,
+            )
+            body.append(Adw.Avatar(size=44, text=host, show_initials=True))
+            body.append(
+                Gtk.Label(
+                    label=title,
+                    lines=2,
+                    wrap=True,
+                    wrap_mode=Pango.WrapMode.WORD_CHAR,
+                    ellipsize=Pango.EllipsizeMode.END,
+                    max_width_chars=10,
+                    width_chars=8,
+                    justify=Gtk.Justification.CENTER,
+                    css_classes=["heading"],
+                )
+            )
+            body.append(
+                Gtk.Label(
+                    label=host,
+                    ellipsize=Pango.EllipsizeMode.END,
+                    max_width_chars=12,
+                    css_classes=["caption", "dim-label"],
+                )
+            )
+            button = Gtk.Button(
+                child=body,
+                css_classes=["flat", "card"],
+                tooltip_text=f"{title}\n{record['site']}",
+            )
+            button.connect("clicked", lambda _button, url=record["url"]: self.load_uri(url))
+            self.recent_tiles.append(button)
+
+    def show_home(self):
+        self.webview.stop_loading()
+        self.refresh_recents()
+        self.stack.set_visible_child_name("home")
+        self.set_title(APP_NAME)
+        self.home_entry.set_text("")
+        self.home_entry.grab_focus()
 
     def _add_actions(self):
         for name, callback in {
             "address": lambda: address_dialog(self),
+            "home": self.show_home,
+            "settings": lambda: settings_dialog(self),
             "close": self.close,
             "reload": self._retry,
             "back": self.webview.go_back,
@@ -145,6 +216,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "library": lambda: library_dialog(self),
             "bookmark": self._bookmark,
             "passwords": lambda: passwords_dialog(self),
+            "import-passwords": lambda: passwords_dialog(self, import_now=True),
             "fill-login": lambda: fill_login(self),
             "lock-vault": self.get_application().lock_vault,
             "shortcuts": lambda: shortcuts_dialog(self),
@@ -197,6 +269,9 @@ class BrowserWindow(Adw.ApplicationWindow):
             if is_web_url(uri):
                 try:
                     self.library.record_visit(uri, view.get_title())
+                    for window in self.get_application().get_windows():
+                        if window.stack.get_visible_child_name() == "home":
+                            window.refresh_recents()
                 except Exception:
                     self.toast("Could not save this visit to history.")
 
@@ -223,10 +298,13 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._show_error(self.webview.get_uri(), "The page stopped responding. Reload to continue.")
 
     def _title_changed(self, view, _pspec):
-        self.set_title(view.get_title() or APP_NAME)
+        if self.stack.get_visible_child_name() == "web":
+            self.set_title(view.get_title() or APP_NAME)
 
     def _retry(self, *_):
-        if self.failed_uri:
+        if self.stack.get_visible_child_name() == "home":
+            self.refresh_recents()
+        elif self.failed_uri:
             self.load_uri(self.failed_uri)
         elif self.webview.get_uri():
             self.webview.reload()

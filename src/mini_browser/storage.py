@@ -4,6 +4,9 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from .navigation import is_web_url
 
 
 class Library:
@@ -24,6 +27,12 @@ class Library:
                     title TEXT NOT NULL,
                     last_visit REAL NOT NULL,
                     visit_count INTEGER NOT NULL DEFAULT 1
+                );
+                CREATE TABLE IF NOT EXISTS recent_apps (
+                    site TEXT PRIMARY KEY,
+                    url TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    last_opened REAL NOT NULL
                 );
             """)
         path.chmod(0o600)
@@ -71,13 +80,38 @@ class Library:
             )
 
     def record_visit(self, url: str, title: str):
+        visited = time.time()
         with self.connect() as db:
             db.execute(
                 """INSERT INTO history VALUES (?, ?, ?, 1)
                    ON CONFLICT(url) DO UPDATE SET title=excluded.title,
                      last_visit=excluded.last_visit, visit_count=history.visit_count+1""",
-                (url, title or url, time.time()),
+                (url, title or url, visited),
             )
+            if is_web_url(url):
+                parts = urlsplit(url)
+                host = parts.hostname
+                if ":" in host:
+                    host = f"[{host}]"
+                port = parts.port
+                if port and port != (443 if parts.scheme == "https" else 80):
+                    host += f":{port}"
+                site = f"{parts.scheme}://{host}"
+                db.execute(
+                    """INSERT INTO recent_apps VALUES (?, ?, ?, ?)
+                       ON CONFLICT(site) DO UPDATE SET url=excluded.url,
+                         title=excluded.title, last_opened=excluded.last_opened""",
+                    (site, url, title or parts.hostname, visited),
+                )
+
+    def recent_apps(self, limit: int = 6) -> list[dict]:
+        """Sites actually opened here, grouped by origin, with their latest page."""
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT * FROM recent_apps ORDER BY last_opened DESC, site ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def search(self, kind: str, query: str = "", limit: int = 200) -> list[dict]:
         if kind not in {"bookmarks", "history"}:

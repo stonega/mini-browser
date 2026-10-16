@@ -298,11 +298,81 @@ def library_dialog(window):
     return dialog
 
 
+def settings_dialog(window):
+    dialog = Adw.PreferencesDialog(
+        title="Settings",
+        content_width=380,
+        content_height=560,
+        search_enabled=False,
+    )
+    page = Adw.PreferencesPage()
+    for title, rows in [
+        (
+            "Import",
+            [
+                (
+                    "Import bookmarks and history",
+                    "Chrome profiles or bookmarks HTML",
+                    "document-open-symbolic",
+                    "win.import",
+                ),
+                (
+                    "Import passwords",
+                    "Chrome password CSV into your encrypted vault",
+                    "dialog-password-symbolic",
+                    "win.import-passwords",
+                ),
+            ],
+        ),
+        (
+            "Browser",
+            [
+                (
+                    "Bookmarks and history",
+                    "Browse your saved pages and visits",
+                    "user-bookmarks-symbolic",
+                    "win.library",
+                ),
+                (
+                    "Passwords",
+                    "Manage saved logins and your vault PIN",
+                    "dialog-password-symbolic",
+                    "win.passwords",
+                ),
+                (
+                    "Keyboard shortcuts",
+                    "Navigation and window controls",
+                    "preferences-desktop-keyboard-shortcuts-symbolic",
+                    "win.shortcuts",
+                ),
+            ],
+        ),
+    ]:
+        group = Adw.PreferencesGroup(title=title)
+        for label, subtitle, icon, action in rows:
+            row = Adw.ActionRow(title=label, subtitle=subtitle, activatable=True, use_markup=False)
+            row.add_prefix(Gtk.Image(icon_name=icon))
+            row.add_suffix(Gtk.Image(icon_name="go-next-symbolic"))
+
+            def activate(_row, name=action):
+                dialog.force_close()
+                window.activate_action(name, None)
+
+            row.connect("activated", activate)
+            group.add(row)
+        page.add(group)
+    dialog.add(page)
+    dialog.present(window)
+    return dialog
+
+
 def shortcuts_dialog(window):
     dialog, toolbar = dialog_shell("Keyboard shortcuts")
     box = padded_box()
     for title, accelerator in [
         ("Open a website or search", "<Primary>l"),
+        ("Home page", "<Alt>Home"),
+        ("Settings", "<Primary>comma"),
         ("New window", "<Primary>n"),
         ("Close window", "<Primary>w"),
         ("Reload", "<Primary>r"),

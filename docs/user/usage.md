@@ -1,9 +1,19 @@
 # Using Mini Browser
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
-website or search on the start page. A native GNOME header bar shows the page
-title and close button. Open the address dialog with Ctrl+L to inspect the
+website or search in the home page's input bar, then press Enter or its arrow.
+The home page also shows up to six recently opened sites. A native GNOME header
+bar shows the page title, Settings gear, and close button. Open the address
+dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
+
+Recent tiles group pages from the same website and reopen its most recently
+visited page. They track sites opened in Mini Browser; importing Chrome history
+does not add tiles. Return home with Alt+Home. Other home windows refresh when
+you open a site in another Mini Browser window.
+
+Open Settings with the header's gear button or Ctrl+,. It contains browser data
+import, password CSV import, bookmarks/history, saved passwords, and shortcuts.
 
 Ctrl+N opens another portrait window. A website link that requests a new window
 also gets a separate window. Ordinary links navigate in their current window.
@@ -14,7 +24,7 @@ Drag the header bar to move the window. Close it with its close button or Ctrl+W
 
 ## Import bookmarks and history
 
-1. Choose Import from Chrome on the start page, or press Ctrl+Shift+I.
+1. Choose Settings → Import bookmarks and history, or press Ctrl+Shift+I.
 2. Select your Chrome profile. For a custom location, choose the folder that
    contains the files named `Bookmarks` and `History` (often `Default` or
    `Profile 1`, inside `~/.config/google-chrome`).
@@ -39,8 +49,8 @@ are not imported. Passwords use the separate CSV workflow below.
 
 1. In Chrome, open Google Password Manager → Settings → Export passwords, and
    save the CSV locally.
-2. In Mini Browser, open Passwords on the start page or press Ctrl+Shift+P. You
-   can also choose Import passwords from Chrome CSV in the Chrome import dialog.
+2. In Mini Browser, choose Settings → Import passwords, or open Settings →
+   Passwords (Ctrl+Shift+P) to manage the vault before importing.
 3. Create and confirm a PIN containing exactly six digits. Leading zeroes are
    supported. Later sessions ask you to unlock the vault with this PIN. Existing
    vaults also accept their previous master password.

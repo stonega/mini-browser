@@ -12,8 +12,11 @@ requests remain under WebKit's control.
 
 An `Adw.ApplicationWindow` contains a stack for the start page, web content, and
 load errors. An `Adw.ToolbarView` places a native `Adw.HeaderBar` with the page
-title and close control above the content. Address, library, import, and help controls live
-in temporary adaptive libadwaita dialogs. Window dimensions are defaults, not a
+title, Settings gear, and close control above the content. The home body contains
+only a search/address entry and up to six recent-site tiles. Settings uses a
+native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
+Address, library, import, and help controls live in temporary adaptive libadwaita
+dialogs. Window dimensions are defaults, not a
 locked aspect ratio. WebKit's user agent is unchanged.
 
 `chrome.py` discovers profiles and reads Chrome's bookmark JSON and read-only
@@ -28,6 +31,13 @@ time and the maximum known visit count to keep repeated imports idempotent.
 Local navigation increments visit counts. Folder names are retained for Chrome
 bookmarks; the initial library UI is a flat searchable list. Library searches
 return at most 200 matches to keep the narrow UI responsive.
+
+The `recent_apps` table tracks actual Mini Browser navigation separately from
+imported history. It groups by origin and retains the latest URL, title, and
+opening time for each site. Schema creation adds this table to existing libraries
+without altering bookmark/history records. Home tiles are sorted by most recent
+use; open home windows refresh after another window records a visit. Tiles use
+native initial avatars and make no background requests to the saved websites.
 
 Website content stays in WebKit's sandbox. TLS errors show an error page without
 an override. Unsupported external URI schemes are not launched. Browser data is

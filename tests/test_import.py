@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from contextlib import closing
 from pathlib import Path
+from unittest.mock import patch
 
 from mini_browser.chrome import (
     CHROME_EPOCH_OFFSET,
@@ -178,3 +179,26 @@ class LibraryTests(unittest.TestCase):
         self.assertEqual(len(self.library.search("bookmarks", "_")), 0)
         with self.assertRaises(ValueError):
             self.library.search("not_a_table")
+
+    def test_recent_apps_group_sites_and_reopen_latest_page(self):
+        with patch("mini_browser.storage.time.time", side_effect=[1, 2, 3]):
+            self.library.record_visit("https://example.org/first", "First page")
+            self.library.record_visit("https://other.example/start", "Other app")
+            self.library.record_visit("https://example.org:443/latest", "Latest page")
+        recent = Library(self.library.path).recent_apps()
+        self.assertEqual(len(recent), 2)
+        self.assertEqual(recent[0]["site"], "https://example.org")
+        self.assertEqual(recent[0]["url"], "https://example.org:443/latest")
+        self.assertEqual(recent[0]["title"], "Latest page")
+        self.assertEqual(len(self.library.recent_apps(limit=1)), 1)
+
+    def test_imported_history_does_not_populate_recent_apps(self):
+        self.library.import_records([], [("https://example.org", "Imported", 1234, 5)])
+        self.assertEqual(self.library.recent_apps(), [])
+        self.library.record_visit("https://example.org", "Opened here")
+        self.assertEqual(len(self.library.recent_apps()), 1)
+
+    def test_recent_apps_keep_different_origins_separate(self):
+        for url in ["http://example.org", "https://example.org", "https://example.org:8443"]:
+            self.library.record_visit(url, url)
+        self.assertEqual(len(self.library.recent_apps()), 3)

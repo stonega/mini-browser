@@ -1,8 +1,9 @@
 # Mini Browser
 
 Native GNOME browser: Python, GTK 4, libadwaita, and WebKitGTK 6.0. Keep the
-browsing surface limited to a native header bar (page title and close) and web
-content. Each page owns a
+browsing surface limited to a native header bar (page title, Settings, and close)
+and web content. The home body contains only the search/address bar and recent
+site tiles; import and management controls belong in Settings. Each page owns a
 window; the default size is 420 × 780 logical pixels.
 
 ## Layout and workflow
