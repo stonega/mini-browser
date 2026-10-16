@@ -169,9 +169,9 @@ class PasswordVault:
         ).derive(password.encode("utf-8"))
 
     @staticmethod
-    def _check_new_password(password):
-        if len(password) < 12:
-            raise VaultError("Use at least 12 characters for the master password.")
+    def _check_new_pin(password):
+        if len(password) != 6 or not password.isascii() or not password.isdigit():
+            raise VaultError("Use exactly 6 digits (0–9) for the vault PIN.")
 
     def _read(self):
         try:
@@ -242,7 +242,7 @@ class PasswordVault:
 
     def create(self, password):
         with self._mutex:
-            self._check_new_password(password)
+            self._check_new_pin(password)
             salt = os.urandom(16)
             key = bytearray(self._derive(password, salt))
             try:
@@ -292,7 +292,7 @@ class PasswordVault:
             except (InvalidTag, ValueError, TypeError, UnicodeError, VaultError):
                 key[:] = b"\x00" * len(key)
                 raise VaultError(
-                    "Could not unlock. Check the master password or vault backup."
+                    "Could not unlock. Check the PIN or existing master password."
                 ) from None
 
     def import_csv(self, path: Path) -> PasswordImportResult:
@@ -346,9 +346,9 @@ class PasswordVault:
     def change_password(self, current, new):
         with self._mutex:
             self._require_unlocked()
-            self._check_new_password(new)
+            self._check_new_pin(new)
             if not hmac.compare_digest(self._derive(current, self._salt), bytes(self._key)):
-                raise VaultError("The current master password is incorrect.")
+                raise VaultError("The current PIN or master password is incorrect.")
             salt = os.urandom(16)
             key = bytearray(self._derive(new, salt))
             try:

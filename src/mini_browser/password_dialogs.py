@@ -1,4 +1,4 @@
-"""Native master-password, import, management and login selection dialogs."""
+"""Native vault PIN, import, management and login selection dialogs."""
 
 import json
 import threading
@@ -81,22 +81,23 @@ def ensure_unlocked(window, completed):
     box.append(
         Gtk.Label(
             label="Your passwords are encrypted on this device. "
-            "Only your master password can unlock them.",
+            "Unlock the vault with your PIN or existing master password.",
             wrap=True,
             xalign=0,
         )
     )
     password = Gtk.PasswordEntry(show_peek_icon=True, activates_default=True)
-    password.set_tooltip_text("Master password")
-    box.append(Gtk.Label(label="Master password", xalign=0))
+    label = "6-digit PIN" if creating else "PIN or existing master password"
+    password.set_tooltip_text(label)
+    box.append(Gtk.Label(label=label, xalign=0))
     box.append(password)
     confirm = Gtk.PasswordEntry(show_peek_icon=True, activates_default=True)
     if creating:
-        box.append(Gtk.Label(label="Confirm master password", xalign=0))
+        box.append(Gtk.Label(label="Confirm PIN", xalign=0))
         box.append(confirm)
         box.append(
             Gtk.Label(
-                label="Use at least 12 characters. If you forget this password, "
+                label="Use exactly 6 digits. If you forget your PIN, "
                 "the vault cannot be recovered.",
                 wrap=True,
                 xalign=0,
@@ -114,7 +115,7 @@ def ensure_unlocked(window, completed):
     def unlock(*_):
         secret = password.get_text()
         if creating and secret != confirm.get_text():
-            status.set_label("The master passwords do not match.")
+            status.set_label("The PINs do not match.")
             return
         password.set_text("")
         confirm.set_text("")
@@ -179,7 +180,7 @@ def _passwords_dialog(window, *, import_now):
         label="Import Chrome password CSV…", css_classes=["suggested-action"]
     )
     box.append(import_button)
-    change = Gtk.Button(label="Change master password…", css_classes=["flat"])
+    change = Gtk.Button(label="Change PIN…", css_classes=["flat"])
     box.append(change)
     lock = Gtk.Button(label="Lock vault", css_classes=["flat"])
     lock.connect("clicked", lambda *_: app.lock_vault())
@@ -281,30 +282,30 @@ def _passwords_dialog(window, *, import_now):
 
 def change_password_dialog(window):
     vault = window.get_application().vault
-    dialog, toolbar = vault_shell("Change master password")
+    dialog, toolbar = vault_shell("Change vault PIN")
     box = padded_box()
     entries = []
-    for label in ["Current master password", "New master password", "Confirm new master password"]:
+    for label in ["Current PIN or master password", "New 6-digit PIN", "Confirm new PIN"]:
         box.append(Gtk.Label(label=label, xalign=0))
         entry = Gtk.PasswordEntry(show_peek_icon=True, activates_default=True)
         entries.append(entry)
         box.append(entry)
-    status = Gtk.Label(label="Use at least 12 characters.", wrap=True, xalign=0)
+    status = Gtk.Label(label="Use exactly 6 digits (0–9).", wrap=True, xalign=0)
     box.append(status)
-    submit = Gtk.Button(label="Change password", css_classes=["suggested-action"])
+    submit = Gtk.Button(label="Change PIN", css_classes=["suggested-action"])
     box.append(submit)
 
     def change(*_):
         current, new, confirmation = (entry.get_text() for entry in entries)
         if new != confirmation:
-            status.set_label("The new master passwords do not match.")
+            status.set_label("The new PINs do not match.")
             return
         for entry in entries:
             entry.set_text("")
 
         def done(_):
             dialog.force_close()
-            window.toast("Master password changed")
+            window.toast("Vault PIN changed")
 
         run_task(
             window,

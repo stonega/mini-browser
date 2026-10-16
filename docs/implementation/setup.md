@@ -19,6 +19,7 @@ Development commands:
 ./scripts/check
 ruff format src tests scripts/install
 ./scripts/smoke
+./scripts/build-rpm
 ```
 
 `check` runs standard-library unit tests, Ruff lint and format checks, and Python
@@ -30,6 +31,29 @@ through the native dialog, checks failed and successful unlocks, then fills a
 local WebKit login form. It checks isolated-world setters, exact-site account
 selection, origin/document/form guards, and manual locking. Neither test command
 imports private Chrome data or uses the system keyring.
+
+## Fedora system package
+
+```sh
+sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
+./scripts/build-rpm
+sudo dnf install ./dist/mini-browser-*.noarch.rpm
+/usr/bin/mini-browser
+```
+
+The build uses `build/rpm` and writes the binary and source RPMs into `dist/`.
+The binary package installs `/usr/bin/mini-browser`, modules under
+`/usr/share/mini-browser`, the desktop entry, icon, license, and docs. DNF resolves
+the declared GTK, WebKitGTK, PyGObject, and cryptography runtime dependencies.
+No personal bookmarks, history, cookies, or vault files are packaged or removed.
+
+If migrating from `scripts/install`, move the old user desktop entry
+`~/.local/share/applications/io.github.stone.MiniBrowser.desktop` aside so GNOME
+uses the packaged entry. Replace `~/.local/bin/mini-browser` with a symlink to
+`/usr/bin/mini-browser` or remove that old wrapper. Keep the `mini-browser` data
+directory and `passwords.vault`. Restart Mini Browser to load the installed code.
+
+## Alternative user installation
 
 `scripts/install` copies the Python package under
 `$XDG_DATA_HOME/mini-browser/app`, adds `~/.local/bin/mini-browser`, and writes

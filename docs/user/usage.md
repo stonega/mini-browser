@@ -41,8 +41,9 @@ are not imported. Passwords use the separate CSV workflow below.
    save the CSV locally.
 2. In Mini Browser, open Passwords on the start page or press Ctrl+Shift+P. You
    can also choose Import passwords from Chrome CSV in the Chrome import dialog.
-3. Create a master password of at least 12 characters and confirm it. Later
-   sessions ask you to unlock the existing vault with this master password.
+3. Create and confirm a PIN containing exactly six digits. Leading zeroes are
+   supported. Later sessions ask you to unlock the vault with this PIN. Existing
+   vaults also accept their previous master password.
 4. Choose Import Chrome password CSV and select the exported file. Import results
    report added, updated, and skipped entries. Re-importing updates the password
    for an existing website/account without duplicating it.
@@ -58,14 +59,14 @@ registration/password-change forms. Forms sending to another website are
 excluded. Some custom or multi-step login forms need manual entry.
 
 Use the Passwords dialog to search saved accounts, delete individual entries, or
-change your master password. Ctrl+Shift+K locks the vault. It also locks after
+change your PIN. Ctrl+Shift+K locks the vault. It also locks after
 five minutes without password use, when the last window closes, and on GNOME
 screen lock or system sleep when session notifications are available.
 
 The vault is independent of GNOME Keyring. There is no recovery for a forgotten
-master password. To back it up, lock it, then copy `passwords.vault` to your
+PIN or master password. To back it up, lock it, then copy `passwords.vault` to your
 backup location. Restoring that encrypted file requires its original master
-password. Changing the master password does not change existing backup copies.
+PIN or master password. Changing the PIN does not change existing backup copies.
 
 ## Local data
 
@@ -78,8 +79,8 @@ Saved logins are encrypted in `~/.local/share/mini-browser/passwords.vault`.
 This protects the file at rest; an unlocked vault and filled web forms contain
 plaintext in memory. Closing or locking the vault drops its in-memory records
 and key references. Python cannot guarantee erasing every temporary memory copy.
-Already-filled web forms retain their values when the vault locks. The master
-password is never saved to disk.
+Already-filled web forms retain their values when the vault locks. The PIN or
+master password is never saved to disk.
 
 To reset browser data, first close every Mini Browser window and wait for any
 import or download to finish. Remove `library.sqlite3` to clear bookmarks and

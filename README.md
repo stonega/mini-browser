@@ -12,6 +12,21 @@ A native GNOME web browser with a small footprint on your screen.
 
 Built with Python, GTK 4, libadwaita, and WebKitGTK 6.0.
 
+## Fedora RPM
+
+Build and install the native system package:
+
+```sh
+./scripts/build-rpm
+sudo dnf install ./dist/mini-browser-*.noarch.rpm
+/usr/bin/mini-browser
+```
+
+Build tools: `rpm-build`, `desktop-file-utils`, `python3-cryptography` (44+),
+and `ruff`. The binary and source RPMs are written to `dist/`. Installing the
+package adds Mini Browser to GNOME's launcher and leaves personal browser data
+in your account. Restart existing browser windows after an upgrade.
+
 ## Run
 
 On Fedora, install the native runtime packages if needed:
@@ -73,8 +88,9 @@ files are changed. See [the user guide](docs/user/usage.md).
 
 ## Password vault
 
-Open **Passwords** on the start page or press **Ctrl+Shift+P**. Create a master
-password of at least 12 characters, then import Chrome's password CSV. The vault
+Open **Passwords** on the start page or press **Ctrl+Shift+P**. Create a
+**six-digit PIN**, then import Chrome's password CSV. Leading zeroes are supported.
+The vault
 uses Argon2id and AES-256-GCM through `cryptography` 44+; it does not use GNOME
 Keyring. Website names, usernames, and passwords are encrypted together.
 
@@ -87,9 +103,10 @@ The vault locks after five minutes without password use, when the last window
 closes, and on GNOME screen lock or system sleep when those D-Bus signals are
 available. Use **Ctrl+Shift+K** to lock it manually. Delete the exported CSV
 after import: that file contains readable passwords. Keep an encrypted vault
-backup and remember your master password; there is no password recovery.
+backup and remember your PIN; there is no PIN recovery. Existing vaults still
+accept their previous master password; use **Change PIN** to switch to six digits.
 
-## Install in the GNOME launcher
+## Alternative user installation
 
 ```sh
 ./scripts/install
@@ -97,6 +114,8 @@ backup and remember your master password; there is no password recovery.
 
 This copies the app, desktop entry, and icon into your user account. It requires
 no root access and does not change your default browser. Re-run after updates.
+Use the RPM for a system installation. An earlier user desktop entry can shadow
+the system entry; see [the setup notes](docs/implementation/setup.md).
 
 ## Develop and verify
 

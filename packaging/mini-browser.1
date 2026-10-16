@@ -1,0 +1,55 @@
+.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.2.1" "User Commands"
+.SH NAME
+mini-browser \- a small native GNOME web browser
+.SH SYNOPSIS
+.B mini-browser
+.RI [ URL " or " "search terms" ]...
+.SH DESCRIPTION
+Mini Browser opens one page per resizable portrait window, with a native
+GNOME header bar. Each command-line argument opens a separate window.
+Quote search terms containing spaces. Without arguments, the start page opens.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show usage information.
+.TP
+.B \-\-version
+Show the application version.
+.SH KEYBOARD SHORTCUTS
+.TP
+.B Ctrl+L
+Open the address and search dialog.
+.TP
+.B Ctrl+N / Ctrl+W
+Open a new window / close the current window.
+.TP
+.B Alt+Left / Alt+Right
+Navigate back / forward.
+.TP
+.B Ctrl+Shift+I
+Import Chrome bookmarks and history.
+.TP
+.B Ctrl+Shift+P
+Manage the encrypted password vault and import Chrome password CSV files.
+New vaults use an exactly six-digit PIN. Existing vaults accept their old
+master password, which can be changed to a PIN in the Passwords dialog.
+.TP
+.B Ctrl+Shift+L
+Choose and fill a saved login for the current website.
+.TP
+.B Ctrl+Shift+K
+Lock the password vault.
+.TP
+.B F1
+Show all keyboard shortcuts.
+.SH FILES
+.TP
+.I ~/.local/share/mini-browser/
+Personal library, encrypted vault, cookies, and website data.
+.TP
+.I ~/.cache/mini-browser/
+Website cache.
+.PP
+XDG_DATA_HOME and XDG_CACHE_HOME override the default data and cache roots.
+.SH SEE ALSO
+Documentation is installed in /usr/share/doc/mini-browser/.

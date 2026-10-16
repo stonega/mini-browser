@@ -30,12 +30,18 @@ thread. Support repeated imports without duplicate records. Never log browsing
 data, passwords, cookies, or profile contents. Keep TLS verification and the
 WebKit sandbox enabled. Document import limitations honestly.
 
-Passwords use an app-local master-password vault, not GNOME Keyring. Keep
+Passwords use an app-local six-digit PIN vault, not GNOME Keyring. Keep
 credential metadata and secrets encrypted at rest. Use the established PyCA
 Argon2id/AES-GCM format, atomic ciphertext writes and stale-write protection.
 Never log secrets or interpolate them into JavaScript. Filling requires a user
 action, exact origin and document checks, and an isolated WebKit world. Test
 tampering, failed writes, lock/unlock and real WebKit filling with synthetic data.
+Existing longer master passwords remain valid for unlocking old vaults; creation
+and credential changes require exactly six ASCII digits. Preserve leading zeroes.
+
+RPM packaging lives in `packaging/`; `./scripts/build-rpm` writes packages to
+`dist/`. RPMs install the launcher in `/usr/bin` and private modules under
+`/usr/share/mini-browser`. Never include personal browser data in a package.
 
 ## CodeGraph
 

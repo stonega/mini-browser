@@ -16,7 +16,7 @@ from mini_browser import autofill
 from mini_browser.application import BrowserApplication
 from mini_browser.gtk import Adw, Gio, GLib, Gtk
 
-MASTER = "synthetic smoke test master password"
+MASTER = "704826"
 USERNAME = "generated@example.test"
 PASSWORD = "test-only secret, with 'quotes' and \"quotes\" 🔒"
 

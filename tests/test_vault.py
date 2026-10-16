@@ -16,7 +16,7 @@ from mini_browser.vault import (
     read_password_csv,
 )
 
-MASTER = "a generated test master password"
+MASTER = "563829"
 SECRET = 'test-only secret, with "quotes"\nand a new line 🔒'
 
 
@@ -95,7 +95,7 @@ class VaultTests(unittest.TestCase):
     def test_existing_vault_cannot_be_overwritten_by_create(self):
         before = self.vault.path.read_bytes()
         with self.assertRaises(VaultError):
-            PasswordVault(self.vault.path).create("another master password")
+            PasswordVault(self.vault.path).create("487263")
         self.assertEqual(self.vault.path.read_bytes(), before)
 
     def test_stale_writer_preserves_other_process_changes(self):
@@ -134,16 +134,16 @@ class VaultTests(unittest.TestCase):
     def test_master_password_change_and_delete_survive_restart(self):
         self.vault.import_csv(self.csv)
         with self.assertRaises(VaultError):
-            self.vault.change_password("wrong current password", "a different master password")
-        self.vault.change_password(MASTER, "a different master password")
+            self.vault.change_password("wrong current password", "849205")
+        self.vault.change_password(MASTER, "849205")
         self.vault.lock()
         with self.assertRaises(VaultError):
             self.vault.unlock(MASTER)
-        self.vault.unlock("a different master password")
+        self.vault.unlock("849205")
         self.assertEqual(len(self.vault.summaries()), 1)
         self.vault.delete("https://example.org", "test-user")
         self.vault.lock()
-        self.vault.unlock("a different master password")
+        self.vault.unlock("849205")
         self.assertEqual(self.vault.summaries(), [])
 
     def test_parallel_imports_do_not_lose_records(self):
@@ -158,9 +158,27 @@ class VaultTests(unittest.TestCase):
         self.assertEqual(sum(result.added for result in results), 2)
         self.assertEqual(len(self.vault.summaries()), 2)
 
-    def test_short_master_password_rejected(self):
-        with self.assertRaises(VaultError):
-            PasswordVault(self.root / "short.vault").create("short")
+    def test_new_pin_requires_exactly_six_ascii_digits(self):
+        for value in ["short", "12345", "1234567", "12a456", "１２３４５６", "123 45"]:
+            with self.subTest(value=value), self.assertRaises(VaultError):
+                PasswordVault(self.root / "invalid.vault").create(value)
+        vault = PasswordVault(self.root / "zero-prefixed.vault")
+        vault.create("001234")
+        vault.lock()
+        vault.unlock("001234")
+        self.assertTrue(vault.unlocked)
+
+    def test_existing_master_password_vault_can_migrate_to_pin(self):
+        legacy = PasswordVault(self.root / "legacy.vault")
+        # Generate the same format accepted by 0.2.0's longer-password policy.
+        with patch.object(PasswordVault, "_check_new_pin"):
+            legacy.create("a legacy master password")
+        legacy.lock()
+        legacy.unlock("a legacy master password")
+        legacy.change_password("a legacy master password", "027416")
+        legacy.lock()
+        legacy.unlock("027416")
+        self.assertTrue(legacy.unlocked)
 
 
 class PasswordCSVTests(unittest.TestCase):

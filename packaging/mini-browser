@@ -1,0 +1,8 @@
+#!/usr/bin/python3 -I
+"""Run the system-installed private application package."""
+
+import runpy
+import sys
+
+sys.path.insert(0, "/usr/share/mini-browser")
+runpy.run_module("mini_browser", run_name="__main__", alter_sys=True)
