@@ -3,7 +3,7 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 The home page also shows up to six recently opened sites. A native GNOME header
-bar shows the page title, Settings gear, and close button. Open the address
+bar shows the page title, Settings gear, layout icon, and close button. Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
 
@@ -21,6 +21,35 @@ All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.
 
 Drag the header bar to move the window. Close it with its close button or Ctrl+W.
+
+## Media layouts
+
+Click the layout icon immediately before Close to choose **Full page**,
+**Audio player**, or **Video player**. Unavailable options are disabled; the menu
+checks for videos again each time you open it.
+
+Start audio on a page, then choose **Audio player**. It switches the window to a
+compact 360 × 200 native player while the same page keeps playing.
+
+The player shows the website and playback status, with play/pause and mute
+buttons. Play/pause controls standard audio and video elements in the main page;
+resuming restarts only the elements paused by the player, or the first element
+if none were paused by it. Embedded frames, custom Web Audio players, and media
+inside shadow DOM require the website's own play/pause controls. Mute works for
+the whole page, including those players. Websites can also restrict background
+playback or reject playback requests.
+
+Choose **Video player** to focus a main-page video in a resizable 640 × 406 window
+with WebKit's playback controls. The playing video is preferred; otherwise the
+largest visible video is selected. It stays attached to its page, with its
+original styling and controls restored when you leave video mode. Videos in
+embedded frames, shadow DOM, or existing website popovers are not supported.
+Video mode requires WebKit's Popover API; older versions leave this option disabled.
+
+Choose **Full page** or press Escape to return to the previous size and
+maximized/fullscreen state. This remains available after media pauses or ends.
+Navigating, reloading, returning home, or a page error restores the browsing
+layout automatically. Closing the player closes that page's window.
 
 ## Import bookmarks and history
 

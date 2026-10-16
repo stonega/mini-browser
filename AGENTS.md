@@ -1,9 +1,11 @@
 # Mini Browser
 
 Native GNOME browser: Python, GTK 4, libadwaita, and WebKitGTK 6.0. Keep the
-browsing surface limited to a native header bar (page title, Settings, and close)
-and web content. The home body contains only the search/address bar and recent
-site tiles; import and management controls belong in Settings. Each page owns a
+browsing surface limited to a native header bar (page title, Settings, layout
+menu, and close) and web content. Pages can switch to a compact audio player or
+video layout while retaining their WebView. The home body contains only the
+search/address bar and recent site tiles; import and management controls belong
+in Settings. Each page owns a
 window; the default size is 420 × 780 logical pixels.
 
 ## Layout and workflow
@@ -19,8 +21,9 @@ window; the default size is 420 × 780 logical pixels.
 Use the system Python and GI bindings. This is a native application; do not add
 a web UI framework or JavaScript build pipeline. Keep core import/storage logic
 independent of GTK. Use standard-library unittest and Ruff. Run
-`./scripts/check` before finishing. Run `./scripts/smoke` on a graphical session
-when modifying the UI. Do not test against real Chrome profiles or import the
+`./scripts/check` before finishing. Run `./scripts/smoke` when modifying the UI;
+it creates an isolated virtual GNOME desktop. Do not run UI tests on the user's
+active desktop. Do not test against real Chrome profiles or import the
 user's private data during development; use generated temporary fixtures.
 
 ## Implementation rules

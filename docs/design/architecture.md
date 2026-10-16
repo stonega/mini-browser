@@ -10,14 +10,45 @@ one WebView and defaults to 420 × 780 logical pixels. Related WebViews reuse
 WebKit's opener relationship and storage session, so popup navigation and POST
 requests remain under WebKit's control.
 
-An `Adw.ApplicationWindow` contains a stack for the start page, web content, and
-load errors. An `Adw.ToolbarView` places a native `Adw.HeaderBar` with the page
-title, Settings gear, and close control above the content. The home body contains
+An `Adw.ApplicationWindow` contains a stack for the start page, web content,
+compact audio player, and load errors. Video mode reuses the web-content child.
+An `Adw.ToolbarView` places a native
+`Adw.HeaderBar` with the page title, Settings gear, layout menu, and close
+control above the content. The home body contains
 only a search/address entry and up to six recent-site tiles. Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. WebKit's user agent is unchanged.
+
+WebKit's `is-playing-audio` notification enables Audio player for a loaded page.
+Audio mode keeps that WebView alive but unmapped and requests a
+360 × 200 window; the stack measures only its visible child. Restoring preserves
+the browsing size and maximized/fullscreen state. The restore action stays
+available when audio stops. Navigation, home, and error transitions leave compact
+mode. Page titles continue updating in either layout.
+Window size changes wait for the compositor's normal-size configure before
+restoring maximized/fullscreen state, so GTK retains the original normal size.
+
+`audio_player.py` implements native controls. Mute uses WebKit's page-wide API.
+Play/pause uses a static asynchronous script in a separate isolated main-frame
+world, with the command passed as a typed GVariant. It retains the elements it
+pauses for resuming without starting unrelated paused tracks. Embedded frames,
+shadow DOM, and Web Audio are not controlled by that script; mute remains usable.
+Cancelled requests cannot update controls after navigation or window closure.
+
+`video_player.py` focuses the largest playing (or largest visible) main-document
+video in a 640 × 406 window. A static script in its own isolated world uses the
+Popover API to put the existing video in the top layer without moving its DOM
+node or requesting desktop fullscreen. Temporary styles make it fill the WebView
+and expose native media controls. Exit restores the controls and overridden
+styles, retaining unrelated inline changes made by the website. The layout menu
+probes for supported videos when opened and after page loads; stale results are
+discarded. Embedded frames, shadow DOM, and existing website popovers are excluded.
+The option stays disabled when WebKit lacks the Popover API.
+
+Closing a window mutes and unloads its WebView so retained Python references
+cannot leave its audio playing in another window's application process.
 
 `chrome.py` discovers profiles and reads Chrome's bookmark JSON and read-only
 history SQLite database. It filters records to HTTP(S) addresses. The native UI

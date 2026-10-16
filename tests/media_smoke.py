@@ -1,0 +1,499 @@
+"""Real WebKit media layouts, using a generated loopback WAV and canvas stream."""
+
+import io
+import json
+import math
+import os
+import struct
+import sys
+import tempfile
+import threading
+import traceback
+import wave
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+from mini_browser.application import BrowserApplication
+from mini_browser.gtk import GLib, Gtk
+from mini_browser.window import (
+    AUDIO_HEIGHT,
+    AUDIO_WIDTH,
+    DEFAULT_HEIGHT,
+    DEFAULT_WIDTH,
+    VIDEO_HEIGHT,
+    VIDEO_WIDTH,
+)
+
+
+def tone():
+    data = io.BytesIO()
+    with wave.open(data, "wb") as output:
+        output.setparams((1, 2, 8000, 0, "NONE", "not compressed"))
+        output.writeframes(
+            b"".join(
+                struct.pack("<h", int(100 * math.sin(2 * math.pi * 440 * index / 8000)))
+                for index in range(16000)
+            )
+        )
+    return data.getvalue()
+
+
+class Handler(BaseHTTPRequestHandler):
+    audio = tone()
+
+    def do_GET(self):
+        if self.path == "/tone.wav":
+            data, content_type = self.audio, "audio/wav"
+        elif self.path == "/silent":
+            data, content_type = b"<title>Silent page</title>", "text/html"
+        elif self.path == "/video":
+            data = b"""<!doctype html><meta name="viewport" content="width=device-width">
+            <title>Local video fixture</title><h1>Page outside the video</h1>
+            <style>#video-parent{transform:scale(.8);overflow:hidden;width:240px;height:160px}
+            video{width:200px;height:112px}</style>
+            <div id="video-parent">
+            <video muted style="border:3px solid red;object-fit:cover;
+            margin-left:9px;padding-right:7px!important"></video></div>
+            <audio src="/tone.wav" loop></audio><canvas width="320" height="180" hidden></canvas>
+            <script>
+            const canvas = document.querySelector('canvas'); const ctx = canvas.getContext('2d');
+            document.querySelector('video').srcObject = canvas.captureStream(10);
+            window.framesPainted = 0;
+            setInterval(() => {
+                ctx.fillStyle = '#3584e4'; ctx.fillRect(0, 0, 320, 180);
+                ctx.fillStyle = '#ffffff'; ctx.font = '24px sans-serif';
+                ctx.fillText('Mini Browser video', 45, 90);
+                ctx.fillRect((window.framesPainted++ % 28) * 10, 140, 20, 10);
+            }, 100);
+            </script>"""
+            content_type = "text/html"
+        else:
+            data = b"""<!doctype html><meta name="viewport" content="width=device-width">
+            <title>Local audio fixture</title><audio src="/tone.wav" controls loop></audio>
+            <audio id="unused" src="/tone.wav" preload="auto"></audio>"""
+            content_type = "text/html"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def log_message(self, *_):
+        pass
+
+
+def run():
+    with tempfile.TemporaryDirectory(prefix="mini-media-smoke-") as temp:
+        root = Path(temp)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        origin = f"http://127.0.0.1:{server.server_port}"
+        app = BrowserApplication(
+            data_dir=root / "data",
+            cache_dir=root / "cache",
+            application_id=f"io.github.stone.MiniBrowser.MediaSmoke.Run{os.getpid()}",
+        )
+        errors = []
+        state = {"step": "startup", "completed": False}
+
+        def fail(exc):
+            errors.append(f"{state['step']}: {exc}")
+            traceback.print_exception(exc)
+            app.quit()
+
+        def exception_hook(_kind, value, _trace):
+            fail(value)
+
+        def wait(description, condition):
+            state["step"] = description
+            yield condition
+
+        def javascript(window, body):
+            result = {}
+
+            def finished(view, response):
+                try:
+                    value = view.call_async_javascript_function_finish(response)
+                    result["value"] = json.loads(value.to_json(0))
+                except Exception as exc:
+                    fail(exc)
+
+            window.webview.call_async_javascript_function(
+                body, -1, None, None, None, None, finished
+            )
+            yield from wait("JavaScript result: " + body[:60], lambda: "value" in result)
+            return result["value"]
+
+        def toggle_audio(window):
+            window.activate_action(
+                "win.page-layout" if window.audio_mode else "win.audio-player", None
+            )
+
+        def scenario(window):
+            assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+            menu = window.layout_button.get_menu_model()
+            assert [
+                menu.get_item_attribute_value(index, "label", None).get_string()
+                for index in range(menu.get_n_items())
+            ] == ["Full page", "Audio player", "Video player"]
+            assert not window.lookup_action("audio-player").get_enabled()
+            window.activate_action("win.audio-player", None)
+            assert not window.audio_mode
+            window.webview.get_settings().set_property(
+                "media-playback-requires-user-gesture", False
+            )
+            window.load_uri(origin)
+            yield from wait("audio page load", lambda: not window.webview.is_loading())
+            assert not window.lookup_action("audio-player").get_enabled()
+            yield from javascript(
+                window, "await document.querySelector('audio').play(); return true;"
+            )
+            yield from wait(
+                "audio detected", lambda: window.lookup_action("audio-player").get_enabled()
+            )
+            window.webview.get_settings().set_property("media-playback-requires-user-gesture", True)
+            window.set_default_size(480, 700)
+            yield from wait("custom page size", lambda: window.get_height() == 700)
+            original_view = window.webview
+            generation = window.document_generation
+            toggle_audio(window)
+            yield from wait(
+                "compact size and controls",
+                lambda: (
+                    window.get_height() == AUDIO_HEIGHT
+                    and window.player.play_button.get_sensitive()
+                ),
+            )
+            assert window.get_width() == AUDIO_WIDTH
+            assert window.stack.get_visible_child_name() == "audio"
+            assert not window.webview.get_mapped()
+            assert window.webview is original_view
+            assert window.document_generation == generation
+            assert window.webview.is_playing_audio()
+            assert window.layout_button.get_icon_name() == "audio-x-generic-symbolic"
+            assert window.player.play_button.get_tooltip_text() == "Pause"
+            # A clock still advances while the WebView is hidden.
+            before = yield from javascript(
+                window, "return document.querySelector('audio').currentTime;"
+            )
+            yield from javascript(
+                window,
+                "await new Promise(resolve => setTimeout(resolve, 250)); "
+                "return document.querySelector('audio').currentTime;",
+            )
+            after = yield from javascript(
+                window, "return document.querySelector('audio').currentTime;"
+            )
+            assert before != after, (before, after)
+            if len(sys.argv) > 1:
+                paintable = state["paintable"]
+                snapshot = Gtk.Snapshot.new()
+                paintable.snapshot(snapshot, window.get_width(), window.get_height())
+                texture = window.get_renderer().render_texture(snapshot.to_node(), None)
+                path = Path(sys.argv[1])
+                assert texture.save_to_png(str(path.with_name(path.stem + "-audio.png")))
+
+            window.player.mute_button.emit("clicked")
+            assert window.webview.get_is_muted()
+            assert window.player.mute_button.get_tooltip_text() == "Unmute"
+            window.player.mute_button.emit("clicked")
+            assert not window.webview.get_is_muted()
+            yield from wait(
+                "mute probe finished", lambda: window.player.play_button.get_sensitive()
+            )
+            window.player.play_button.emit("clicked")
+            yield from wait(
+                "paused",
+                lambda: (
+                    window.player.play_button.get_sensitive()
+                    and window.player.play_button.get_tooltip_text() == "Play"
+                    and not window.webview.is_playing_audio()
+                ),
+            )
+            paused = yield from javascript(window, "return document.querySelector('audio').paused;")
+            assert paused
+            assert window.audio_mode and window.lookup_action("page-layout").get_enabled()
+            window.player.play_button.emit("clicked")
+            yield from wait(
+                "resumed",
+                lambda: (
+                    window.webview.is_playing_audio() and window.player.play_button.get_sensitive()
+                ),
+            )
+            assert (
+                yield from javascript(window, "return document.querySelector('#unused').paused;")
+            )
+            yield from javascript(window, "document.title = 'Updated audio title'; return true;")
+            yield from wait("compact title", lambda: window.get_title() == "Updated audio title")
+            toggle_audio(window)
+            yield from wait("restored size", lambda: window.get_height() == 700)
+            assert window.get_width() == 480
+            assert window.stack.get_visible_child_name() == "web"
+            assert window.webview.is_playing_audio()
+            assert window.document_generation == generation
+
+            window.maximize()
+            yield from wait("maximized page", window.is_maximized)
+            toggle_audio(window)
+            yield from wait(
+                "compact from maximized",
+                lambda: not window.is_maximized() and window.get_height() == AUDIO_HEIGHT,
+            )
+            toggle_audio(window)
+            yield from wait("restored maximized", window.is_maximized)
+            window.unmaximize()
+            yield from wait(
+                "normal page size", lambda: not window.is_maximized() and window.get_height() == 700
+            )
+            window.fullscreen()
+            yield from wait("fullscreen page", window.is_fullscreen)
+            toggle_audio(window)
+            yield from wait(
+                "compact from fullscreen",
+                lambda: not window.is_fullscreen() and window.get_height() == AUDIO_HEIGHT,
+            )
+            toggle_audio(window)
+            yield from wait("restored fullscreen", window.is_fullscreen)
+            window.unfullscreen()
+            yield from wait(
+                "normal after fullscreen",
+                lambda: not window.is_fullscreen() and window.get_height() == 700,
+            )
+
+            # A pause from the website must leave the restore control available.
+            toggle_audio(window)
+            yield from javascript(
+                window,
+                "document.querySelector('audio').pause(); return true;",
+            )
+            yield from wait("page paused audio", lambda: not window.webview.is_playing_audio())
+            assert window.audio_mode and window.lookup_action("page-layout").get_enabled()
+            toggle_audio(window)
+            assert not window.audio_mode
+            assert not window.lookup_action("audio-player").get_enabled()
+            yield from wait("page mapped after pausing", window.webview.get_mapped)
+            yield from javascript(
+                window,
+                "const audio = document.querySelector('audio'); audio.loop = true; "
+                "audio.playbackRate = 1; await audio.play(); return true;",
+            )
+            yield from wait("replay", lambda: window.lookup_action("audio-player").get_enabled())
+            toggle_audio(window)
+            window.load_uri(origin + "/silent")
+            yield from wait(
+                "navigation restores page",
+                lambda: (
+                    window.webview.get_title() == "Silent page"
+                    and not window.webview.is_loading()
+                    and window.get_height() == 700
+                ),
+            )
+            assert not window.audio_mode
+            assert window.stack.get_visible_child_name() == "web"
+            assert not window.lookup_action("audio-player").get_enabled()
+
+            # Exercise the fallback for audio without main-document HTML media.
+            yield from javascript(
+                window,
+                "globalThis.context = new AudioContext(); "
+                "const source = context.createOscillator(); "
+                "const gain = context.createGain(); gain.gain.value = 0.001; "
+                "source.connect(gain).connect(context.destination); source.start(); "
+                "await context.resume(); return true;",
+            )
+            yield from wait(
+                "Web Audio detected", lambda: window.lookup_action("audio-player").get_enabled()
+            )
+            toggle_audio(window)
+            yield from wait("fallback probe", lambda: window.player._request is None)
+            assert not window.player.play_button.get_sensitive()
+            window.player.mute_button.emit("clicked")
+            assert window.webview.get_is_muted()
+            window.player.mute_button.emit("clicked")
+            window.activate_action("win.home", None)
+            assert not window.audio_mode
+            assert window.stack.get_visible_child_name() == "home"
+            assert not window.lookup_action("audio-player").get_enabled()
+            yield from javascript(window, "await context.close(); return true;")
+
+            window.webview.get_settings().set_property(
+                "media-playback-requires-user-gesture", False
+            )
+            window.load_uri(origin + "/video")
+            yield from wait(
+                "video detected",
+                lambda: (
+                    window.webview.get_title() == "Local video fixture"
+                    and window.lookup_action("video-player").get_enabled()
+                ),
+            )
+            original_style = yield from javascript(
+                window, "return document.querySelector('video').style.cssText;"
+            )
+            yield from javascript(
+                window, "await document.querySelector('video').play(); return true;"
+            )
+            yield from javascript(
+                window, "await document.querySelector('audio').play(); return true;"
+            )
+            window.webview.get_settings().set_property("media-playback-requires-user-gesture", True)
+            video_generation = window.document_generation
+            window.activate_action("win.video-player", None)
+            yield from wait("video size", lambda: window.get_height() == VIDEO_HEIGHT)
+            assert window.video_mode and not window.audio_mode
+            assert window.get_width() == VIDEO_WIDTH
+            assert not window.is_fullscreen()
+            assert window.webview is original_view
+            assert window.document_generation == video_generation
+            dimensions = yield from javascript(
+                window,
+                "const video = document.querySelector('video'); "
+                "const rect = video.getBoundingClientRect(); "
+                "return {width:rect.width,height:rect.height,viewportWidth:innerWidth,"
+                "viewportHeight:innerHeight,open:video.matches(':popover-open'),"
+                "controls:video.controls,parent:video.parentElement.id};",
+            )
+            assert dimensions["open"] and dimensions["controls"]
+            assert dimensions["parent"] == "video-parent"
+            assert dimensions["width"] == dimensions["viewportWidth"]
+            assert dimensions["height"] == dimensions["viewportHeight"]
+            assert window.layout_button.get_icon_name() == "video-x-generic-symbolic"
+            video_time = yield from javascript(
+                window, "return document.querySelector('video').currentTime;"
+            )
+            later = yield from javascript(
+                window,
+                "await new Promise(resolve => setTimeout(resolve, 250)); "
+                "return document.querySelector('video').currentTime;",
+            )
+            assert later > video_time, (video_time, later)
+            if len(sys.argv) > 1:
+                snapshot = Gtk.Snapshot.new()
+                state["paintable"].snapshot(snapshot, window.get_width(), window.get_height())
+                texture = window.get_renderer().render_texture(snapshot.to_node(), None)
+                path = Path(sys.argv[1])
+                assert texture.save_to_png(str(path.with_name(path.stem + "-video.png")))
+            window.activate_action("win.audio-player", None)
+            yield from wait("video to audio", lambda: window.get_height() == AUDIO_HEIGHT)
+            assert window.audio_mode and not window.video_mode
+            assert not (
+                yield from javascript(
+                    window, "return document.querySelector('video').matches(':popover-open');"
+                )
+            )
+            window.activate_action("win.video-player", None)
+            yield from wait("audio to video", lambda: window.get_height() == VIDEO_HEIGHT)
+            assert window.video_mode
+            window.activate_action("win.page-layout", None)
+            yield from wait("restored video page", lambda: window.get_height() == 700)
+            restored = yield from javascript(
+                window,
+                "const video = document.querySelector('video'); return {style:video.style.cssText,"
+                "controls:video.controls,popover:video.hasAttribute('popover')};",
+            )
+            assert restored == {"style": original_style, "controls": False, "popover": False}
+            window.activate_action("win.video-player", None)
+            yield from wait("video before Escape", lambda: window.get_height() == VIDEO_HEIGHT)
+            yield from javascript(
+                window,
+                "document.querySelector('video').style.setProperty('--site-marker', 'kept'); "
+                "return true;",
+            )
+            window.activate_action("win.stop", None)
+            yield from wait("Escape restores page", lambda: window.get_height() == 700)
+            assert not window.video_mode
+            styles = yield from javascript(
+                window,
+                "const style = document.querySelector('video').style; return {"
+                "marker:style.getPropertyValue('--site-marker'),margin:style.marginLeft,"
+                "padding:style.paddingRight,priority:style.getPropertyPriority('padding-right'),"
+                "fit:style.objectFit};",
+            )
+            assert styles == {
+                "marker": "kept",
+                "margin": "9px",
+                "padding": "7px",
+                "priority": "important",
+                "fit": "cover",
+            }
+            window.activate_action("win.video-player", None)
+            yield from wait("video before navigation", lambda: window.get_height() == VIDEO_HEIGHT)
+            window.load_uri(origin + "/silent")
+            yield from wait(
+                "video navigation",
+                lambda: (
+                    window.webview.get_title() == "Silent page"
+                    and not window.webview.is_loading()
+                    and window.get_height() == 700
+                ),
+            )
+            assert not window.video_mode
+            assert not window.lookup_action("video-player").get_enabled()
+
+            # The application remains open in another window when a player closes.
+            window.webview.get_settings().set_property(
+                "media-playback-requires-user-gesture", False
+            )
+            window.load_uri(origin)
+            yield from wait("closing fixture load", lambda: not window.webview.is_loading())
+            yield from javascript(
+                window, "await document.querySelector('audio').play(); return true;"
+            )
+            yield from wait("closing fixture audio", lambda: window.webview.is_playing_audio())
+            window.activate_action("win.audio-player", None)
+            other = app.new_window()
+            window.close()
+            yield from wait("closed player unloads", lambda: not original_view.is_playing_audio())
+            assert original_view.get_is_muted()
+            assert app.get_windows() == [other]
+            assert other.stack.get_visible_child_name() == "home"
+
+            state["completed"] = True
+            print(
+                "PASS: audio detection, compact size, hidden playback, mute, pause/resume, "
+                "title, restore size/state, page pause, navigation, Web Audio fallback, home; "
+                "video sizing, live frames, native controls, unchanged DOM parent, "
+                "audio/video switching, page restoration, Escape, closed-player cleanup"
+            )
+            other.close()
+
+        def tick():
+            try:
+                if "steps" not in state:
+                    if not app.get_windows():
+                        return GLib.SOURCE_CONTINUE
+                    window = app.get_windows()[0]
+                    state["paintable"] = Gtk.WidgetPaintable.new(window)
+                    state["steps"] = scenario(window)
+                    state["waiting"] = next(state["steps"])
+                elif state["waiting"]():
+                    state["waiting"] = next(state["steps"])
+            except StopIteration:
+                return GLib.SOURCE_REMOVE
+            except Exception as exc:
+                fail(exc)
+                return GLib.SOURCE_REMOVE
+            return GLib.SOURCE_CONTINUE
+
+        def timeout():
+            errors.append(f"Media smoke timed out: {state['step']}")
+            app.quit()
+            return GLib.SOURCE_REMOVE
+
+        GLib.timeout_add(50, tick)
+        timeout_source = GLib.timeout_add_seconds(60, timeout)
+        previous_hook = sys.excepthook
+        sys.excepthook = exception_hook
+        try:
+            app.run(["mini-media-smoke"])
+        finally:
+            sys.excepthook = previous_hook
+            if GLib.MainContext.default().find_source_by_id(timeout_source):
+                GLib.source_remove(timeout_source)
+            server.shutdown()
+        if errors or not state["completed"]:
+            raise SystemExit("; ".join(errors) or "Media smoke incomplete")
+
+
+if __name__ == "__main__":
+    run()

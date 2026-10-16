@@ -5,6 +5,7 @@ A native GNOME web browser with a small footprint on your screen.
 - A native GNOME header bar with the page title and close button, plus web content.
 - One page per window, including links that open a new window.
 - A resizable **420 × 780** portrait window by default.
+- Compact audio and video layouts, available from the layout icon beside Close.
 - A home page with a search/address bar and recently opened site tiles.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
@@ -73,6 +74,13 @@ layout; the browser keeps WebKit's normal user agent.
 
 Drag the native header bar to move the window. Resize from the window edges as usual.
 
+Click the layout icon immediately before Close to choose **Full page**,
+**Audio player**, or **Video player**. Audio mode becomes available while the page
+plays audio; video mode becomes available when a supported video is present.
+Both keep the same page loaded. Choose **Full page** or press Escape to restore
+the previous window size. See [the user guide](docs/user/usage.md#media-layouts)
+for controls and supported media.
+
 ## Import from Chrome
 
 Use **Settings → Import bookmarks and history** or **Ctrl+Shift+I**. Select a detected
@@ -127,12 +135,15 @@ Install Ruff (`sudo dnf install ruff`), then run:
 
 ```sh
 ./scripts/check
-./scripts/smoke                  # requires a graphical session
+./scripts/smoke                  # starts an isolated virtual GNOME desktop
 ./scripts/smoke screenshots.png  # optional capture of the test app window
 ```
 
 The smoke test uses a local HTTP server and a temporary data directory. It checks
 the actual WebKit renderer, portrait viewport, popup windows, shortcuts, history,
-bookmarks, and native dialogs. It never imports a real Chrome profile.
+bookmarks, native dialogs, and media layouts with a generated WAV and canvas video.
+It never imports a real Chrome profile.
+GNOME Shell and `dbus-run-session` are required. Test windows run on a private
+headless Wayland display with silent audio, without opening on your desktop.
 
 See [architecture](docs/design/architecture.md) and [setup notes](docs/implementation/setup.md).

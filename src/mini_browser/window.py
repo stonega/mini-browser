@@ -1,6 +1,7 @@
 """One WebView per portrait window with a native GNOME header bar."""
 
 from . import APP_NAME, autofill
+from .audio_player import AudioPlayer
 from .dialogs import (
     address_dialog,
     import_dialog,
@@ -8,12 +9,17 @@ from .dialogs import (
     settings_dialog,
     shortcuts_dialog,
 )
-from .gtk import Adw, Gio, Gtk, Pango, WebKit
+from .gtk import Adw, Gio, GLib, Gtk, Pango, WebKit
 from .navigation import address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
+from .video_player import VideoPlayer
 
 DEFAULT_WIDTH = 420
 DEFAULT_HEIGHT = 780
+AUDIO_WIDTH = 360
+AUDIO_HEIGHT = 200
+VIDEO_WIDTH = 640
+VIDEO_HEIGHT = 406
 
 
 class BrowserWindow(Adw.ApplicationWindow):
@@ -28,6 +34,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.failed = False
         self.failed_uri = None
         self._closing = False
+        self.audio_mode = False
+        self.video_mode = False
+        self._video_available = False
+        self._layout_source = 0
         self.document_generation = 0
         if related_view:
             self.webview = WebKit.WebView(related_view=related_view)
@@ -57,10 +67,15 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.webview.connect("notify::title", self._title_changed)
         self.webview.connect("decide-policy", self._decide_policy)
         self.webview.connect("web-process-terminated", self._web_process_terminated)
+        self.webview.connect("notify::is-playing-audio", self._audio_changed)
+        self.webview.connect("notify::is-muted", self._audio_changed)
 
-        self.stack = Gtk.Stack()
+        self.stack = Gtk.Stack(hhomogeneous=False, vhomogeneous=False)
         self.stack.add_named(self._home(), "home")
         self.stack.add_named(self.webview, "web")
+        self.player = AudioPlayer(self.webview, self.toast)
+        self.video_player = VideoPlayer(self.webview)
+        self.stack.add_named(self.player, "audio")
         self.error_page = Adw.StatusPage(
             icon_name="network-error-symbolic",
             title="Could not load this page",
@@ -78,17 +93,29 @@ class BrowserWindow(Adw.ApplicationWindow):
 
         self.toasts = Adw.ToastOverlay(child=self.stack)
         self.headerbar = Adw.HeaderBar(decoration_layout=":close")
-        self.headerbar.pack_end(
+        header_actions = Gtk.Box(spacing=0)
+        header_actions.append(
             Gtk.Button(
                 icon_name="emblem-system-symbolic",
                 tooltip_text="Settings (Ctrl+,)",
                 action_name="win.settings",
             )
         )
+        layouts = Gio.Menu()
+        layouts.append("Full page", "win.page-layout")
+        layouts.append("Audio player", "win.audio-player")
+        layouts.append("Video player", "win.video-player")
+        self.layout_button = Gtk.MenuButton(
+            icon_name="view-grid-symbolic", tooltip_text="Page layout", menu_model=layouts
+        )
+        self.layout_button.get_popover().connect("notify::visible", self._layout_menu_changed)
+        header_actions.append(self.layout_button)
+        self.headerbar.pack_end(header_actions)
         toolbar = Adw.ToolbarView(content=self.toasts)
         toolbar.add_top_bar(self.headerbar)
         self.set_content(toolbar)
         self._add_actions()
+        self._audio_changed()
         self.set_focus(self.home_entry)
         self.connect("close-request", self._close_requested)
 
@@ -195,23 +222,164 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.recent_tiles.append(button)
 
     def show_home(self):
+        self._restore_page()
         self.webview.stop_loading()
         self.refresh_recents()
         self.stack.set_visible_child_name("home")
         self.set_title(APP_NAME)
         self.home_entry.set_text("")
         self.home_entry.grab_focus()
+        self._audio_changed()
+
+    def _audio_changed(self, *_):
+        if self._closing:
+            return
+        available = (
+            self.stack.get_visible_child_name() == "web"
+            and not self.webview.is_loading()
+            and not self.failed
+            and self.webview.is_playing_audio()
+        )
+        self.lookup_action("audio-player").set_enabled(available and not self.audio_mode)
+        self.lookup_action("page-layout").set_enabled(self.audio_mode or self.video_mode)
+        self.lookup_action("video-player").set_enabled(
+            self.stack.get_visible_child_name() in ("web", "audio")
+            and not self.webview.is_loading()
+            and not self.failed
+            and self._video_available
+            and not self.video_mode
+        )
+        self.layout_button.set_icon_name(
+            "audio-x-generic-symbolic"
+            if self.audio_mode
+            else "video-x-generic-symbolic"
+            if self.video_mode
+            else "view-grid-symbolic"
+        )
+        if self.audio_mode:
+            self.player.refresh()
+
+    def _layout_menu_changed(self, popover, *_):
+        if popover.get_visible():
+            self._probe_video()
+
+    def _probe_video(self):
+        generation = self.document_generation
+
+        def probed(available):
+            if not self._closing and generation == self.document_generation:
+                self._video_available = available
+                self._audio_changed()
+
+        self.video_player.probe(probed)
+
+    def _remember_page_layout(self):
+        if not self.audio_mode and not self.video_mode:
+            self._page_size = self.get_default_size()
+            self._page_maximized = self.is_maximized()
+            self._page_fullscreen = self.is_fullscreen()
+
+    def _show_audio_player(self):
+        if not self.lookup_action("audio-player").get_enabled():
+            return
+        self._remember_page_layout()
+        if self.video_mode:
+            self.video_player.leave()
+        self.video_mode = False
+        self.audio_mode = True
+        self.stack.set_visible_child_name("audio")
+        self._resize_layout(AUDIO_WIDTH, AUDIO_HEIGHT)
+        self.layout_button.grab_focus()
+        self._audio_changed()
+
+    def _show_video_player(self):
+        if not self.lookup_action("video-player").get_enabled():
+            return
+        self._remember_page_layout()
+        self.audio_mode = False
+        self.video_mode = True
+        self.stack.set_visible_child_name("web")
+        self._resize_layout(VIDEO_WIDTH, VIDEO_HEIGHT)
+        self._audio_changed()
+        generation = self.document_generation
+
+        def entered(success):
+            if self._closing or generation != self.document_generation or not self.video_mode:
+                return
+            if not success:
+                self._restore_page()
+                self.toast("Could not open video mode. Use the website’s video controls.")
+
+        self.video_player.enter(entered)
+
+    def _restore_page(self):
+        if not self.audio_mode and not self.video_mode:
+            return
+        if self.video_mode:
+            self.video_player.leave()
+        self.audio_mode = False
+        self.video_mode = False
+        self.stack.set_visible_child_name("web")
+        self._resize_layout(
+            *self._page_size,
+            maximized=self._page_maximized,
+            fullscreen=self._page_fullscreen,
+        )
+        self._audio_changed()
+        self.webview.grab_focus()
+
+    def _stop(self):
+        if self.audio_mode or self.video_mode:
+            self._restore_page()
+        else:
+            self.webview.stop_loading()
+
+    def _resize_layout(self, width, height, *, maximized=False, fullscreen=False):
+        if self._layout_source:
+            GLib.source_remove(self._layout_source)
+        if self.is_fullscreen():
+            self.unfullscreen()
+        if self.is_maximized():
+            self.unmaximize()
+        self.set_default_size(width, height)
+        deadline = GLib.get_monotonic_time() + 2_000_000
+
+        def finish():
+            if self._closing:
+                self._layout_source = 0
+                return GLib.SOURCE_REMOVE
+            normal = not self.is_maximized() and not self.is_fullscreen()
+            sized = (self.get_width(), self.get_height()) == (width, height)
+            if normal and not sized and GLib.get_monotonic_time() < deadline:
+                # A configure event can restore the old normal size after our
+                # first resize request. Wait for the requested size before
+                # maximizing again so GTK remembers the right normal geometry.
+                self.set_default_size(width, height)
+                return GLib.SOURCE_CONTINUE
+            if not normal and GLib.get_monotonic_time() < deadline:
+                return GLib.SOURCE_CONTINUE
+            self._layout_source = 0
+            if maximized:
+                self.maximize()
+            if fullscreen:
+                self.fullscreen()
+            return GLib.SOURCE_REMOVE
+
+        self._layout_source = GLib.timeout_add(50, finish)
 
     def _add_actions(self):
         for name, callback in {
             "address": lambda: address_dialog(self),
             "home": self.show_home,
             "settings": lambda: settings_dialog(self),
+            "page-layout": self._restore_page,
+            "audio-player": self._show_audio_player,
+            "video-player": self._show_video_player,
             "close": self.close,
             "reload": self._retry,
             "back": self.webview.go_back,
             "forward": self.webview.go_forward,
-            "stop": self.webview.stop_loading,
+            "stop": self._stop,
             "import": lambda: import_dialog(self),
             "library": lambda: library_dialog(self),
             "bookmark": self._bookmark,
@@ -233,6 +401,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.toast("Mini Browser opens http:// and https:// websites.")
             return
         self.failed_uri = None
+        self._restore_page()
         self.stack.set_visible_child_name("web")
         self.webview.load_uri(uri)
         self.webview.grab_focus()
@@ -260,11 +429,18 @@ class BrowserWindow(Adw.ApplicationWindow):
         return False
 
     def _load_changed(self, view, event):
+        if self._closing:
+            return
         if event == WebKit.LoadEvent.STARTED:
+            self.player.reset()
+            self.video_player.reset()
+            self._video_available = False
+            self._restore_page()
             self.document_generation += 1
             self.failed = False
             self.stack.set_visible_child_name("web")
         elif event == WebKit.LoadEvent.FINISHED and not self.failed:
+            self._probe_video()
             uri = view.get_uri() or ""
             if is_web_url(uri):
                 try:
@@ -274,12 +450,20 @@ class BrowserWindow(Adw.ApplicationWindow):
                             window.refresh_recents()
                 except Exception:
                     self.toast("Could not save this visit to history.")
+        self._audio_changed()
 
     def _show_error(self, uri, message):
+        if self._closing:
+            return
         self.failed = True
         self.failed_uri = uri
+        self.player.reset()
+        self.video_player.reset()
+        self._video_available = False
+        self._restore_page()
         self.error_page.set_description(message)
         self.stack.set_visible_child_name("error")
+        self._audio_changed()
 
     def _load_failed(self, _view, _event, uri, error):
         if error.matches(WebKit.NetworkError.quark(), WebKit.NetworkError.CANCELLED):
@@ -298,7 +482,9 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._show_error(self.webview.get_uri(), "The page stopped responding. Reload to continue.")
 
     def _title_changed(self, view, _pspec):
-        if self.stack.get_visible_child_name() == "web":
+        if self._closing:
+            return
+        if self.stack.get_visible_child_name() in ("web", "audio"):
             self.set_title(view.get_title() or APP_NAME)
 
     def _retry(self, *_):
@@ -327,5 +513,12 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _close_requested(self, *_):
         self._closing = True
+        if self._layout_source:
+            GLib.source_remove(self._layout_source)
+            self._layout_source = 0
+        self.player.reset()
+        self.video_player.reset()
         self.webview.stop_loading()
+        self.webview.set_is_muted(True)
+        self.webview.load_uri("about:blank")
         return False

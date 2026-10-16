@@ -3,5 +3,4 @@ set -eu
 PROJECT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$PROJECT_DIR"
 export PYTHONPATH="$PROJECT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
-/usr/bin/python3 tests/smoke.py "$@"
-exec /usr/bin/python3 tests/password_smoke.py "$@"
+exec /usr/bin/python3 tests/virtual_desktop.py "$@"
