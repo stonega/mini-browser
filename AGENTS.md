@@ -1,7 +1,8 @@
 # Mini Browser
 
 Native GNOME browser: Python, GTK 4, libadwaita, and WebKitGTK 6.0. Keep the
-browsing surface limited to web content and a close button. Each page owns a
+browsing surface limited to a native header bar (page title and close) and web
+content. Each page owns a
 window; the default size is 420 × 780 logical pixels.
 
 ## Layout and workflow
@@ -28,6 +29,13 @@ Chrome source files. Import on a background thread; GTK work stays on the main
 thread. Support repeated imports without duplicate records. Never log browsing
 data, passwords, cookies, or profile contents. Keep TLS verification and the
 WebKit sandbox enabled. Document import limitations honestly.
+
+Passwords use an app-local master-password vault, not GNOME Keyring. Keep
+credential metadata and secrets encrypted at rest. Use the established PyCA
+Argon2id/AES-GCM format, atomic ciphertext writes and stale-write protection.
+Never log secrets or interpolate them into JavaScript. Filling requires a user
+action, exact origin and document checks, and an isolated WebKit world. Test
+tampering, failed writes, lock/unlock and real WebKit filling with synthetic data.
 
 ## CodeGraph
 

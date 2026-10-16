@@ -1,9 +1,10 @@
-"""One WebView per portrait window, with one persistent close control."""
+"""One WebView per portrait window with a native GNOME header bar."""
 
-from . import APP_NAME
+from . import APP_NAME, autofill
 from .dialogs import address_dialog, import_dialog, library_dialog, shortcuts_dialog
 from .gtk import Adw, Gio, Gtk, WebKit
 from .navigation import address_to_uri, is_web_url
+from .password_dialogs import fill_login, passwords_dialog
 
 DEFAULT_WIDTH = 420
 DEFAULT_HEIGHT = 780
@@ -21,10 +22,24 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.failed = False
         self.failed_uri = None
         self._closing = False
+        self.document_generation = 0
         if related_view:
             self.webview = WebKit.WebView(related_view=related_view)
         else:
             self.webview = WebKit.WebView(network_session=app.network_session)
+        self._user_content_manager = self.webview.get_user_content_manager()
+        if not getattr(self._user_content_manager, "_mini_vault_world", False):
+            # Register and retain the isolated world across asynchronous API calls.
+            script = WebKit.UserScript.new_for_world(
+                autofill.INITIALIZE,
+                WebKit.UserContentInjectedFrames.TOP_FRAME,
+                WebKit.UserScriptInjectionTime.START,
+                autofill.WORLD,
+                None,
+                None,
+            )
+            self._user_content_manager.add_script(script)
+            self._user_content_manager._mini_vault_world = True
         settings = self.webview.get_settings()
         settings.set_property("enable-developer-extras", False)
         settings.set_property("media-playback-requires-user-gesture", True)
@@ -56,25 +71,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.stack.add_named(self.error_page, "error")
 
         self.toasts = Adw.ToastOverlay(child=self.stack)
-        overlay = Gtk.Overlay(child=self.toasts)
-        close_button = Gtk.Button(
-            icon_name="window-close-symbolic",
-            tooltip_text="Close window (Ctrl+W)",
-            width_request=34,
-            height_request=34,
-            css_classes=["circular", "mini-close"],
-        )
-        close_button.connect("clicked", lambda *_: self.close())
-        # The control can also provide native window dragging without a title bar.
-        handle = Gtk.WindowHandle(
-            child=close_button,
-            halign=Gtk.Align.END,
-            valign=Gtk.Align.START,
-            margin_top=8,
-            margin_end=8,
-        )
-        overlay.add_overlay(handle)
-        self.set_content(overlay)
+        self.headerbar = Adw.HeaderBar(decoration_layout=":close")
+        toolbar = Adw.ToolbarView(content=self.toasts)
+        toolbar.add_top_bar(self.headerbar)
+        self.set_content(toolbar)
         self._add_actions()
         self.connect("close-request", self._close_requested)
 
@@ -120,6 +120,9 @@ class BrowserWindow(Adw.ApplicationWindow):
         library_button = Gtk.Button(label="Bookmarks & history", css_classes=["flat"])
         library_button.connect("clicked", lambda *_: library_dialog(self))
         content.append(library_button)
+        password_button = Gtk.Button(label="Passwords", css_classes=["flat"])
+        password_button.connect("clicked", lambda *_: passwords_dialog(self))
+        content.append(password_button)
         help_button = Gtk.Button(
             label="Keyboard shortcuts",
             css_classes=["flat", "dim-label"],
@@ -141,6 +144,9 @@ class BrowserWindow(Adw.ApplicationWindow):
             "import": lambda: import_dialog(self),
             "library": lambda: library_dialog(self),
             "bookmark": self._bookmark,
+            "passwords": lambda: passwords_dialog(self),
+            "fill-login": lambda: fill_login(self),
+            "lock-vault": self.get_application().lock_vault,
             "shortcuts": lambda: shortcuts_dialog(self),
             "zoom-in": lambda: self._zoom(0.1),
             "zoom-out": lambda: self._zoom(-0.1),
@@ -183,6 +189,7 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _load_changed(self, view, event):
         if event == WebKit.LoadEvent.STARTED:
+            self.document_generation += 1
             self.failed = False
             self.stack.set_visible_child_name("web")
         elif event == WebKit.LoadEvent.FINISHED and not self.failed:

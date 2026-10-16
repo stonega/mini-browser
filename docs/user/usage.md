@@ -1,8 +1,8 @@
 # Using Mini Browser
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
-website or search on the start page. When the website loads, only a close button
-occupies the browser surface. Open the address dialog with Ctrl+L to inspect the
+website or search on the start page. A native GNOME header bar shows the page
+title and close button. Open the address dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
 
 Ctrl+N opens another portrait window. A website link that requests a new window
@@ -10,8 +10,7 @@ also gets a separate window. Ordinary links navigate in their current window.
 All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.
 
-To move a window, hold Super and drag its content using GNOME's normal gesture.
-To close it, use the floating close button or Ctrl+W.
+Drag the header bar to move the window. Close it with its close button or Ctrl+W.
 
 ## Import bookmarks and history
 
@@ -33,8 +32,40 @@ For HTML imports, export bookmarks from Chrome's bookmark manager. Choose
 Import bookmarks from HTML in Mini Browser and select that file. This imports
 HTTP(S) bookmark links and titles. HTML folder structure is not retained.
 
-Passwords, cookies, autofill, extensions, and Chrome's signed-in sessions are
-not imported in this version. Log in to websites in Mini Browser as needed.
+Cookies, autofill addresses, extensions, passkeys, and Chrome's signed-in sessions
+are not imported. Passwords use the separate CSV workflow below.
+
+## Import and use passwords
+
+1. In Chrome, open Google Password Manager → Settings → Export passwords, and
+   save the CSV locally.
+2. In Mini Browser, open Passwords on the start page or press Ctrl+Shift+P. You
+   can also choose Import passwords from Chrome CSV in the Chrome import dialog.
+3. Create a master password of at least 12 characters and confirm it. Later
+   sessions ask you to unlock the existing vault with this master password.
+4. Choose Import Chrome password CSV and select the exported file. Import results
+   report added, updated, and skipped entries. Re-importing updates the password
+   for an existing website/account without duplicating it.
+5. Delete the CSV when finished: it holds readable passwords.
+6. Open a website's login page, press Ctrl+Shift+L, and choose your account.
+   Review the filled form and click the website's sign-in button yourself.
+
+Credentials are matched by exact scheme, hostname, and port. An account imported
+for `https://example.org` is not filled on `https://login.example.org`, another
+port, or `http://example.org`. HTTPS and local loopback HTTP sites support filling.
+Filling acts on visible login fields in the main page, not embedded frames or
+registration/password-change forms. Forms sending to another website are
+excluded. Some custom or multi-step login forms need manual entry.
+
+Use the Passwords dialog to search saved accounts, delete individual entries, or
+change your master password. Ctrl+Shift+K locks the vault. It also locks after
+five minutes without password use, when the last window closes, and on GNOME
+screen lock or system sleep when session notifications are available.
+
+The vault is independent of GNOME Keyring. There is no recovery for a forgotten
+master password. To back it up, lock it, then copy `passwords.vault` to your
+backup location. Restoring that encrypted file requires its original master
+password. Changing the master password does not change existing backup copies.
 
 ## Local data
 
@@ -42,6 +73,13 @@ Mini Browser keeps the library, its own cookies, and WebKit site data under
 `~/.local/share/mini-browser`. Caches are under `~/.cache/mini-browser`.
 `XDG_DATA_HOME` and `XDG_CACHE_HOME` are respected when set. Chrome source
 profiles are never rewritten by the importer.
+
+Saved logins are encrypted in `~/.local/share/mini-browser/passwords.vault`.
+This protects the file at rest; an unlocked vault and filled web forms contain
+plaintext in memory. Closing or locking the vault drops its in-memory records
+and key references. Python cannot guarantee erasing every temporary memory copy.
+Already-filled web forms retain their values when the vault locks. The master
+password is never saved to disk.
 
 To reset browser data, first close every Mini Browser window and wait for any
 import or download to finish. Remove `library.sqlite3` to clear bookmarks and

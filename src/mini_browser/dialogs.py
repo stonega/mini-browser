@@ -103,8 +103,8 @@ def import_dialog(window):
     box.append(html_button)
     box.append(
         Gtk.Label(
-            label="Passwords, cookies, and signed-in sessions are not imported. "
-            "Sign in to websites again in Mini Browser.",
+            label="Passwords use a separate Chrome CSV export. "
+            "Cookies and signed-in sessions are not imported.",
             wrap=True,
             xalign=0,
             css_classes=["dim-label", "caption"],
@@ -147,7 +147,7 @@ def import_dialog(window):
     def run_import(work):
         # Read toggle state on the GTK thread, before the worker starts.
         app = window.get_application()
-        for widget in [choices, browse, checks, submit, html_button]:
+        for widget in [choices, browse, checks, submit, html_button, passwords]:
             widget.set_sensitive(False)
         dialog.set_can_close(False)
         spinner.set_visible(True)
@@ -158,7 +158,7 @@ def import_dialog(window):
             spinner.stop()
             spinner.set_visible(False)
             dialog.set_can_close(True)
-            for widget in [browse, checks, html_button]:
+            for widget in [browse, checks, html_button, passwords]:
                 widget.set_sensitive(True)
             choices.set_sensitive(bool(profiles))
             update_submit()
@@ -223,6 +223,16 @@ def import_dialog(window):
         picker.open(window, None, selected)
 
     html_button.connect("clicked", choose_html)
+    passwords = Gtk.Button(label="Import passwords from Chrome CSV…", css_classes=["flat"])
+
+    def choose_passwords(*_):
+        from .password_dialogs import passwords_dialog
+
+        dialog.force_close()
+        passwords_dialog(window, import_now=True)
+
+    passwords.connect("clicked", choose_passwords)
+    box.append(passwords)
     dialog.present(window)
     return dialog
 
@@ -301,6 +311,9 @@ def shortcuts_dialog(window):
         ("Bookmarks and history", "<Primary>b"),
         ("Bookmark this page", "<Primary>d"),
         ("Import from Chrome", "<Primary><Shift>i"),
+        ("Manage passwords", "<Primary><Shift>p"),
+        ("Fill saved login", "<Primary><Shift>l"),
+        ("Lock password vault", "<Primary><Shift>k"),
         ("Zoom in / out", "<Primary>plus"),
         ("Reset zoom", "<Primary>0"),
         ("Keyboard shortcuts", "<Primary>question"),

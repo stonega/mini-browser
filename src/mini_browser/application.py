@@ -5,9 +5,10 @@ import sys
 from pathlib import Path
 
 from . import APP_ID
-from .gtk import Adw, Gdk, Gio, Gtk, WebKit
+from .gtk import Adw, Gio, GLib, Gtk, WebKit
 from .navigation import address_to_uri
 from .storage import Library
+from .vault import PasswordVault
 from .window import BrowserWindow
 
 
@@ -39,32 +40,22 @@ class BrowserApplication(Adw.Application):
         self.data_dir.chmod(0o700)
         self.cache_dir.chmod(0o700)
         self.library = Library(self.data_dir / "library.sqlite3")
+        self.vault = PasswordVault(self.data_dir / "passwords.vault")
+        self.vault_requests = set()
+        self._vault_timer = GLib.timeout_add_seconds(2, self._expire_vault)
+        self._lock_subscriptions = []
+        self._watch_session_lock()
+        self.connect("window-removed", lambda *_: self.get_windows() or self.lock_vault())
         self.network_session = WebKit.NetworkSession.new(
             str(self.data_dir / "webkit"),
             str(self.cache_dir / "webkit"),
         )
+        self.network_session.set_persistent_credential_storage_enabled(False)
         self.network_session.get_cookie_manager().set_persistent_storage(
             str(self.data_dir / "cookies.sqlite3"),
             WebKit.CookiePersistentStorage.SQLITE,
         )
         self.network_session.connect("download-started", self._download_started)
-        css = Gtk.CssProvider()
-        css.load_from_string("""
-            .mini-close {
-                color: #fff;
-                background: rgba(30, 30, 30, 0.78);
-                box-shadow: 0 1px 5px rgba(0, 0, 0, 0.18);
-                padding: 5px;
-                min-width: 24px;
-                min-height: 24px;
-            }
-            .mini-close:hover { background: rgba(55, 55, 55, 0.96); }
-        """)
-        Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(),
-            css,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
         for name, callback in [("new-window", self.new_window), ("quit", self.quit)]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda _a, _p, cb=callback: cb())
@@ -81,6 +72,9 @@ class BrowserApplication(Adw.Application):
             "win.import": ["<Primary><Shift>i"],
             "win.library": ["<Primary>b", "<Primary>h"],
             "win.bookmark": ["<Primary>d"],
+            "win.passwords": ["<Primary><Shift>p"],
+            "win.fill-login": ["<Primary><Shift>l"],
+            "win.lock-vault": ["<Primary><Shift>k"],
             "win.shortcuts": ["<Primary>question", "F1"],
             "win.zoom-in": ["<Primary>plus", "<Primary>equal"],
             "win.zoom-out": ["<Primary>minus"],
@@ -88,6 +82,64 @@ class BrowserApplication(Adw.Application):
         }
         for action, accelerators in shortcuts.items():
             self.set_accels_for_action(action, accelerators)
+
+    def lock_vault(self):
+        self.vault.lock()
+        for request in tuple(self.vault_requests):
+            request.cancel()
+        for window in self.get_windows():
+            # Close stacked password dialogs, clearing their native credential rows.
+            for dialog in reversed(list(window.get_dialogs())):
+                if getattr(dialog, "_password_dialog", False):
+                    dialog.force_close()
+
+    def _expire_vault(self):
+        if self.vault.expire():
+            self.lock_vault()
+        return GLib.SOURCE_CONTINUE
+
+    def _watch_session_lock(self):
+        def changed(_bus, _sender, _path, _interface, _signal, parameters, _data=None):
+            if parameters.unpack()[0]:
+                self.lock_vault()
+
+        for bus_type, sender, interface, signal, path in [
+            (
+                Gio.BusType.SESSION,
+                "org.gnome.ScreenSaver",
+                "org.gnome.ScreenSaver",
+                "ActiveChanged",
+                "/org/gnome/ScreenSaver",
+            ),
+            (
+                Gio.BusType.SYSTEM,
+                "org.freedesktop.login1",
+                "org.freedesktop.login1.Manager",
+                "PrepareForSleep",
+                "/org/freedesktop/login1",
+            ),
+        ]:
+            try:
+                connection = Gio.bus_get_sync(bus_type, None)
+                subscription = connection.signal_subscribe(
+                    sender,
+                    interface,
+                    signal,
+                    path,
+                    None,
+                    Gio.DBusSignalFlags.NONE,
+                    changed,
+                )
+                self._lock_subscriptions.append((connection, subscription))
+            except GLib.Error:
+                pass  # Manual locking and the timeout work without session services.
+
+    def do_shutdown(self):
+        self.lock_vault()
+        GLib.source_remove(self._vault_timer)
+        for connection, subscription in self._lock_subscriptions:
+            connection.signal_unsubscribe(subscription)
+        Adw.Application.do_shutdown(self)
 
     def do_activate(self):
         self.new_window()

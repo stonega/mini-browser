@@ -2,10 +2,11 @@
 
 A native GNOME web browser with a small footprint on your screen.
 
-- Web content and a floating close button. No toolbar or tabs while browsing.
+- A native GNOME header bar with the page title and close button, plus web content.
 - One page per window, including links that open a new window.
 - A resizable **420 × 780** portrait window by default.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
+- Chrome password CSV import into an app-local encrypted vault, with login filling.
 - Shared, persistent website sessions across Mini Browser windows.
 - Native dialogs for addresses, the searchable library, import, and downloads.
 
@@ -16,7 +17,7 @@ Built with Python, GTK 4, libadwaita, and WebKitGTK 6.0.
 On Fedora, install the native runtime packages if needed:
 
 ```sh
-sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0
+sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0 python3-cryptography
 ```
 
 From this directory:
@@ -28,8 +29,8 @@ From this directory:
 ```
 
 Each argument opens its own window. The start page lets you enter an address,
-import Chrome data, or open your library. Once a website is open, only the close
-button remains. The narrow window lets responsive websites use their compact
+import Chrome data, or open your library. While browsing, the header bar sits
+above the page. The narrow window lets responsive websites use their compact
 layout; the browser keeps WebKit's normal user agent.
 
 ## Controls
@@ -44,12 +45,14 @@ layout; the browser keeps WebKit's normal user agent.
 | Bookmarks and history | Ctrl+B or Ctrl+H |
 | Bookmark current page | Ctrl+D |
 | Import Chrome data | Ctrl+Shift+I |
+| Manage passwords / import CSV | Ctrl+Shift+P |
+| Fill a saved login | Ctrl+Shift+L |
+| Lock password vault | Ctrl+Shift+K |
 | Zoom in / out / reset | Ctrl++ / Ctrl+− / Ctrl+0 |
 | Show shortcuts | F1 or Ctrl+? |
 | Quit all windows | Ctrl+Q |
 
-Use GNOME's Super+drag gesture to move a window by its web content. Resize from
-the window edges as usual.
+Drag the native header bar to move the window. Resize from the window edges as usual.
 
 ## Import from Chrome
 
@@ -62,10 +65,29 @@ Chrome, Chrome Beta/Dev, Chromium, and the usual Chrome/Chromium Flatpak profile
 locations are detected. You can also export bookmarks from Chrome as HTML and
 choose **Import bookmarks from HTML…**.
 
-This version imports **bookmarks and browsing history** (up to 50,000 recent
-addresses per import). Passwords, cookies, extensions, autofill, and signed-in
-Chrome sessions are not imported. Sign in to websites again; Mini Browser then
-keeps its own cookies. No Chrome files are changed. See [the user guide](docs/user/usage.md).
+Bookmarks and browsing history import directly from the profile (up to 50,000
+recent addresses). Passwords use a separate Chrome CSV export. Cookies,
+extensions, autofill addresses, passkeys, and signed-in sessions are not imported.
+Sign in to websites again; Mini Browser then keeps its own cookies. No Chrome
+files are changed. See [the user guide](docs/user/usage.md).
+
+## Password vault
+
+Open **Passwords** on the start page or press **Ctrl+Shift+P**. Create a master
+password of at least 12 characters, then import Chrome's password CSV. The vault
+uses Argon2id and AES-256-GCM through `cryptography` 44+; it does not use GNOME
+Keyring. Website names, usernames, and passwords are encrypted together.
+
+On a login page, press **Ctrl+Shift+L** and choose the saved account. Filling is
+limited to the exact website origin over HTTPS (or HTTP on loopback for local
+sites). It fills the main-page login form and leaves submission to you. Embedded
+frames, registration forms, and forms sending to another origin are excluded.
+
+The vault locks after five minutes without password use, when the last window
+closes, and on GNOME screen lock or system sleep when those D-Bus signals are
+available. Use **Ctrl+Shift+K** to lock it manually. Delete the exported CSV
+after import: that file contains readable passwords. Keep an encrypted vault
+backup and remember your master password; there is no password recovery.
 
 ## Install in the GNOME launcher
 

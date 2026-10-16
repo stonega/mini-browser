@@ -1,14 +1,15 @@
 # Setup and verification
 
 Use `/usr/bin/python3` with distribution-provided PyGObject, GTK 4.12+,
-libadwaita 1.5+, and WebKitGTK 6.0 (2.40+). A pip-only virtual environment will
+libadwaita 1.5+, WebKitGTK 6.0 (2.40+), and cryptography 44+ with Argon2id support.
+A pip-only virtual environment will
 not usually see native GI bindings. No Bun/npm dependencies are needed for this
 native desktop app.
 
 On Fedora:
 
 ```sh
-sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0 ruff
+sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0 python3-cryptography ruff
 ./scripts/run
 ```
 
@@ -24,7 +25,11 @@ ruff format src tests scripts/install
 byte compilation. `smoke` requires a running Wayland or X11 session. It uses a
 separate application ID, temporary browser data, and a loopback HTTP server.
 Pass an optional PNG filename to capture only the test application window.
-Neither test command imports private Chrome data.
+The password smoke test also creates a temporary vault, imports a synthetic CSV
+through the native dialog, checks failed and successful unlocks, then fills a
+local WebKit login form. It checks isolated-world setters, exact-site account
+selection, origin/document/form guards, and manual locking. Neither test command
+imports private Chrome data or uses the system keyring.
 
 `scripts/install` copies the Python package under
 `$XDG_DATA_HOME/mini-browser/app`, adds `~/.local/bin/mini-browser`, and writes
