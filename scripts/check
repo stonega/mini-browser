@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+set -eu
+PROJECT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$PROJECT_DIR"
+export PYTHONPATH="$PROJECT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+ruff check src tests scripts/install
+ruff format --check src tests scripts/install
+python3 -m compileall -q src

@@ -1,0 +1,41 @@
+#!/usr/bin/env python3
+"""Install for the current user, without root or changing browser defaults."""
+
+import os
+import shlex
+import shutil
+from pathlib import Path
+
+project = Path(__file__).resolve().parent.parent
+data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+binary = Path.home() / ".local/bin/mini-browser"
+app_data = data / "mini-browser/app"
+app_data.mkdir(parents=True, exist_ok=True)
+shutil.copytree(
+    project / "src/mini_browser",
+    app_data / "mini_browser",
+    dirs_exist_ok=True,
+    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+)
+binary.parent.mkdir(parents=True, exist_ok=True)
+binary.write_text(
+    "#!/bin/sh\n"
+    f"export PYTHONPATH={shlex.quote(str(app_data))}\n"
+    'exec /usr/bin/python3 -m mini_browser "$@"\n',
+    encoding="utf-8",
+)
+binary.chmod(0o755)
+desktop_path = data / "applications/io.github.stone.MiniBrowser.desktop"
+desktop_path.parent.mkdir(parents=True, exist_ok=True)
+desktop = (project / "data/io.github.stone.MiniBrowser.desktop").read_text(encoding="utf-8")
+# Desktop Entry quoting is distinct from shell quoting.
+executable = str(binary).replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`")
+executable = executable.replace("$", "\\$").replace("%", "%%")
+desktop_path.write_text(
+    desktop.replace("Exec=mini-browser %U", f'Exec="{executable}" %U'),
+    encoding="utf-8",
+)
+icons = data / "icons/hicolor/scalable/apps"
+icons.mkdir(parents=True, exist_ok=True)
+shutil.copy2(project / "data/io.github.stone.MiniBrowser.svg", icons)
+print(f"Installed {binary}\nFind Mini Browser in the GNOME app launcher.")

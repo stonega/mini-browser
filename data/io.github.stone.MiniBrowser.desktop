@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Mini Browser
+Comment=One page, one little window
+Exec=mini-browser %U
+Icon=io.github.stone.MiniBrowser
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Network;WebBrowser;
+MimeType=x-scheme-handler/http;x-scheme-handler/https;
+StartupNotify=true
+StartupWMClass=io.github.stone.MiniBrowser
+Keywords=web;browser;mini;portrait;
