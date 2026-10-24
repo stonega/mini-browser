@@ -37,7 +37,9 @@ is removed after the run, including failed tests. Each test also uses a separate
 application ID, temporary browser data, and a loopback HTTP server.
 Pass an optional PNG filename to capture only the test application window.
 The media smoke test serves a generated WAV and canvas video. It verifies WebKit
-audio detection, continued compact playback, mute, play/pause, size and window-state
+audio detection, square edge-to-edge artwork at default and resized dimensions,
+track metadata and cover updates, missing-cover and page-preview fallbacks,
+continued compact playback, mute, play/pause, size and window-state
 restoration, navigation, and the Web Audio fallback. Video checks cover live
 frames, native controls, intrinsic landscape/portrait sizing, delayed metadata,
 immersive header reveal and keyboard/menu access, audio/video switching,

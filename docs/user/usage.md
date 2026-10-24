@@ -43,8 +43,15 @@ Escape also restores Full page.
 Start audio on a page, then choose **Audio player**. It switches the window to a
 compact 360 × 200 native player while the same page keeps playing.
 
-The player shows the website and playback status, with play/pause and mute
-buttons. Play/pause controls standard audio and video elements in the main page;
+The player shows a square cover flush against the left edge, filling the window's
+height. Track title, artist or album (when supplied by the website), website,
+playback status, and play/pause and mute buttons appear on the right. Artwork and
+track details update as tracks change. Covers use the website's Media Session
+artwork, video poster, or page preview image; unavailable images or images blocked
+by the website's image-fetching rules show an audio icon instead. Non-square
+artwork is cropped to fill the square without stretching.
+
+Play/pause controls standard audio and video elements in the main page;
 resuming restarts only the elements paused by the player, or the first element
 if none were paused by it. Embedded frames, custom Web Audio players, and media
 inside shadow DOM require the website's own play/pause controls. Mute works for

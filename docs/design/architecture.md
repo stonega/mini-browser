@@ -48,6 +48,17 @@ is open. F10 reveals and focuses the layout button. Restoring the page restores
 the permanent header. Video uses the native OSD header style for contrast.
 
 `audio_player.py` implements native controls. Mute uses WebKit's page-wide API.
+The left cover fills the player's height with no margins; a width-for-height
+layout keeps it square on resize, and `Gtk.Picture` crops artwork without
+stretching it. Track title, artist (or album), website, status, and controls sit
+to its right. While mapped, the player probes once a second for track changes.
+Artwork comes from Media Session metadata, then video posters or page preview
+metadata. A separate static script fetches images inside WebKit, retaining the
+page's session, CORS, CSP, TLS, and sandbox protections. Fetches time out after
+five seconds and read at most 4 MiB. The player saves no separate artwork files;
+missing, invalid, or blocked covers show a native audio placeholder. Navigation
+cancels artwork requests and clears track details so stale responses cannot
+replace a new cover.
 Play/pause uses a static asynchronous script in a separate isolated main-frame
 world, with the command passed as a typed GVariant. It retains the elements it
 pauses for resuming without starting unrelated paused tracks. Embedded frames,

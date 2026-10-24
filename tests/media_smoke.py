@@ -39,10 +39,22 @@ def tone():
 
 class Handler(BaseHTTPRequestHandler):
     audio = tone()
+    cover_requested = threading.Event()
+    release_cover = threading.Event()
 
     def do_GET(self):
         if self.path == "/tone.wav":
             data, content_type = self.audio, "audio/wav"
+        elif self.path in ("/cover.svg", "/next-cover.svg", "/slow-cover.svg"):
+            color = b"#613583" if self.path == "/cover.svg" else b"#1c71d8"
+            data = (
+                b'<svg xmlns="http://www.w3.org/2000/svg" width="480" height="240">'
+                b'<path fill="' + color + b'" d="M0 0h480v240H0z"/>'
+                b'<circle cx="240" cy="120" r="86" fill="#c061cb"/>'
+                b'<circle cx="240" cy="120" r="32" fill="#241f31"/>'
+                b'<circle cx="240" cy="120" r="8" fill="#f6f5f4"/></svg>'
+            )
+            content_type = "image/svg+xml"
         elif self.path == "/silent":
             data, content_type = b"<title>Silent page</title>", "text/html"
         elif self.path in ("/video", "/portrait-video", "/metadata-video"):
@@ -77,13 +89,23 @@ class Handler(BaseHTTPRequestHandler):
         else:
             data = b"""<!doctype html><meta name="viewport" content="width=device-width">
             <title>Local audio fixture</title><audio src="/tone.wav" controls loop></audio>
-            <audio id="unused" src="/tone.wav" preload="auto"></audio>"""
+            <audio id="unused" src="/tone.wav" preload="auto"></audio>
+            <script>navigator.mediaSession.metadata = new MediaMetadata({
+                title: 'Synthetic Track', artist: 'Fixture Artist',
+                artwork: [{src: '/cover.svg', sizes: '480x240', type: 'image/svg+xml'}]
+            });</script>"""
             content_type = "text/html"
         self.send_response(200)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
-        self.wfile.write(data)
+        if self.path == "/slow-cover.svg":
+            self.cover_requested.set()
+            self.release_cover.wait(5)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Navigation may cancel a fixture request before its body arrives.
 
     def log_message(self, *_):
         pass
@@ -179,6 +201,30 @@ def run():
             assert window.webview.is_playing_audio()
             assert window.toolbar.get_extend_content_to_top_edge()
             yield from wait("hidden audio header", lambda: window.toolbar.get_top_bar_height() == 0)
+            yield from wait(
+                "audio cover and metadata",
+                lambda: window.player.cover.get_paintable() is not None,
+            )
+            assert window.player.title.get_label() == "Synthetic Track"
+            assert window.player.artist.get_label() == "Fixture Artist"
+            assert not window.player.placeholder.get_visible()
+
+            def check_cover():
+                valid, bounds = window.player.cover.compute_bounds(window.player)
+                assert valid
+                assert bounds.get_x() == bounds.get_y() == 0
+                assert bounds.get_width() == bounds.get_height() == window.get_height()
+                assert window.player.cover.get_content_fit() == Gtk.ContentFit.COVER
+
+            check_cover()
+            window.set_default_size(420, 240)
+            yield from wait(
+                "resized square cover",
+                lambda: window.player.cover.get_width() == window.get_height() == 240,
+            )
+            check_cover()
+            window.set_default_size(AUDIO_WIDTH, AUDIO_HEIGHT)
+            yield from wait("compact cover restored", lambda: window.get_height() == AUDIO_HEIGHT)
             window.activate_action("win.show-header", None)
             assert window.toolbar.get_reveal_top_bars()
             assert window._header_has_focus()
@@ -225,6 +271,49 @@ def run():
                 texture = window.get_renderer().render_texture(snapshot.to_node(), None)
                 path = Path(sys.argv[1])
                 assert texture.save_to_png(str(path.with_name(path.stem + "-audio.png")))
+
+            # A track change updates artwork without changing the page's audio element.
+            first_cover = window.player.cover.get_paintable()
+            yield from javascript(
+                window,
+                "navigator.mediaSession.metadata = new MediaMetadata({title:'Next Track', "
+                "artist:'Next Artist', artwork:[{src:'/next-cover.svg'}]}); return true;",
+            )
+            yield from wait(
+                "changed track artwork",
+                lambda: (
+                    window.player.cover.get_paintable() is not None
+                    and window.player.cover.get_paintable() is not first_cover
+                ),
+            )
+            assert window.player.title.get_label() == "Next Track"
+            assert window.player.artist.get_label() == "Next Artist"
+            yield from javascript(
+                window,
+                "navigator.mediaSession.metadata = new MediaMetadata({title:'No Cover', "
+                "artwork:[{src:'/silent'}]}); return true;",
+            )
+            yield from wait(
+                "unavailable cover placeholder",
+                lambda: (
+                    window.player.title.get_label() == "No Cover"
+                    and window.player._artwork_request is None
+                ),
+            )
+            assert window.player.cover.get_paintable() is None
+            assert window.player.placeholder.get_visible()
+            assert not window.player.artist.get_visible()
+            yield from javascript(
+                window,
+                "navigator.mediaSession.metadata = null; "
+                "const meta = document.createElement('meta'); meta.setAttribute('property', "
+                "'og:image'); meta.content = '/cover.svg'; "
+                "document.head.append(meta); return true;",
+            )
+            yield from wait(
+                "page artwork fallback", lambda: window.player.cover.get_paintable() is not None
+            )
+            assert window.player.title.get_label() == "Local audio fixture"
 
             window.player.mute_button.emit("clicked")
             assert window.webview.get_is_muted()
@@ -314,6 +403,13 @@ def run():
             )
             yield from wait("replay", lambda: window.lookup_action("audio-player").get_enabled())
             toggle_audio(window)
+            yield from javascript(
+                window,
+                "navigator.mediaSession.metadata = new MediaMetadata({"
+                "artwork:[{src:'/slow-cover.svg'}]}); return true;",
+            )
+            yield from wait("pending cover before navigation", Handler.cover_requested.is_set)
+            assert window.player._artwork_request is not None
             window.load_uri(origin + "/silent")
             yield from wait(
                 "navigation restores page",
@@ -324,6 +420,15 @@ def run():
                 ),
             )
             assert not window.audio_mode
+            assert window.player.cover.get_paintable() is None
+            assert window.player.placeholder.get_visible()
+            assert not window.player._timer
+            assert window.player._artwork_request is None
+            Handler.release_cover.set()
+            yield from javascript(
+                window, "await new Promise(resolve => setTimeout(resolve, 150)); return true;"
+            )
+            assert window.player.cover.get_paintable() is None
             assert window.stack.get_visible_child_name() == "web"
             assert not window.lookup_action("audio-player").get_enabled()
 
@@ -612,6 +717,7 @@ def run():
             state["completed"] = True
             print(
                 "PASS: audio detection, compact size, hidden playback, mute, pause/resume, "
+                "square edge-to-edge artwork, track metadata updates and cover fallback, "
                 "title, restore size/state, page pause, navigation, Web Audio fallback, home; "
                 "immersive header reveal/menus/keyboard, landscape/portrait/metadata video sizing, "
                 "live frames, native controls, unchanged DOM parent, "
@@ -650,6 +756,7 @@ def run():
             app.run(["mini-media-smoke"])
         finally:
             sys.excepthook = previous_hook
+            Handler.release_cover.set()
             if GLib.MainContext.default().find_source_by_id(timeout_source):
                 GLib.source_remove(timeout_source)
             server.shutdown()
