@@ -1,6 +1,6 @@
 """Always-on-top control through the scoped GNOME Shell companion extension."""
 
-from .gtk import Gio, GLib
+from .gtk import Adw, Gio, GLib
 
 BUS_NAME = "io.github.stone.MiniBrowser.WindowPin"
 OBJECT_PATH = "/io/github/stone/MiniBrowser/WindowPin"
@@ -16,6 +16,8 @@ class WindowPin:
         self.pinned = False
         self.requested = None
         self.pending = False
+        self._enabling = False
+        self._enable_timer = 0
         self._serial = 0
         self._retry = 0
         self._closed = False
@@ -38,24 +40,110 @@ class WindowPin:
             self._appeared,
             self._vanished,
         )
-        button.connect("clicked", lambda *_: self.set_pinned(button.get_active()))
+        button.connect("clicked", self._clicked)
         window.connect("map", lambda *_: self._sync())
         self._render()
 
     def _render(self):
         self.button.set_active(self.pinned)
-        self.button.set_sensitive(self.available and not self.pending)
+        self.button.set_sensitive(not self.pending and not self._enabling)
         self.button.set_tooltip_text(
             "Unpin from top"
             if self.available and self.pinned
             else "Pin on top"
             if self.available
-            else "Enable the Mini Browser Pin GNOME Shell extension to pin on top"
+            else "Set up pinning"
+        )
+
+    def _clicked(self, *_):
+        if self.available:
+            self.set_pinned(self.button.get_active())
+            return
+        self.button.set_active(False)
+        dialog = Adw.AlertDialog(
+            heading="Enable window pinning",
+            body=(
+                "Pinning needs the Mini Browser Pin GNOME extension. "
+                "Enable it to keep this window on top."
+            ),
+        )
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("enable", "Enable Pinning")
+        dialog.set_response_appearance("enable", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("enable")
+        dialog.set_close_response("cancel")
+        dialog.connect(
+            "response", lambda _dialog, response: self._enable() if response == "enable" else None
+        )
+        dialog.present(self.window)
+
+    def _enable(self):
+        if self._closed:
+            return
+        self.requested = True
+        self._enabling = True
+        self._render()
+
+        def finished(connection, result):
+            enabled = False
+            try:
+                enabled = connection.call_finish(result).unpack()[0]
+            except GLib.Error:
+                pass
+            if self._closed:
+                return
+            if not enabled:
+                self._enabling = False
+                self._render()
+                dialog = Adw.AlertDialog(
+                    heading="Finish setting up pinning",
+                    body=(
+                        "GNOME has not loaded Mini Browser Pin. After installing the updated app, "
+                        "sign out and back in once, then enable Mini Browser Pin in Extensions."
+                    ),
+                )
+                dialog.add_response("close", "OK")
+                dialog.present(self.window)
+            else:
+                self._wait_for_extension()
+
+        self.connection.call(
+            "org.gnome.Shell",
+            "/org/gnome/Shell",
+            "org.gnome.Shell.Extensions",
+            "EnableExtension",
+            GLib.Variant("(s)", (EXTENSION_UUID,)),
+            GLib.VariantType.new("(b)"),
+            Gio.DBusCallFlags.NO_AUTO_START,
+            1500,
+            None,
+            finished,
         )
 
     def _appeared(self, *_):
         self.available = True
         self._sync()
+
+    def _wait_for_extension(self, attempt=0):
+        self._enable_timer = 0
+        if self._closed:
+            return GLib.SOURCE_REMOVE
+        if self.available or attempt >= 20:
+            self._enabling = False
+            self._render()
+            if not self.available:
+                dialog = Adw.AlertDialog(
+                    heading="Pinning did not start",
+                    body=(
+                        "Turn on GNOME extensions and enable Mini Browser Pin in Extensions. "
+                        "If you just installed it, sign out and back in once."
+                    ),
+                )
+                dialog.add_response("close", "OK")
+                dialog.present(self.window)
+            return GLib.SOURCE_REMOVE
+        self._enable_timer = GLib.timeout_add(100, self._wait_for_extension, attempt + 1)
+        return GLib.SOURCE_REMOVE
 
     def _vanished(self, *_):
         self._serial += 1
@@ -136,6 +224,9 @@ class WindowPin:
     def close(self):
         self._closed = True
         self._serial += 1
+        if self._enable_timer:
+            GLib.source_remove(self._enable_timer)
+            self._enable_timer = 0
         if self._retry:
             GLib.source_remove(self._retry)
             self._retry = 0

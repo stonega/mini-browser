@@ -89,8 +89,9 @@ back in, then enable it once:
 gnome-extensions enable mini-browser-pin@io.github.stone
 ```
 
-The pin button is disabled while the extension is unavailable. Browsing and media
-playback remain available. The extension only accepts requests for a Mini Browser
+If pinning is unavailable, click the pin button and choose **Enable Pinning**.
+The setup dialog explains when signing out and back in is needed after installation.
+Browsing and media playback remain available. The extension only accepts requests for a Mini Browser
 window owned by the calling application; it does not read page content.
 
 Audio and video modes hide the title bar for an immersive view. Move the pointer

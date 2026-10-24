@@ -61,7 +61,9 @@ interface matches both the caller's unique bus name and GTK window object path,
 and only handles Mini Browser application IDs. It never matches page titles.
 Replies and unicast change signals report the compositor's actual `above` state.
 Calls are asynchronous, stale replies are ignored, and mapping races receive a
-bounded retry. Missing extensions leave the pin disabled with an explanation.
+bounded retry. Unavailable pinning keeps the button clickable and opens a native
+setup dialog. Enable Pinning activates the installed GNOME extension; newly
+installed extensions require signing out and back in before GNOME can load them.
 Entering either media mode requests pinning; returning to the page restores the
 previous requested setting. Manual unpinning remains available during playback.
 Disabling the extension restores the original state of windows it controlled.
