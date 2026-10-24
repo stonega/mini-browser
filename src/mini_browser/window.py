@@ -3,6 +3,7 @@
 from . import APP_NAME, autofill
 from .audio_player import AudioPlayer
 from .dialogs import (
+    about_dialog,
     address_dialog,
     import_dialog,
     library_dialog,
@@ -109,22 +110,23 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
         self.headerbar.pack_start(self.back_button)
         header_actions = Gtk.Box(spacing=0)
-        header_actions.append(
-            Gtk.Button(
-                icon_name="emblem-system-symbolic",
-                tooltip_text="Settings (Ctrl+,)",
-                action_name="win.settings",
-            )
-        )
         layouts = Gio.Menu()
         layouts.append("Full page", "win.page-layout")
         layouts.append("Audio player", "win.audio-player")
         layouts.append("Video player", "win.video-player")
         self.layout_button = Gtk.MenuButton(
-            icon_name="view-grid-symbolic", tooltip_text="Page layout", menu_model=layouts
+            icon_name="view-paged-symbolic", tooltip_text="Page layout", menu_model=layouts
         )
         self.layout_button.get_popover().connect("notify::visible", self._layout_menu_changed)
         header_actions.append(self.layout_button)
+        menu = Gio.Menu()
+        menu.append("Settings", "win.settings")
+        menu.append(f"About {APP_NAME}", "win.about")
+        self.menu_button = Gtk.MenuButton(
+            icon_name="open-menu-symbolic", tooltip_text="Main menu", menu_model=menu
+        )
+        self.menu_button.get_popover().connect("notify::visible", self._menu_changed)
+        header_actions.append(self.menu_button)
         self.headerbar.pack_end(header_actions)
         self.toolbar = Adw.ToolbarView(content=self.toasts)
         self.toolbar.add_top_bar(self.headerbar)
@@ -279,7 +281,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             if self.audio_mode
             else "video-x-generic-symbolic"
             if self.video_mode
-            else "view-grid-symbolic"
+            else "view-paged-symbolic"
         )
         if self.audio_mode:
             self.player.refresh()
@@ -287,6 +289,11 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _layout_menu_changed(self, popover, *_):
         if popover.get_visible():
             self._probe_video()
+        self._menu_changed(popover)
+
+    def _menu_changed(self, popover, *_):
+        if popover.get_visible():
+            self._cancel_header_hide()
         else:
             self._queue_header_hide()
 
@@ -338,6 +345,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._header_pointer
             or self._header_has_focus()
             or self.layout_button.get_popover().get_visible()
+            or self.menu_button.get_popover().get_visible()
         ):
             self.toolbar.set_reveal_top_bars(False)
         return GLib.SOURCE_REMOVE
@@ -494,6 +502,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "address": lambda: address_dialog(self),
             "home": self.show_home,
             "settings": lambda: settings_dialog(self),
+            "about": lambda: about_dialog(self),
             "show-header": self._show_header,
             "page-layout": self._restore_page,
             "audio-player": self._show_audio_player,

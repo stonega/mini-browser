@@ -3,7 +3,7 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 The home page also shows up to six recently opened sites. A native GNOME header
-bar shows Back, the page title, Settings gear, layout icon, and close button.
+bar shows Back, the page title, layout icon, three-line main menu, and close button.
 Back returns to the previous page and is disabled when there is no previous page.
 Open the address
 dialog with Ctrl+L to inspect the
@@ -14,8 +14,10 @@ visited page. They track sites opened in Mini Browser; importing Chrome history
 does not add tiles. Return home with Alt+Home. Other home windows refresh when
 you open a site in another Mini Browser window.
 
-Open Settings with the header's gear button or Ctrl+,. It contains browser data
-import, password CSV import, bookmarks/history, saved passwords, and shortcuts.
+Open Settings from the three-line main menu after the layout button, or press
+Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
+saved passwords, and shortcuts.
+Choose **About Mini Browser** in the same menu to see the app version and license.
 
 Ctrl+N opens another portrait window. Website links that request a new tab or
 window open in the current window, as do ordinary links. Scripted popup flows
@@ -27,15 +29,16 @@ Drag the header bar to move the window. Close it with its close button or Ctrl+W
 
 ## Media layouts
 
-Click the layout icon immediately before Close to choose **Full page**,
+Click the layout icon before the main menu to choose **Full page**,
 **Audio player**, or **Video player**. Unavailable options are disabled; the menu
-checks for videos again each time you open it.
+checks for videos again each time you open it. Full page uses a page-shaped icon.
 
 Audio and video modes hide the title bar for an immersive view. Move the pointer
-to the top edge to reveal Back, Settings, layout, and Close, or press F10 to reveal
+to the top edge to reveal Back, layout, main menu, and Close, or press F10 to reveal
 and focus the layout button. The bar overlays the player and hides after you
-move away; it stays visible while its controls have keyboard focus or its menu
-is open. Full page restores the usual title bar. Escape also restores Full page.
+move away; it stays visible while its controls have keyboard focus or either menu
+is open. Full page restores the usual title bar.
+Escape also restores Full page.
 
 Start audio on a page, then choose **Audio player**. It switches the window to a
 compact 360 × 200 native player while the same page keeps playing.

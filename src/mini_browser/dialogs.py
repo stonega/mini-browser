@@ -3,6 +3,7 @@
 import threading
 from pathlib import Path
 
+from . import APP_ID, APP_NAME, VERSION
 from .chrome import ChromeProfile, discover_profiles, import_html, import_profile
 from .gtk import Adw, Gio, GLib, Gtk
 from .navigation import address_to_uri
@@ -296,6 +297,17 @@ def library_dialog(window):
     refresh()
     dialog.present(window)
     return dialog
+
+
+def about_dialog(window):
+    dialog = Adw.AboutDialog(
+        application_name=APP_NAME,
+        application_icon=APP_ID,
+        version=VERSION,
+        comments="A small, native GNOME browser. One page, one portrait window.",
+        license_type=Gtk.License.GPL_3_0,
+    )
+    dialog.present(window)
 
 
 def settings_dialog(window):

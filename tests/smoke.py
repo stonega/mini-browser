@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
+from mini_browser import APP_NAME, VERSION
 from mini_browser.application import BrowserApplication
 from mini_browser.dialogs import address_dialog, library_dialog, shortcuts_dialog
 from mini_browser.gtk import Adw, GLib, Gtk
@@ -117,6 +118,15 @@ def run():
                     for callback in [address_dialog, library_dialog, shortcuts_dialog]:
                         callback(window)
                         window.get_visible_dialog().force_close()
+                    window.menu_button.popup()
+                    assert window.menu_button.get_popover().get_visible()
+                    window.menu_button.popdown()
+                    window.activate_action("win.about", None)
+                    about = window.get_visible_dialog()
+                    assert isinstance(about, Adw.AboutDialog)
+                    assert about.get_application_name() == APP_NAME
+                    assert about.get_version() == VERSION
+                    about.force_close()
                     with patch("mini_browser.dialogs.discover_profiles", return_value=[]):
                         window.activate_action("win.settings", None)
                         settings = window.get_visible_dialog()

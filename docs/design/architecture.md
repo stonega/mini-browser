@@ -18,10 +18,13 @@ sharing the storage session.
 An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
-`Adw.HeaderBar` with Back, the page title, Settings gear, layout menu, and close
+`Adw.HeaderBar` with Back, the page title, layout menu, main menu, and close
 control above the content. The home body contains
 only a search/address entry and up to six recent-site tiles. Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
+The three-line main menu follows the layout button and offers Settings and an
+`Adw.AboutDialog` displaying the app's name, version, and license. Full page uses
+the native `view-paged-symbolic` icon.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track WebKit's back-forward list and
@@ -40,7 +43,7 @@ Window size changes wait for the compositor's normal-size configure before
 restoring maximized/fullscreen state, so GTK retains the original normal size.
 In both media layouts the header overlays the content and hides by default.
 Moving to the top eight logical pixels reveals it; leaving the header hides it
-after 1.5 seconds, unless a header control has keyboard focus or the layout menu
+after 1.5 seconds, unless a header control has keyboard focus or either menu
 is open. F10 reveals and focuses the layout button. Restoring the page restores
 the permanent header. Video uses the native OSD header style for contrast.
 

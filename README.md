@@ -48,9 +48,10 @@ From this directory:
 ```
 
 Each argument opens its own window. The home page has a search/address field
-and tiles for recently opened sites. The header bar's gear button opens Settings
-for imports, passwords, and your library. While browsing, the header bar sits
-above the page. The narrow window lets responsive websites use their compact
+and tiles for recently opened sites. The header bar's three-line menu, after the
+layout button, contains Settings for imports, passwords, and your library, plus
+About Mini Browser with the app version and license. While browsing, the header
+bar sits above the page. The narrow window lets responsive websites use their compact
 layout; the browser keeps WebKit's normal user agent.
 
 ## Controls
@@ -77,7 +78,7 @@ layout; the browser keeps WebKit's normal user agent.
 
 Drag the native header bar to move the window. Resize from the window edges as usual.
 
-Click the layout icon immediately before Close to choose **Full page**,
+Click the layout icon before the three-line menu to choose **Full page**,
 **Audio player**, or **Video player**. Audio mode becomes available while the page
 plays audio; video mode becomes available when a supported video is present.
 Both keep the same page loaded and hide the title bar until you move to the top

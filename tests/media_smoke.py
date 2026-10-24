@@ -187,21 +187,22 @@ def run():
             yield from wait(
                 "audio header hides again", lambda: not window.toolbar.get_reveal_top_bars()
             )
-            window._header_motion(None, 100, 2)
-            assert window.toolbar.get_reveal_top_bars()
-            window.layout_button.popup()
-            window._header_leave()
-            # An open layout menu must remain reachable even after the hide delay.
-            yield from javascript(
-                window, "await new Promise(r => setTimeout(r, 1600)); return true;"
-            )
-            assert window.toolbar.get_reveal_top_bars()
-            window.layout_button.popdown()
-            window.player.mute_button.grab_focus()
-            window._header_leave()
-            yield from wait(
-                "audio menu dismissed", lambda: window.toolbar.get_top_bar_height() == 0
-            )
+            for menu_button in (window.layout_button, window.menu_button):
+                window._header_motion(None, 100, 2)
+                assert window.toolbar.get_reveal_top_bars()
+                menu_button.popup()
+                window._header_leave()
+                # Either open menu must remain reachable even after the hide delay.
+                yield from javascript(
+                    window, "await new Promise(r => setTimeout(r, 1600)); return true;"
+                )
+                assert window.toolbar.get_reveal_top_bars()
+                menu_button.popdown()
+                window.player.mute_button.grab_focus()
+                window._header_leave()
+                yield from wait(
+                    "audio menu dismissed", lambda: window.toolbar.get_top_bar_height() == 0
+                )
             assert window.layout_button.get_icon_name() == "audio-x-generic-symbolic"
             assert window.player.play_button.get_tooltip_text() == "Pause"
             # A clock still advances while the WebView is hidden.
