@@ -15,7 +15,7 @@ A native GNOME web browser with a small footprint on your screen.
 - Shared, persistent website sessions across Mini Browser windows.
 - Native dialogs for addresses, the searchable library, import, and downloads.
 
-See the [0.2.3 release notes](docs/user/releases.md) for the latest changes.
+See the [0.2.4 release notes](docs/user/releases.md) for the latest changes.
 
 Built with Python, GTK 4, libadwaita, and WebKitGTK 6.0.
 
@@ -25,7 +25,7 @@ Build and install the native system package:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.3-3.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.4-1.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 

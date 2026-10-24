@@ -116,7 +116,7 @@ imports private Chrome data or uses the system keyring.
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.3-3.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.4-1.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 

@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased
+## 0.2.4 — October 24, 2026
 
 - Group phone tiles under Devices and merge USB/Wi-Fi connections to the same
   physical Android phone, preferring an authorized USB connection.
@@ -17,6 +17,20 @@
   Screen Mirroring. Desktop iPhone input and phone audio are not yet supported.
 - Phone sessions clear their screens and stop helpers on close or desktop lock.
   Synthetic helper tests cover native H.264/RTP rendering, input, and cleanup.
+- Pin browser and phone windows above other windows and across workspaces through
+  the bundled Mini Browser Pin GNOME Shell extension. Media layouts enable pinning
+  by default and restore the previous pin setting when returning to the page.
+- Long-press Back to choose a page from the current window's history. Back returns
+  to the full page from media layouts, or to Home when no earlier page exists.
+- Improve media layouts with dark audio styling, draggable player surfaces,
+  edge-to-edge square artwork, and video sizing that stays stable as sites resize.
+  The compact audio window now opens at 420 × 200 logical pixels.
+
+The Fedora RPM requires ADB (`android-tools`) and includes the Android helper.
+iPhone viewing requires the optional UxPlay 1.73+ package and local-network AirPlay
+access. After first installing the bundled pin extension, log out and back in and
+enable it with `gnome-extensions enable mini-browser-pin@io.github.stone`.
+See the [setup guide](../implementation/setup.md) for dependencies.
 
 ## 0.2.3 — October 24, 2026
 

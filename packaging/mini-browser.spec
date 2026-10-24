@@ -1,6 +1,6 @@
 Name:           mini-browser
-Version:        0.2.3
-Release:        3%{?dist}
+Version:        0.2.4
+Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0
 Source0:        %{name}-%{version}.tar.gz
@@ -71,6 +71,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Sat Oct 24 2026 Mini Browser contributors - 0.2.4-1
+- Add Android and iPhone mirroring with a bundled, checksum-pinned scrcpy server.
+- Discover connected Android phones in a Devices group and merge USB/Wi-Fi aliases.
+- Add window pinning, Back history, and Home fallback; widen the audio player.
+
 * Sat Oct 24 2026 Mini Browser contributors - 0.2.3-3
 - Group phones under Devices and deduplicate USB/Wi-Fi aliases by hardware identity.
 
