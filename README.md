@@ -21,7 +21,17 @@ Built with Python, GTK 4, libadwaita, and WebKitGTK 6.0.
 
 ## Fedora RPM
 
-Build and install the native system package:
+Install from [COPR](https://copr.fedorainfracloud.org/coprs/stonegate/mini-browser/):
+
+```sh
+sudo dnf copr enable stonegate/mini-browser
+sudo dnf install mini-browser
+```
+
+The repository targets Fedora 43–45 and Rawhide on x86_64 and aarch64.
+Restart existing browser windows after upgrading.
+
+Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm

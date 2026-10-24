@@ -113,6 +113,20 @@ imports private Chrome data or uses the system keyring.
 
 ## Fedora system package
 
+Install released packages from
+[COPR](https://copr.fedorainfracloud.org/coprs/stonegate/mini-browser/):
+
+```sh
+sudo dnf copr enable stonegate/mini-browser
+sudo dnf install mini-browser
+```
+
+The project targets Fedora 43, 44, 45, and Rawhide on x86_64 and aarch64.
+DNF receives future updates after the repository is enabled. Restart Mini Browser
+after an upgrade to load the new code.
+
+To build a local package instead:
+
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
 ./scripts/build-rpm
@@ -125,6 +139,14 @@ The binary package installs `/usr/bin/mini-browser`, modules under
 `/usr/share/mini-browser`, the desktop entry, icon, license, and docs. DNF resolves
 the declared GTK, WebKitGTK, PyGObject, and cryptography runtime dependencies.
 No personal bookmarks, history, cookies, or vault files are packaged or removed.
+
+Release maintainers submit the verified source RPM to COPR, then check that each
+enabled target succeeds before announcing repository availability:
+
+```sh
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.2.4-1.fc45.src.rpm
+copr-cli list-builds stonegate/mini-browser
+```
 
 The package also installs the Mini Browser Pin extension for GNOME Shell 45–51.
 Log out and back in after first installation, then run
