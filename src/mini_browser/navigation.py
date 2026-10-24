@@ -4,6 +4,31 @@ import ipaddress
 import re
 from urllib.parse import quote_plus, urlsplit
 
+# Keep native link/form navigation (including POST bodies) in this WebView.
+# Policy/create handlers also cover script-created popups and modified clicks.
+RETARGET = """
+const retarget = (element, attribute, fallback) => {
+    const target = element.getAttribute(attribute) ?? fallback ?? '';
+    if (!target || ['_self', '_parent', '_top'].includes(target.toLowerCase())) return;
+    if ([...document.querySelectorAll('iframe, frame')].some(frame => frame.name === target))
+        return;
+    element.setAttribute(attribute, '_top');
+};
+window.addEventListener('click', event => {
+    const link = event.composedPath().find(node =>
+        node instanceof HTMLAnchorElement || node instanceof HTMLAreaElement);
+    if (link) retarget(link, 'target', document.querySelector('base[target]')?.target);
+}, true);
+window.addEventListener('submit', event => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const fallback = form.getAttribute('target') ?? document.querySelector('base[target]')?.target;
+    if (event.submitter?.hasAttribute('formtarget'))
+        retarget(event.submitter, 'formtarget', fallback);
+    else retarget(form, 'target', fallback);
+}, true);
+"""
+
 
 def is_web_url(value: str) -> bool:
     """Only HTTP(S) URLs may enter the library or be opened from imports."""

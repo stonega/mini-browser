@@ -2,8 +2,8 @@
 
 A native GNOME web browser with a small footprint on your screen.
 
-- A native GNOME header bar with the page title and close button, plus web content.
-- One page per window, including links that open a new window.
+- A native GNOME header bar with Back, the page title, and close button, plus web content.
+- Links requesting a new tab or window open in the current window; Ctrl+N opens another.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
 - A home page with a search/address bar and recently opened site tiles.
@@ -11,6 +11,8 @@ A native GNOME web browser with a small footprint on your screen.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
 - Shared, persistent website sessions across Mini Browser windows.
 - Native dialogs for addresses, the searchable library, import, and downloads.
+
+See the [0.2.3 release notes](docs/user/releases.md) for the latest changes.
 
 Built with Python, GTK 4, libadwaita, and WebKitGTK 6.0.
 
@@ -20,7 +22,7 @@ Build and install the native system package:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.2-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.3-1.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 
@@ -58,6 +60,7 @@ layout; the browser keeps WebKit's normal user agent.
 | Open an address or search | Ctrl+L |
 | Home page | Alt+Home |
 | Settings | Ctrl+, |
+| Reveal media title bar | F10 |
 | New window | Ctrl+N |
 | Close window | Ctrl+W |
 | Back / forward | Alt+Left / Alt+Right |
@@ -77,7 +80,9 @@ Drag the native header bar to move the window. Resize from the window edges as u
 Click the layout icon immediately before Close to choose **Full page**,
 **Audio player**, or **Video player**. Audio mode becomes available while the page
 plays audio; video mode becomes available when a supported video is present.
-Both keep the same page loaded. Choose **Full page** or press Escape to restore
+Both keep the same page loaded and hide the title bar until you move to the top
+edge or press F10. Video mode initially matches the video's aspect ratio and
+fits within the monitor. Choose **Full page** or press Escape to restore
 the previous window size. See [the user guide](docs/user/usage.md#media-layouts)
 for controls and supported media.
 

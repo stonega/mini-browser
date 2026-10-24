@@ -28,7 +28,9 @@ virtual monitor, a private Wayland display and D-Bus session, and temporary XDG
 directories. It requires `gnome-shell`, `dbus-run-session` (`dbus-daemon` on
 Fedora), `at-spi2-core`, and the GStreamer GI typelib. No active graphical session
 is needed. The runner starts a separate accessibility bus before WebKit launches.
-Test windows stay off the user's desktop. Audio sinks are disabled only for the
+Test windows stay off the user's desktop. Navigation checks cover same-window
+target links, script popups, native POST submissions, Back, and explicit new windows.
+Audio sinks are disabled only for the
 test processes, using GStreamer's clocked fake sink for silent playback checks.
 The GNOME process and test process groups are stopped and temporary desktop data
 is removed after the run, including failed tests. Each test also uses a separate
@@ -37,7 +39,8 @@ Pass an optional PNG filename to capture only the test application window.
 The media smoke test serves a generated WAV and canvas video. It verifies WebKit
 audio detection, continued compact playback, mute, play/pause, size and window-state
 restoration, navigation, and the Web Audio fallback. Video checks cover live
-frames, native controls, audio/video switching, restored DOM styling, and closing
+frames, native controls, intrinsic landscape/portrait sizing, delayed metadata,
+immersive header reveal and keyboard/menu access, audio/video switching, restored DOM styling, and closing
 an active player while another window stays open. It saves
 additional `-audio.png` and `-video.png` captures when requested.
 The password smoke test also creates a temporary vault, imports a synthetic CSV
@@ -51,7 +54,7 @@ imports private Chrome data or uses the system keyring.
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.2-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.3-1.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 

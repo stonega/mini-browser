@@ -373,6 +373,7 @@ def shortcuts_dialog(window):
         ("Open a website or search", "<Primary>l"),
         ("Home page", "<Alt>Home"),
         ("Settings", "<Primary>comma"),
+        ("Show media title bar", "F10"),
         ("New window", "<Primary>n"),
         ("Close window", "<Primary>w"),
         ("Reload", "<Primary>r"),

@@ -10,7 +10,8 @@ from .dialogs import (
     shortcuts_dialog,
 )
 from .gtk import Adw, Gio, GLib, Gtk, Pango, WebKit
-from .navigation import address_to_uri, is_web_url
+from .media import video_window_size
+from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
 from .video_player import VideoPlayer
 
@@ -18,12 +19,10 @@ DEFAULT_WIDTH = 420
 DEFAULT_HEIGHT = 780
 AUDIO_WIDTH = 360
 AUDIO_HEIGHT = 200
-VIDEO_WIDTH = 640
-VIDEO_HEIGHT = 406
 
 
 class BrowserWindow(Adw.ApplicationWindow):
-    def __init__(self, app, *, related_view=None):
+    def __init__(self, app):
         super().__init__(
             application=app,
             title=APP_NAME,
@@ -38,12 +37,22 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.video_mode = False
         self._video_available = False
         self._layout_source = 0
+        self._header_source = 0
+        self._header_pointer = False
+        self._media_generation = 0
         self.document_generation = 0
-        if related_view:
-            self.webview = WebKit.WebView(related_view=related_view)
-        else:
-            self.webview = WebKit.WebView(network_session=app.network_session)
+        self.webview = WebKit.WebView(network_session=app.network_session)
         self._user_content_manager = self.webview.get_user_content_manager()
+        self._user_content_manager.add_script(
+            WebKit.UserScript.new_for_world(
+                RETARGET,
+                WebKit.UserContentInjectedFrames.ALL_FRAMES,
+                WebKit.UserScriptInjectionTime.START,
+                "mini-browser-navigation",
+                None,
+                None,
+            )
+        )
         if not getattr(self._user_content_manager, "_mini_vault_world", False):
             # Register and retain the isolated world across asynchronous API calls.
             script = WebKit.UserScript.new_for_world(
@@ -93,6 +102,12 @@ class BrowserWindow(Adw.ApplicationWindow):
 
         self.toasts = Adw.ToastOverlay(child=self.stack)
         self.headerbar = Adw.HeaderBar(decoration_layout=":close")
+        self.back_button = Gtk.Button(
+            icon_name="go-previous-symbolic",
+            tooltip_text="Back (Alt+Left)",
+            action_name="win.back",
+        )
+        self.headerbar.pack_start(self.back_button)
         header_actions = Gtk.Box(spacing=0)
         header_actions.append(
             Gtk.Button(
@@ -111,10 +126,19 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.layout_button.get_popover().connect("notify::visible", self._layout_menu_changed)
         header_actions.append(self.layout_button)
         self.headerbar.pack_end(header_actions)
-        toolbar = Adw.ToolbarView(content=self.toasts)
-        toolbar.add_top_bar(self.headerbar)
-        self.set_content(toolbar)
+        self.toolbar = Adw.ToolbarView(content=self.toasts)
+        self.toolbar.add_top_bar(self.headerbar)
+        self.set_content(self.toolbar)
         self._add_actions()
+        self.webview.get_back_forward_list().connect("changed", self._navigation_changed)
+        self.stack.connect("notify::visible-child-name", self._navigation_changed)
+        self._navigation_changed()
+        motion = Gtk.EventControllerMotion(propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        motion.connect("enter", self._header_motion)
+        motion.connect("motion", self._header_motion)
+        motion.connect("leave", self._header_leave)
+        self.toolbar.add_controller(motion)
+        self.connect("notify::focus-widget", self._header_focus_changed)
         self._audio_changed()
         self.set_focus(self.home_entry)
         self.connect("close-request", self._close_requested)
@@ -262,6 +286,76 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _layout_menu_changed(self, popover, *_):
         if popover.get_visible():
             self._probe_video()
+        else:
+            self._queue_header_hide()
+
+    def _navigation_changed(self, *_):
+        browsing = self.stack.get_visible_child_name() != "home" and not self._closing
+        self.lookup_action("back").set_enabled(browsing and self.webview.can_go_back())
+        self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
+
+    def _cancel_header_hide(self):
+        if self._header_source:
+            GLib.source_remove(self._header_source)
+            self._header_source = 0
+
+    def _set_media_header(self, immersive):
+        self._media_generation += 1
+        self._cancel_header_hide()
+        self._header_pointer = False
+        self.toolbar.set_extend_content_to_top_edge(immersive)
+        self.toolbar.set_reveal_top_bars(not immersive)
+        if self.video_mode:
+            self.headerbar.add_css_class("osd")
+        else:
+            self.headerbar.remove_css_class("osd")
+
+    def _header_has_focus(self):
+        focus = self.get_focus()
+        return focus is not None and (focus == self.headerbar or focus.is_ancestor(self.headerbar))
+
+    def _show_header(self):
+        self._cancel_header_hide()
+        self.toolbar.set_reveal_top_bars(True)
+        self.layout_button.grab_focus()
+
+    def _queue_header_hide(self):
+        self._cancel_header_hide()
+        if not self._closing and (self.audio_mode or self.video_mode):
+            self._header_source = GLib.timeout_add(1500, self._hide_media_header)
+
+    def _hide_media_header(self):
+        self._header_source = 0
+        if not (
+            self._header_pointer
+            or self._header_has_focus()
+            or self.layout_button.get_popover().get_visible()
+        ):
+            self.toolbar.set_reveal_top_bars(False)
+        return GLib.SOURCE_REMOVE
+
+    def _header_motion(self, _controller, _x, y):
+        if not (self.audio_mode or self.video_mode):
+            return
+        revealed = self.toolbar.get_reveal_top_bars()
+        self._header_pointer = y <= (max(48, self.headerbar.get_height()) if revealed else 8)
+        if self._header_pointer:
+            self._cancel_header_hide()
+            self.toolbar.set_reveal_top_bars(True)
+        elif revealed:
+            self._queue_header_hide()
+
+    def _header_leave(self, *_):
+        self._header_pointer = False
+        self._queue_header_hide()
+
+    def _header_focus_changed(self, *_):
+        if self.audio_mode or self.video_mode:
+            if self._header_has_focus():
+                self._cancel_header_hide()
+                self.toolbar.set_reveal_top_bars(True)
+            else:
+                self._queue_header_hide()
 
     def _probe_video(self):
         generation = self.document_generation
@@ -288,8 +382,9 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.video_mode = False
         self.audio_mode = True
         self.stack.set_visible_child_name("audio")
+        self._set_media_header(True)
         self._resize_layout(AUDIO_WIDTH, AUDIO_HEIGHT)
-        self.layout_button.grab_focus()
+        self.player.mute_button.grab_focus()
         self._audio_changed()
 
     def _show_video_player(self):
@@ -299,16 +394,34 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.audio_mode = False
         self.video_mode = True
         self.stack.set_visible_child_name("web")
-        self._resize_layout(VIDEO_WIDTH, VIDEO_HEIGHT)
+        self._set_media_header(True)
+        self.webview.grab_focus()
         self._audio_changed()
         generation = self.document_generation
+        media_generation = self._media_generation
 
-        def entered(success):
-            if self._closing or generation != self.document_generation or not self.video_mode:
+        def entered(dimensions):
+            if (
+                self._closing
+                or generation != self.document_generation
+                or not self.video_mode
+                or media_generation != self._media_generation
+            ):
                 return
-            if not success:
+            if not dimensions:
                 self._restore_page()
                 self.toast("Could not open video mode. Use the website’s video controls.")
+                return
+            monitor = self.get_display().get_monitor_at_surface(self.get_surface())
+            geometry = monitor.get_geometry() if monitor else None
+            self._resize_layout(
+                *video_window_size(
+                    dimensions["width"],
+                    dimensions["height"],
+                    max_width=int(geometry.width * 0.9) if geometry else 960,
+                    max_height=int(geometry.height * 0.8) if geometry else 720,
+                )
+            )
 
         self.video_player.enter(entered)
 
@@ -319,6 +432,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.video_player.leave()
         self.audio_mode = False
         self.video_mode = False
+        self._set_media_header(False)
         self.stack.set_visible_child_name("web")
         self._resize_layout(
             *self._page_size,
@@ -372,6 +486,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "address": lambda: address_dialog(self),
             "home": self.show_home,
             "settings": lambda: settings_dialog(self),
+            "show-header": self._show_header,
             "page-layout": self._restore_page,
             "audio-player": self._show_audio_player,
             "video-player": self._show_video_player,
@@ -406,11 +521,26 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.webview.load_uri(uri)
         self.webview.grab_focus()
 
-    def _create_webview(self, _view, _navigation):
-        child = self.get_application().new_window(related_view=self.webview)
-        child.stack.set_visible_child_name("web")
-        # WebKit controls loading of the related view (including POST requests).
-        return child.webview
+    def _create_webview(self, _view, navigation):
+        self._open_in_current_view(navigation.get_request())
+        return None
+
+    def _open_in_current_view(self, request):
+        if self._closing:
+            return
+        uri = request.get_uri()
+        if uri == "about:blank":
+            return
+        if not is_web_url(uri):
+            self.toast("This link uses an unsupported address type.")
+            return
+        if request.get_http_method() != "GET":
+            self.toast("This form could not be opened in the current window.")
+            return
+        self._restore_page()
+        self.stack.set_visible_child_name("web")
+        self.webview.load_request(request)
+        self.webview.grab_focus()
 
     def _decide_policy(self, _view, decision, kind):
         if kind in (
@@ -421,6 +551,11 @@ class BrowserWindow(Adw.ApplicationWindow):
             if uri != "about:blank" and not is_web_url(uri):
                 decision.ignore()
                 self.toast("This link uses an unsupported address type.")
+                return True
+            if kind == WebKit.PolicyDecisionType.NEW_WINDOW_ACTION:
+                request = decision.get_navigation_action().get_request()
+                decision.ignore()
+                self._open_in_current_view(request)
                 return True
         elif kind == WebKit.PolicyDecisionType.RESPONSE:
             if not decision.is_mime_type_supported():
@@ -513,6 +648,7 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _close_requested(self, *_):
         self._closing = True
+        self._cancel_header_hide()
         if self._layout_source:
             GLib.source_remove(self._layout_source)
             self._layout_source = 0

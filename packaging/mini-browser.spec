@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.2.2
+Version:        0.2.3
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later
@@ -55,6 +55,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_mandir}/man1/mini-browser.1*
 
 %changelog
+* Sat Oct 24 2026 Mini Browser contributors - 0.2.3-1
+- Add audio/video layouts with immersive headers and intrinsic video sizing.
+- Open new-tab links in the current window and add native Back navigation.
+- Verify navigation and media layouts on an isolated virtual GNOME desktop.
+
 * Fri Oct 16 2026 Mini Browser contributors - 0.2.2-1
 - Simplify home to search and recent sites; move import controls into Settings.
 

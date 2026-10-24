@@ -3,7 +3,9 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 The home page also shows up to six recently opened sites. A native GNOME header
-bar shows the page title, Settings gear, layout icon, and close button. Open the address
+bar shows Back, the page title, Settings gear, layout icon, and close button.
+Back returns to the previous page and is disabled when there is no previous page.
+Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
 
@@ -15,8 +17,9 @@ you open a site in another Mini Browser window.
 Open Settings with the header's gear button or Ctrl+,. It contains browser data
 import, password CSV import, bookmarks/history, saved passwords, and shortcuts.
 
-Ctrl+N opens another portrait window. A website link that requests a new window
-also gets a separate window. Ordinary links navigate in their current window.
+Ctrl+N opens another portrait window. Website links that request a new tab or
+window open in the current window, as do ordinary links. Scripted popup flows
+that need a separate window handle or build a blank popup are unsupported.
 All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.
 
@@ -27,6 +30,12 @@ Drag the header bar to move the window. Close it with its close button or Ctrl+W
 Click the layout icon immediately before Close to choose **Full page**,
 **Audio player**, or **Video player**. Unavailable options are disabled; the menu
 checks for videos again each time you open it.
+
+Audio and video modes hide the title bar for an immersive view. Move the pointer
+to the top edge to reveal Back, Settings, layout, and Close, or press F10 to reveal
+and focus the layout button. The bar overlays the player and hides after you
+move away; it stays visible while its controls have keyboard focus or its menu
+is open. Full page restores the usual title bar. Escape also restores Full page.
 
 Start audio on a page, then choose **Audio player**. It switches the window to a
 compact 360 × 200 native player while the same page keeps playing.
@@ -39,8 +48,11 @@ inside shadow DOM require the website's own play/pause controls. Mute works for
 the whole page, including those players. Websites can also restrict background
 playback or reject playback requests.
 
-Choose **Video player** to focus a main-page video in a resizable 640 × 406 window
-with WebKit's playback controls. The playing video is preferred; otherwise the
+Choose **Video player** to focus a main-page video with WebKit's playback controls.
+Its initial window proportions match the video's own aspect ratio, usually at
+640 pixels wide; tall videos shrink to fit the monitor. You can still resize it
+freely. When video dimensions are unavailable, the default is 640 × 360 (16:9).
+The playing video is preferred; otherwise the
 largest visible video is selected. It stays attached to its page, with its
 original styling and controls restored when you leave video mode. Videos in
 embedded frames, shadow DOM, or existing website popovers are not supported.

@@ -6,20 +6,26 @@ web UI or JavaScript build toolchain. GTK 4.12+ is required by the CSS API.
 
 `BrowserApplication` owns the application actions, private data paths, SQLite
 library, and a shared persistent `WebKit.NetworkSession`. `BrowserWindow` owns
-one WebView and defaults to 420 × 780 logical pixels. Related WebViews reuse
-WebKit's opener relationship and storage session, so popup navigation and POST
-requests remain under WebKit's control.
+one WebView and defaults to 420 × 780 logical pixels. Links requesting another
+tab/window navigate that same WebView. A document-start script in an isolated
+world retargets links and submitted forms while preserving native navigation and
+POST bodies; WebKit policy/create handlers redirect other HTTP(S) GET popup
+requests and refuse new WebViews. `window.open()` returns no popup handle;
+blank popups and programmatic POST popups that bypass submission events are
+unsupported. Explicit application new-window actions still create windows, all
+sharing the storage session.
 
 An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
-`Adw.HeaderBar` with the page title, Settings gear, layout menu, and close
+`Adw.HeaderBar` with Back, the page title, Settings gear, layout menu, and close
 control above the content. The home body contains
 only a search/address entry and up to six recent-site tiles. Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
-locked aspect ratio. WebKit's user agent is unchanged.
+locked aspect ratio. Back/Forward actions track WebKit's back-forward list and
+are disabled on the home page. WebKit's user agent is unchanged.
 
 WebKit's `is-playing-audio` notification enables Audio player for a loaded page.
 Audio mode keeps that WebView alive but unmapped and requests a
@@ -29,6 +35,11 @@ available when audio stops. Navigation, home, and error transitions leave compac
 mode. Page titles continue updating in either layout.
 Window size changes wait for the compositor's normal-size configure before
 restoring maximized/fullscreen state, so GTK retains the original normal size.
+In both media layouts the header overlays the content and hides by default.
+Moving to the top eight logical pixels reveals it; leaving the header hides it
+after 1.5 seconds, unless a header control has keyboard focus or the layout menu
+is open. F10 reveals and focuses the layout button. Restoring the page restores
+the permanent header. Video uses the native OSD header style for contrast.
 
 `audio_player.py` implements native controls. Mute uses WebKit's page-wide API.
 Play/pause uses a static asynchronous script in a separate isolated main-frame
@@ -38,7 +49,11 @@ shadow DOM, and Web Audio are not controlled by that script; mute remains usable
 Cancelled requests cannot update controls after navigation or window closure.
 
 `video_player.py` focuses the largest playing (or largest visible) main-document
-video in a 640 × 406 window. A static script in its own isolated world uses the
+video in a window sized to its intrinsic aspect ratio, normally 640 pixels wide
+and bounded by 90% of monitor width and 80% of monitor height. The header overlay
+does not add height or shrink the video viewport. Metadata is awaited for up to
+1.5 seconds; unavailable dimensions fall back to 640 × 360. Subsequent manual
+resizing is unrestricted. A static script in its own isolated world uses the
 Popover API to put the existing video in the top layer without moving its DOM
 node or requesting desktop fullscreen. Temporary styles make it fill the WebView
 and expose native media controls. Exit restores the controls and overridden

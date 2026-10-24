@@ -1,5 +1,7 @@
 """Focus an existing video in WebKit's top layer without moving its DOM node."""
 
+import json
+
 from .gtk import GLib, WebKit
 
 WORLD = "mini-browser-video"
@@ -23,6 +25,19 @@ const restore = () => {
     }
     globalThis.__miniBrowserVideo = null;
 };
+const dimensions = async video => {
+    if (!video.videoWidth || !video.videoHeight) {
+        await new Promise(resolve => {
+            const ready = () => {
+                clearTimeout(timer); video.removeEventListener('loadedmetadata', ready); resolve();
+            };
+            const timer = setTimeout(ready, 1500);
+            video.addEventListener('loadedmetadata', ready, {once: true});
+        });
+    }
+    return globalThis.__miniBrowserVideo === saved ?
+        {width: video.videoWidth, height: video.videoHeight} : false;
+};
 if (command === 'exit') {
     if (saved && document.fullscreenElement?.contains(saved.video))
         await document.exitFullscreen();
@@ -36,7 +51,7 @@ const videos = [...document.querySelectorAll('video')].filter(video => {
         style.visibility === 'visible' && style.opacity !== '0';
 });
 if (command === 'probe') return !!(saved?.video.isConnected || videos.length);
-if (saved?.video.isConnected) return true;
+if (saved?.video.isConnected) return await dimensions(saved.video);
 const area = video => {
     const rect = video.getBoundingClientRect(); return rect.width * rect.height;
 };
@@ -70,7 +85,7 @@ try {
     saved.appliedStyle = video.style.cssText;
     video.showPopover();
     if (!video.matches(':popover-open')) { restore(); return false; }
-    return true;
+    return await dimensions(video);
 } catch (error) { restore(); return false; }
 """
 
@@ -115,7 +130,7 @@ class VideoPlayer:
     def _run(self, command, completed=None):
         def finished(view, result):
             try:
-                success = view.call_async_javascript_function_finish(result).to_boolean()
+                success = json.loads(view.call_async_javascript_function_finish(result).to_json(0))
             except GLib.Error:
                 success = False
             if completed:

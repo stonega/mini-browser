@@ -27,10 +27,21 @@ class Handler(BaseHTTPRequestHandler):
             "margin:0;padding:72px 24px}h1{font-size:34px}a{color:#1c71d8}</style>"
             f"<h1>{'Another little window.' if second else 'A little window to the web.'}</h1>"
             '<p>Native GNOME. One page per window.</p><a href="/second" target="_blank">'
-            "Open another page</a>"
+            'Open another page</a><form action="/submitted" method="post" target="_blank">'
+            '<input name="fixture" value="synthetic"><button>Submit</button></form>'
         ).encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(page)))
+        self.end_headers()
+        self.wfile.write(page)
+
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        assert self.path == "/submitted" and body == b"fixture=synthetic"
+        page = b"<title>Submitted page</title>"
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html")
         self.send_header("Content-Length", str(len(page)))
         self.end_headers()
         self.wfile.write(page)
@@ -86,6 +97,7 @@ def run():
                     assert window.stack.get_visible_child_name() == "home"
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.recent_empty.get_visible()
+                    assert not window.back_button.get_sensitive()
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
                     state["phase"] = 1
@@ -142,7 +154,7 @@ def run():
                                 "javascript-can-open-windows-automatically",
                                 True,
                             )
-                            view.evaluate_javascript("window.open('/second', '_blank')", -1)
+                            view.evaluate_javascript("document.querySelector('a').click()", -1)
                             state["phase"] = 2
                         except Exception as exc:
                             fail(exc)
@@ -157,15 +169,67 @@ def run():
                     )
                     state["phase"] = 10
                 elif state["phase"] == 2:
-                    if len(windows) != 2:
+                    if window.webview.get_title() != "Second page" or window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
-                    second = next(w for w in windows if w.webview.get_title() == "Second page")
-                    if second.webview.is_loading():
-                        return GLib.SOURCE_CONTINUE
-                    assert second.webview != window.webview
-                    assert second.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                    assert len(windows) == 1
+                    assert window.back_button.get_sensitive()
                     assert len(app.library.search("history")) == 2
-                    second.activate_action("win.close", None)
+                    window.back_button.emit("clicked")
+                    state["phase"] = 21
+                elif state["phase"] == 21:
+                    if window.webview.get_title() != "Mini smoke" or window.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
+                    assert not window.back_button.get_sensitive()
+                    assert window.lookup_action("forward").get_enabled()
+                    window.webview.evaluate_javascript("window.open('/second', '_blank')", -1)
+                    state["phase"] = 22
+                elif state["phase"] == 22:
+                    if window.webview.get_title() != "Second page" or window.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
+                    assert len(windows) == 1
+                    window.back_button.emit("clicked")
+                    state["phase"] = 23
+                elif state["phase"] == 23:
+                    if window.webview.get_title() != "Mini smoke" or window.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
+                    if not state.get("policy_link_checked"):
+                        # A site can change the target after our capture listener.
+                        # Exercise WebKit's new-window policy fallback as well.
+                        window.webview.evaluate_javascript(
+                            "const link = document.querySelector('a'); "
+                            "link.addEventListener('click', () => link.target = '_blank', "
+                            "{once:true}); link.click();",
+                            -1,
+                        )
+                        state["phase"] = 26
+                        return GLib.SOURCE_CONTINUE
+                    window.webview.evaluate_javascript(
+                        "document.querySelector('form').requestSubmit()", -1
+                    )
+                    state["phase"] = 24
+                elif state["phase"] == 26:
+                    if window.webview.get_title() != "Second page" or window.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
+                    assert len(windows) == 1
+                    state["policy_link_checked"] = True
+                    window.back_button.emit("clicked")
+                    state["phase"] = 23
+                elif state["phase"] == 24:
+                    if (
+                        window.webview.get_title() != "Submitted page"
+                        or window.webview.is_loading()
+                    ):
+                        return GLib.SOURCE_CONTINUE
+                    assert len(windows) == 1
+                    assert window.webview.get_uri() == base + "/submitted"
+                    # Explicit new-window requests remain available to the user.
+                    app.activate_action("new-window", None)
+                    state["phase"] = 25
+                elif state["phase"] == 25:
+                    assert len(windows) == 2
+                    other = next(w for w in windows if w.stack.get_visible_child_name() == "home")
+                    assert other.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                    other.close()
                     state["phase"] = 3
                 elif state["phase"] == 3 and len(windows) == 1:
                     # Synthetic app history also exercises the complete home grid.
@@ -175,6 +239,7 @@ def run():
                     window.activate_action("win.home", None)
                     assert window.stack.get_visible_child_name() == "home"
                     assert window.get_title() == "Mini Browser"
+                    assert not window.back_button.get_sensitive()
                     assert not window.recent_empty.get_visible()
                     state["ready"] = time.monotonic() + 0.2
                     state["phase"] = 31
@@ -200,7 +265,8 @@ def run():
                     assert window.stack.get_visible_child_name() == "web"
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
-                        "history, bookmark, settings imports, home entry, recent apps, popup, close"
+                        "history, bookmark, settings imports, home entry, recent apps, "
+                        "same-window links/popups/POST, Back, explicit new window, close"
                     )
                     window.close()
                     return GLib.SOURCE_REMOVE

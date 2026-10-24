@@ -66,6 +66,7 @@ class BrowserApplication(Adw.Application):
             "win.address": ["<Primary>l"],
             "win.home": ["<Alt>Home"],
             "win.settings": ["<Primary>comma"],
+            "win.show-header": ["F10"],
             "win.close": ["<Primary>w"],
             "win.reload": ["<Primary>r", "F5"],
             "win.back": ["<Alt>Left"],
@@ -164,8 +165,8 @@ class BrowserApplication(Adw.Application):
             self.new_window(uri)
         return 0
 
-    def new_window(self, uri=None, *, related_view=None):
-        window = BrowserWindow(self, related_view=related_view)
+    def new_window(self, uri=None):
+        window = BrowserWindow(self)
         if uri:
             window.load_uri(uri)
         window.present()

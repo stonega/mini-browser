@@ -15,13 +15,12 @@ from pathlib import Path
 
 from mini_browser.application import BrowserApplication
 from mini_browser.gtk import GLib, Gtk
+from mini_browser.media import video_window_size
 from mini_browser.window import (
     AUDIO_HEIGHT,
     AUDIO_WIDTH,
     DEFAULT_HEIGHT,
     DEFAULT_WIDTH,
-    VIDEO_HEIGHT,
-    VIDEO_WIDTH,
 )
 
 
@@ -32,7 +31,7 @@ def tone():
         output.writeframes(
             b"".join(
                 struct.pack("<h", int(100 * math.sin(2 * math.pi * 440 * index / 8000)))
-                for index in range(16000)
+                for index in range(8000 * 30)
             )
         )
     return data.getvalue()
@@ -46,7 +45,7 @@ class Handler(BaseHTTPRequestHandler):
             data, content_type = self.audio, "audio/wav"
         elif self.path == "/silent":
             data, content_type = b"<title>Silent page</title>", "text/html"
-        elif self.path == "/video":
+        elif self.path in ("/video", "/portrait-video", "/metadata-video"):
             data = b"""<!doctype html><meta name="viewport" content="width=device-width">
             <title>Local video fixture</title><h1>Page outside the video</h1>
             <style>#video-parent{transform:scale(.8);overflow:hidden;width:240px;height:160px}
@@ -66,6 +65,14 @@ class Handler(BaseHTTPRequestHandler):
                 ctx.fillRect((window.framesPainted++ % 28) * 10, 140, 20, 10);
             }, 100);
             </script>"""
+            if self.path == "/portrait-video":
+                data = data.replace(b'width="320" height="180"', b'width="180" height="320"')
+            if self.path == "/metadata-video":
+                data = data.replace(
+                    b"document.querySelector('video').srcObject = canvas.captureStream(10);",
+                    b"window.startVideo = () => { "
+                    b"document.querySelector('video').srcObject = canvas.captureStream(10); };",
+                )
             content_type = "text/html"
         else:
             data = b"""<!doctype html><meta name="viewport" content="width=device-width">
@@ -170,6 +177,31 @@ def run():
             assert window.webview is original_view
             assert window.document_generation == generation
             assert window.webview.is_playing_audio()
+            assert window.toolbar.get_extend_content_to_top_edge()
+            yield from wait("hidden audio header", lambda: window.toolbar.get_top_bar_height() == 0)
+            window.activate_action("win.show-header", None)
+            assert window.toolbar.get_reveal_top_bars()
+            assert window._header_has_focus()
+            window.player.mute_button.grab_focus()
+            window._header_motion(None, 100, AUDIO_HEIGHT - 1)
+            yield from wait(
+                "audio header hides again", lambda: not window.toolbar.get_reveal_top_bars()
+            )
+            window._header_motion(None, 100, 2)
+            assert window.toolbar.get_reveal_top_bars()
+            window.layout_button.popup()
+            window._header_leave()
+            # An open layout menu must remain reachable even after the hide delay.
+            yield from javascript(
+                window, "await new Promise(r => setTimeout(r, 1600)); return true;"
+            )
+            assert window.toolbar.get_reveal_top_bars()
+            window.layout_button.popdown()
+            window.player.mute_button.grab_focus()
+            window._header_leave()
+            yield from wait(
+                "audio menu dismissed", lambda: window.toolbar.get_top_bar_height() == 0
+            )
             assert window.layout_button.get_icon_name() == "audio-x-generic-symbolic"
             assert window.player.play_button.get_tooltip_text() == "Pause"
             # A clock still advances while the WebView is hidden.
@@ -231,6 +263,8 @@ def run():
             assert window.stack.get_visible_child_name() == "web"
             assert window.webview.is_playing_audio()
             assert window.document_generation == generation
+            assert window.toolbar.get_reveal_top_bars()
+            assert not window.toolbar.get_extend_content_to_top_edge()
 
             window.maximize()
             yield from wait("maximized page", window.is_maximized)
@@ -339,9 +373,11 @@ def run():
             window.webview.get_settings().set_property("media-playback-requires-user-gesture", True)
             video_generation = window.document_generation
             window.activate_action("win.video-player", None)
-            yield from wait("video size", lambda: window.get_height() == VIDEO_HEIGHT)
+            yield from wait(
+                "video size", lambda: (window.get_width(), window.get_height()) == (640, 360)
+            )
             assert window.video_mode and not window.audio_mode
-            assert window.get_width() == VIDEO_WIDTH
+            yield from wait("hidden video header", lambda: window.toolbar.get_top_bar_height() == 0)
             assert not window.is_fullscreen()
             assert window.webview is original_view
             assert window.document_generation == video_generation
@@ -357,6 +393,21 @@ def run():
             assert dimensions["parent"] == "video-parent"
             assert dimensions["width"] == dimensions["viewportWidth"]
             assert dimensions["height"] == dimensions["viewportHeight"]
+            assert abs(dimensions["viewportWidth"] / dimensions["viewportHeight"] - 16 / 9) < 0.01
+            window.activate_action("win.show-header", None)
+            yield from wait(
+                "video header overlays", lambda: window.toolbar.get_top_bar_height() > 0
+            )
+            overlaid = yield from javascript(
+                window, "return {width:innerWidth,height:innerHeight};"
+            )
+            assert overlaid == {
+                "width": dimensions["viewportWidth"],
+                "height": dimensions["viewportHeight"],
+            }
+            window.webview.grab_focus()
+            window._header_leave()
+            yield from wait("video header hides", lambda: window.toolbar.get_top_bar_height() == 0)
             assert window.layout_button.get_icon_name() == "video-x-generic-symbolic"
             video_time = yield from javascript(
                 window, "return document.querySelector('video').currentTime;"
@@ -382,7 +433,7 @@ def run():
                 )
             )
             window.activate_action("win.video-player", None)
-            yield from wait("audio to video", lambda: window.get_height() == VIDEO_HEIGHT)
+            yield from wait("audio to video", lambda: window.get_height() == 360)
             assert window.video_mode
             window.activate_action("win.page-layout", None)
             yield from wait("restored video page", lambda: window.get_height() == 700)
@@ -393,7 +444,7 @@ def run():
             )
             assert restored == {"style": original_style, "controls": False, "popover": False}
             window.activate_action("win.video-player", None)
-            yield from wait("video before Escape", lambda: window.get_height() == VIDEO_HEIGHT)
+            yield from wait("video before Escape", lambda: window.get_height() == 360)
             yield from javascript(
                 window,
                 "document.querySelector('video').style.setProperty('--site-marker', 'kept'); "
@@ -417,7 +468,7 @@ def run():
                 "fit": "cover",
             }
             window.activate_action("win.video-player", None)
-            yield from wait("video before navigation", lambda: window.get_height() == VIDEO_HEIGHT)
+            yield from wait("video before navigation", lambda: window.get_height() == 360)
             window.load_uri(origin + "/silent")
             yield from wait(
                 "video navigation",
@@ -429,6 +480,69 @@ def run():
             )
             assert not window.video_mode
             assert not window.lookup_action("video-player").get_enabled()
+
+            # These synthetic play() calls do not carry a real user gesture.
+            window.webview.get_settings().set_property(
+                "media-playback-requires-user-gesture", False
+            )
+            window.load_uri(origin + "/portrait-video")
+            yield from wait(
+                "portrait video detected",
+                lambda: (
+                    window.webview.get_uri() == origin + "/portrait-video"
+                    and not window.webview.is_loading()
+                    and window.lookup_action("video-player").get_enabled()
+                ),
+            )
+            yield from javascript(
+                window, "/* portrait */ await document.querySelector('video').play(); return true;"
+            )
+            geometry = (
+                window.get_display().get_monitor_at_surface(window.get_surface()).get_geometry()
+            )
+            portrait_size = video_window_size(
+                180, 320, max_width=int(geometry.width * 0.9), max_height=int(geometry.height * 0.8)
+            )
+            window.activate_action("win.video-player", None)
+            yield from wait(
+                "portrait size", lambda: (window.get_width(), window.get_height()) == portrait_size
+            )
+            assert abs(window.get_width() / window.get_height() - 9 / 16) < 0.01
+            window.activate_action("win.page-layout", None)
+            yield from wait("portrait restored", lambda: window.get_height() == 700)
+
+            window.load_uri(origin + "/metadata-video")
+            yield from wait(
+                "metadata fixture", lambda: window.lookup_action("video-player").get_enabled()
+            )
+            assert (
+                yield from javascript(window, "return document.querySelector('video').videoWidth;")
+            ) == 0
+            window.activate_action("win.video-player", None)
+            yield from javascript(
+                window, "startVideo(); await document.querySelector('video').play(); return true;"
+            )
+            yield from wait("late metadata size", lambda: window.get_height() == 360)
+            window.activate_action("win.page-layout", None)
+            yield from wait("metadata restored", lambda: window.get_height() == 700)
+
+            # Missing metadata falls back safely; a cancelled entry cannot resize the page later.
+            window.load_uri(origin + "/metadata-video")
+            yield from wait(
+                "missing metadata fixture",
+                lambda: window.lookup_action("video-player").get_enabled(),
+            )
+            window.activate_action("win.video-player", None)
+            window.activate_action("win.page-layout", None)
+            yield from javascript(
+                window, "await new Promise(r => setTimeout(r, 1700)); return true;"
+            )
+            assert not window.video_mode and window.get_height() == 700
+            window.activate_action("win.video-player", None)
+            yield from wait("missing metadata fallback", lambda: window.get_height() == 360)
+            assert window.get_width() == 640
+            window.activate_action("win.page-layout", None)
+            yield from wait("fallback restored", lambda: window.get_height() == 700)
 
             # The application remains open in another window when a player closes.
             window.webview.get_settings().set_property(
@@ -452,7 +566,8 @@ def run():
             print(
                 "PASS: audio detection, compact size, hidden playback, mute, pause/resume, "
                 "title, restore size/state, page pause, navigation, Web Audio fallback, home; "
-                "video sizing, live frames, native controls, unchanged DOM parent, "
+                "immersive header reveal/menus/keyboard, landscape/portrait/metadata video sizing, "
+                "live frames, native controls, unchanged DOM parent, "
                 "audio/video switching, page restoration, Escape, closed-player cleanup"
             )
             other.close()
