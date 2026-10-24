@@ -45,7 +45,7 @@ retain their page-history or media-layout behavior.
 
 WebKit's `is-playing-audio` notification enables Audio player for a loaded page.
 Audio mode keeps that WebView alive but unmapped and requests a
-360 × 200 window; the stack measures only its visible child. Restoring preserves
+420 × 200 window; the stack measures only its visible child. Restoring preserves
 the browsing size and maximized/fullscreen state. The restore action stays
 available when audio stops. Navigation, home, and error transitions leave compact
 mode. Page titles continue updating in either layout.

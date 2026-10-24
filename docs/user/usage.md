@@ -129,7 +129,7 @@ Playback buttons remain clickable, and the video's bottom control strip stays
 available for seeking and volume changes.
 
 Start audio on a page, then choose **Audio player**. It switches the window to a
-compact 360 × 200 native player while the same page keeps playing.
+compact 420 × 200 native player while the same page keeps playing.
 The player and its revealed title bar use a dark appearance, including when the
 desktop uses a light theme. Returning to Full page restores the usual title bar.
 

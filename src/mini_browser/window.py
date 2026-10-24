@@ -19,7 +19,7 @@ from .window_pin import WindowPin
 
 DEFAULT_WIDTH = 420
 DEFAULT_HEIGHT = 780
-AUDIO_WIDTH = 360
+AUDIO_WIDTH = 420
 AUDIO_HEIGHT = 200
 
 
