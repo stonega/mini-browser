@@ -3,7 +3,7 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 The home page also shows up to six recently opened sites. A native GNOME header
-bar shows Back, the page title, layout icon, three-line main menu, and close button.
+bar shows Back, the page title, pin, layout icon, three-line main menu, and close button.
 Back returns to the previous page and is disabled when there is no previous page.
 Open the address
 dialog with Ctrl+L to inspect the
@@ -33,8 +33,25 @@ Click the layout icon before the main menu to choose **Full page**,
 **Audio player**, or **Video player**. Unavailable options are disabled; the menu
 checks for videos again each time you open it. Full page uses a page-shaped icon.
 
+The pin button immediately before the layout button keeps a window above other
+windows. Audio and video modes turn it on automatically; click it to unpin the
+player. Returning to Full page restores the pin setting from before media mode.
+Each window has its own pin setting.
+
+Pinning requires the bundled **Mini Browser Pin** GNOME Shell extension on GNOME
+45–51. The RPM and `scripts/install` install it. After installation, log out and
+back in, then enable it once:
+
+```sh
+gnome-extensions enable mini-browser-pin@io.github.stone
+```
+
+The pin button is disabled while the extension is unavailable. Browsing and media
+playback remain available. The extension only accepts requests for a Mini Browser
+window owned by the calling application; it does not read page content.
+
 Audio and video modes hide the title bar for an immersive view. Move the pointer
-to the top edge to reveal Back, layout, main menu, and Close, or press F10 to reveal
+to the top edge to reveal Back, pin, layout, main menu, and Close, or press F10 to reveal
 and focus the layout button. The bar overlays the player and hides after you
 move away; it stays visible while its controls have keyboard focus or either menu
 is open. Full page restores the usual title bar.

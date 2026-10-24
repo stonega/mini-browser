@@ -160,6 +160,17 @@ def run():
 
         def scenario(window):
             assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+            yield from wait(
+                "pin extension connected", lambda: window.pin.available and not window.pin.pending
+            )
+            assert window.pin_button.get_next_sibling() == window.layout_button
+            assert not window.pin.pinned and not window.pin_button.get_active()
+            window.pin_button.emit("clicked")
+            yield from wait("manual page pin", lambda: window.pin.pinned and not window.pin.pending)
+            window.pin_button.emit("clicked")
+            yield from wait(
+                "manual page unpin", lambda: not window.pin.pinned and not window.pin.pending
+            )
             menu = window.layout_button.get_menu_model()
             assert [
                 menu.get_item_attribute_value(index, "label", None).get_string()
@@ -194,6 +205,16 @@ def run():
                 ),
             )
             assert window.get_width() == AUDIO_WIDTH
+            yield from wait(
+                "audio pins by default", lambda: window.pin.pinned and not window.pin.pending
+            )
+            assert window.pin_button.get_active()
+            window.pin_button.emit("clicked")
+            yield from wait(
+                "audio can unpin", lambda: not window.pin.pinned and not window.pin.pending
+            )
+            window.pin_button.emit("clicked")
+            yield from wait("audio can repin", lambda: window.pin.pinned and not window.pin.pending)
             assert window.stack.get_visible_child_name() == "audio"
             assert not window.webview.get_mapped()
             assert window.webview is original_view
@@ -355,6 +376,29 @@ def run():
             assert window.document_generation == generation
             assert window.toolbar.get_reveal_top_bars()
             assert not window.toolbar.get_extend_content_to_top_edge()
+            yield from wait(
+                "page pin restored", lambda: not window.pin.pinned and not window.pin.pending
+            )
+
+            window.pin.set_pinned(True)
+            yield from wait(
+                "pinned browsing page", lambda: window.pin.pinned and not window.pin.pending
+            )
+            toggle_audio(window)
+            yield from wait("pinned page enters audio", lambda: window.get_height() == AUDIO_HEIGHT)
+            window.pin.set_pinned(False)
+            yield from wait(
+                "unpin this player", lambda: not window.pin.pinned and not window.pin.pending
+            )
+            toggle_audio(window)
+            yield from wait(
+                "previous page stays pinned",
+                lambda: window.pin.pinned and not window.pin.pending and window.get_height() == 700,
+            )
+            window.pin.set_pinned(False)
+            yield from wait(
+                "page unpinned again", lambda: not window.pin.pinned and not window.pin.pending
+            )
 
             window.maximize()
             yield from wait("maximized page", window.is_maximized)
@@ -483,6 +527,9 @@ def run():
                 "video size", lambda: (window.get_width(), window.get_height()) == (640, 360)
             )
             assert window.video_mode and not window.audio_mode
+            yield from wait(
+                "video pins by default", lambda: window.pin.pinned and not window.pin.pending
+            )
             yield from wait("hidden video header", lambda: window.toolbar.get_top_bar_height() == 0)
             assert not window.is_fullscreen()
             assert window.webview is original_view
@@ -543,6 +590,9 @@ def run():
             assert window.video_mode
             window.activate_action("win.page-layout", None)
             yield from wait("restored video page", lambda: window.get_height() == 700)
+            yield from wait(
+                "video pin restored", lambda: not window.pin.pinned and not window.pin.pending
+            )
             restored = yield from javascript(
                 window,
                 "const video = document.querySelector('video'); return {style:video.style.cssText,"
@@ -721,7 +771,8 @@ def run():
                 "title, restore size/state, page pause, navigation, Web Audio fallback, home; "
                 "immersive header reveal/menus/keyboard, landscape/portrait/metadata video sizing, "
                 "live frames, native controls, unchanged DOM parent, "
-                "audio/video switching, page restoration, Escape, closed-player cleanup"
+                "audio/video switching, page restoration, Escape, closed-player cleanup; "
+                "manual pins, default media pins, previous pin restoration"
             )
             other.close()
 

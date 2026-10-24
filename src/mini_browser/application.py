@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 from . import APP_ID
-from .gtk import Adw, Gio, GLib, Gtk, WebKit
+from .gtk import Adw, Gdk, Gio, GLib, Gtk, WebKit
 from .navigation import address_to_uri
 from .storage import Library
 from .vault import PasswordVault
@@ -35,6 +35,17 @@ class BrowserApplication(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+        # The card buttons own interaction styling; FlowBox only arranges them.
+        styles = Gtk.CssProvider()
+        styles.load_from_string("""
+            flowbox.recent-sites > flowboxchild {
+                background: none;
+                box-shadow: none;
+            }
+        """)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), styles, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
         self.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.data_dir.chmod(0o700)

@@ -15,6 +15,7 @@ from .media import video_window_size
 from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
 from .video_player import VideoPlayer
+from .window_pin import WindowPin
 
 DEFAULT_WIDTH = 420
 DEFAULT_HEIGHT = 780
@@ -110,6 +111,9 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
         self.headerbar.pack_start(self.back_button)
         header_actions = Gtk.Box(spacing=0)
+        self.pin_button = Gtk.ToggleButton(icon_name="view-pin-symbolic", tooltip_text="Pin on top")
+        header_actions.append(self.pin_button)
+        self.pin = WindowPin(self, self.pin_button)
         layouts = Gio.Menu()
         layouts.append("Full page", "win.page-layout")
         layouts.append("Audio player", "win.audio-player")
@@ -181,6 +185,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         recent = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         recent.append(Gtk.Label(label="Recently opened", xalign=0, css_classes=["heading"]))
         self.recent_tiles = Gtk.FlowBox(
+            css_classes=["recent-sites"],
             selection_mode=Gtk.SelectionMode.NONE,
             homogeneous=True,
             min_children_per_line=2,
@@ -388,6 +393,9 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._page_size = self.get_default_size()
             self._page_maximized = self.is_maximized()
             self._page_fullscreen = self.is_fullscreen()
+            self._page_pinned = (
+                self.pin.pinned if self.pin.requested is None else self.pin.requested
+            )
 
     def _show_audio_player(self):
         if not self.lookup_action("audio-player").get_enabled():
@@ -397,6 +405,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.video_player.leave()
         self.video_mode = False
         self.audio_mode = True
+        self.pin.set_pinned(True)
         self.stack.set_visible_child_name("audio")
         self._set_media_header(True)
         self._resize_layout(AUDIO_WIDTH, AUDIO_HEIGHT)
@@ -409,6 +418,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._remember_page_layout()
         self.audio_mode = False
         self.video_mode = True
+        self.pin.set_pinned(True)
         self.stack.set_visible_child_name("web")
         self._set_media_header(True)
         self.webview.grab_focus()
@@ -448,6 +458,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.video_player.leave()
         self.audio_mode = False
         self.video_mode = False
+        self.pin.set_pinned(self._page_pinned)
         self._set_media_header(False)
         self.stack.set_visible_child_name("web")
         self._resize_layout(
@@ -666,6 +677,7 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _close_requested(self, *_):
         self._closing = True
+        self.pin.close()
         self._cancel_header_hide()
         if self._layout_source:
             GLib.source_remove(self._layout_source)

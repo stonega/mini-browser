@@ -18,7 +18,7 @@ sharing the storage session.
 An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
-`Adw.HeaderBar` with Back, the page title, layout menu, main menu, and close
+`Adw.HeaderBar` with Back, the page title, pin toggle, layout menu, main menu, and close
 control above the content. The home body contains
 only a search/address entry and up to six recent-site tiles. Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
@@ -46,6 +46,18 @@ Moving to the top eight logical pixels reveals it; leaving the header hides it
 after 1.5 seconds, unless a header control has keyboard focus or either menu
 is open. F10 reveals and focuses the layout button. Restoring the page restores
 the permanent header. Video uses the native OSD header style for contrast.
+
+`window_pin.py` connects each window's pin toggle to the bundled Mini Browser Pin
+GNOME Shell extension. GTK 4 provides no always-on-top request for GNOME Wayland;
+the extension calls Mutter's `make_above`/`unmake_above`. Its narrow session D-Bus
+interface matches both the caller's unique bus name and GTK window object path,
+and only handles Mini Browser application IDs. It never matches page titles.
+Replies and unicast change signals report the compositor's actual `above` state.
+Calls are asynchronous, stale replies are ignored, and mapping races receive a
+bounded retry. Missing extensions leave the pin disabled with an explanation.
+Entering either media mode requests pinning; returning to the page restores the
+previous requested setting. Manual unpinning remains available during playback.
+Disabling the extension restores the original state of windows it controlled.
 
 `audio_player.py` implements native controls. Mute uses WebKit's page-wide API.
 The left cover fills the player's height with no margins; a width-for-height
@@ -105,6 +117,8 @@ opening time for each site. Schema creation adds this table to existing librarie
 without altering bookmark/history records. Home tiles are sorted by most recent
 use; open home windows refresh after another window records a visit. Tiles use
 native initial avatars and make no background requests to the saved websites.
+Card buttons draw their own rounded hover and pressed states; the surrounding
+FlowBox children remain transparent to avoid a second outline around each tile.
 
 Website content stays in WebKit's sandbox. TLS errors show an error page without
 an override. Unsupported external URI schemes are not launched. Browser data is

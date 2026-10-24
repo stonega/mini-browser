@@ -6,6 +6,7 @@ A native GNOME web browser with a small footprint on your screen.
 - Links requesting a new tab or window open in the current window; Ctrl+N opens another.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
+- A pin button before the layout icon, with always-on-top enabled by default in media layouts.
 - A home page with a search/address bar and recently opened site tiles.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
@@ -53,6 +54,11 @@ layout button, contains Settings for imports, passwords, and your library, plus
 About Mini Browser with the app version and license. While browsing, the header
 bar sits above the page. The narrow window lets responsive websites use their compact
 layout; the browser keeps WebKit's normal user agent.
+
+Pinning uses the bundled Mini Browser Pin GNOME Shell extension. After installing
+the RPM or running `scripts/install`, log out and back in, then run
+`gnome-extensions enable mini-browser-pin@io.github.stone`. See the
+[usage guide](docs/user/usage.md#media-layouts) for pin and player behavior.
 
 ## Controls
 

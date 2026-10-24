@@ -27,9 +27,15 @@ byte compilation. `smoke` starts a disposable GNOME Shell with a 1280 × 1024
 virtual monitor, a private Wayland display and D-Bus session, and temporary XDG
 directories. It requires `gnome-shell`, `dbus-run-session` (`dbus-daemon` on
 Fedora), `at-spi2-core`, and the GStreamer GI typelib. No active graphical session
-is needed. The runner starts a separate accessibility bus before WebKit launches.
+is needed. The runner starts a separate accessibility bus and registry daemon
+before WebKit launches, avoiding private-bus systemd activation failures.
 Test windows stay off the user's desktop. Navigation checks cover same-window
 target links, script popups, native POST submissions, Back, and explicit new windows.
+The runner copies and enables the bundled pin extension only in the disposable
+desktop. Media checks verify manual pinning, pinning by default in both player
+layouts, and restoration of the page's prior pin setting.
+Separate pin checks cover independent windows, rejection of unrelated D-Bus
+callers, compositor state notifications, rapid requests, and extension restarts.
 Audio sinks are disabled only for the
 test processes, using GStreamer's clocked fake sink for silent playback checks.
 The GNOME process and test process groups are stopped and temporary desktop data
@@ -67,6 +73,11 @@ The binary package installs `/usr/bin/mini-browser`, modules under
 the declared GTK, WebKitGTK, PyGObject, and cryptography runtime dependencies.
 No personal bookmarks, history, cookies, or vault files are packaged or removed.
 
+The package also installs the Mini Browser Pin extension for GNOME Shell 45–51.
+Log out and back in after first installation, then run
+`gnome-extensions enable mini-browser-pin@io.github.stone` to enable always-on-top
+controls. The application detects extension availability without a restart.
+
 If migrating from `scripts/install`, move the old user desktop entry
 `~/.local/share/applications/io.github.stone.MiniBrowser.desktop` aside so GNOME
 uses the packaged entry. Replace `~/.local/bin/mini-browser` with a symlink to
@@ -78,12 +89,16 @@ directory and `passwords.vault`. Restart Mini Browser to load the installed code
 `scripts/install` copies the Python package under
 `$XDG_DATA_HOME/mini-browser/app`, adds `~/.local/bin/mini-browser`, and writes
 the desktop file and scalable icon under the usual XDG data directories.
+It also copies the pin extension into the user's GNOME Shell extensions directory;
+enable it with the command above after logging out and back in.
 Re-running the script updates the installed copy. The launcher uses an absolute
 executable path, so `~/.local/bin` need not be on the desktop session's PATH.
 
 To remove the installation, delete the `mini-browser` executable, the
 `io.github.stone.MiniBrowser.desktop` entry, the matching app icon, and the
-`mini-browser/app` directory. Browser data is stored separately; see the user
+`mini-browser/app` directory. Disable Mini Browser Pin in Extensions and remove
+`~/.local/share/gnome-shell/extensions/mini-browser-pin@io.github.stone` as well.
+Browser data is stored separately; see the user
 guide before removing it.
 
 Reference APIs:

@@ -9,13 +9,20 @@ Mini Browser opens one page per resizable portrait window, with a native
 GNOME header bar. Each command-line argument opens a separate window.
 Quote search terms containing spaces. Without arguments, the start page opens.
 It contains an address/search field and tiles for recently opened sites.
-The header bar's gear button opens Settings, including Chrome data import.
+The header bar's main menu opens Settings, including Chrome data import.
 Its Back button returns to the previous page. Website links requesting another
 tab or window open in the current window.
 .PP
 Audio and video layouts hide the title bar; move to the top edge or press F10
 to reveal it. Video windows initially match the video's aspect ratio.
 Choose Full page from the layout menu or press Escape to restore the page layout.
+.PP
+The pin button before the layout button keeps the window above other windows.
+Audio and video modes enable pinning by default; Full page restores the previous
+pin setting. Pinning requires the bundled Mini Browser Pin GNOME Shell extension.
+After installation, log out and back in, then run
+.B gnome-extensions enable mini-browser-pin@io.github.stone
+once. The pin button is disabled while the extension is unavailable.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help

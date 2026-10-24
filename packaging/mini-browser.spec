@@ -38,6 +38,9 @@ install -Dpm 0644 data/io.github.stone.MiniBrowser.desktop \
 install -Dpm 0644 data/io.github.stone.MiniBrowser.svg \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/io.github.stone.MiniBrowser.svg
 install -Dpm 0644 packaging/mini-browser.1 %{buildroot}%{_mandir}/man1/mini-browser.1
+install -d %{buildroot}%{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone
+install -m 0644 data/gnome-shell/mini-browser-pin@io.github.stone/* \
+    %{buildroot}%{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 /usr/bin/python3 -m compileall -q --invalidation-mode=checked-hash \
     -s %{buildroot} -p / %{buildroot}%{_datadir}/%{name}
 
@@ -53,6 +56,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/applications/io.github.stone.MiniBrowser.desktop
 %{_datadir}/icons/hicolor/scalable/apps/io.github.stone.MiniBrowser.svg
 %{_mandir}/man1/mini-browser.1*
+%{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
 * Sat Oct 24 2026 Mini Browser contributors - 0.2.3-1

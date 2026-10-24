@@ -11,6 +11,33 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parent.parent
 DISPLAY_NAME = "mini-browser-test-0"
+PIN_EXTENSION = "mini-browser-pin@io.github.stone"
+
+
+def enable_pin_extension(shell):
+    from gi.repository import Gio, GLib
+
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and shell.poll() is None:
+        try:
+            enabled = bus.call_sync(
+                "org.gnome.Shell",
+                "/org/gnome/Shell",
+                "org.gnome.Shell.Extensions",
+                "EnableExtension",
+                GLib.Variant("(s)", (PIN_EXTENSION,)),
+                GLib.VariantType.new("(b)"),
+                Gio.DBusCallFlags.NONE,
+                1000,
+                None,
+            ).unpack()[0]
+            if enabled:
+                return
+        except GLib.Error:
+            pass
+        time.sleep(0.1)
+    raise RuntimeError("Could not enable Mini Browser Pin in virtual GNOME")
 
 
 def stop_process_group(process):
@@ -102,8 +129,30 @@ def run_tests(root, arguments):
             [launcher, "--launch-immediately"], stdout=log, stderr=log, start_new_session=True
         )
         shell = None
+        registry = None
         try:
             address = accessibility_address()
+            registry_path = next(
+                (
+                    path
+                    for path in (
+                        "/usr/libexec/at-spi2-registryd",
+                        "/usr/lib/at-spi2-core/at-spi2-registryd",
+                    )
+                    if Path(path).is_file()
+                ),
+                None,
+            )
+            if registry_path is None:
+                raise RuntimeError("UI tests require the at-spi2-core registry daemon")
+            # The private accessibility bus cannot activate a user systemd unit.
+            registry = subprocess.Popen(
+                [registry_path],
+                env={**os.environ, "AT_SPI_BUS_ADDRESS": address},
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
             shell = subprocess.Popen(
                 command,
                 env={**os.environ, "AT_SPI_BUS_ADDRESS": address},
@@ -118,8 +167,9 @@ def run_tests(root, arguments):
                     raise RuntimeError("Virtual GNOME did not start a Wayland display")
                 time.sleep(0.1)
             environment = silent_audio_environment(address)
+            enable_pin_extension(shell)
             print("Running UI tests in virtual GNOME (1280 × 1024, silent audio)", flush=True)
-            for filename in ("smoke.py", "media_smoke.py", "password_smoke.py"):
+            for filename in ("smoke.py", "pin_smoke.py", "media_smoke.py", "password_smoke.py"):
                 if shell.poll() is not None:
                     raise RuntimeError("Virtual GNOME exited during the UI tests")
                 test = subprocess.Popen(
@@ -144,6 +194,8 @@ def run_tests(root, arguments):
         finally:
             if shell:
                 stop_process_group(shell)
+            if registry:
+                stop_process_group(registry)
             stop_process_group(accessibility)
 
 
@@ -194,6 +246,11 @@ def main():
             raise SystemExit(f"UI tests require {executable}; install GNOME Shell and dbus-daemon.")
     with tempfile.TemporaryDirectory(prefix="mini-browser-gnome-") as temporary:
         root = Path(temporary)
+        environment = isolated_environment(root)
+        shutil.copytree(
+            PROJECT / "data/gnome-shell" / PIN_EXTENSION,
+            root / "data/gnome-shell/extensions" / PIN_EXTENSION,
+        )
         log_path = root / "session.log"
         with log_path.open("wb") as log:
             result = subprocess.call(
@@ -206,7 +263,7 @@ def main():
                     str(root),
                     *sys.argv[1:],
                 ],
-                env=isolated_environment(root),
+                env=environment,
                 stderr=log,
             )
         if result:

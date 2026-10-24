@@ -38,4 +38,11 @@ desktop_path.write_text(
 icons = data / "icons/hicolor/scalable/apps"
 icons.mkdir(parents=True, exist_ok=True)
 shutil.copy2(project / "data/io.github.stone.MiniBrowser.svg", icons)
+extension = "mini-browser-pin@io.github.stone"
+shutil.copytree(
+    project / "data/gnome-shell" / extension,
+    data / "gnome-shell/extensions" / extension,
+    dirs_exist_ok=True,
+)
 print(f"Installed {binary}\nFind Mini Browser in the GNOME app launcher.")
+print(f"For pinning, log out and back in, then run: gnome-extensions enable {extension}")
