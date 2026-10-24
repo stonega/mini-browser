@@ -40,8 +40,9 @@ The media smoke test serves a generated WAV and canvas video. It verifies WebKit
 audio detection, continued compact playback, mute, play/pause, size and window-state
 restoration, navigation, and the Web Audio fallback. Video checks cover live
 frames, native controls, intrinsic landscape/portrait sizing, delayed metadata,
-immersive header reveal and keyboard/menu access, audio/video switching, restored DOM styling, and closing
-an active player while another window stays open. It saves
+immersive header reveal and keyboard/menu access, audio/video switching,
+responsive site sizing rewrites, opaque video backdrops, restored DOM styling,
+and closing an active player while another window stays open. It saves
 additional `-audio.png` and `-video.png` captures when requested.
 The password smoke test also creates a temporary vault, imports a synthetic CSV
 through the native dialog, checks failed and successful unlocks, then fills a

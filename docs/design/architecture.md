@@ -61,9 +61,13 @@ does not add height or shrink the video viewport. Metadata is awaited for up to
 1.5 seconds; unavailable dimensions fall back to 640 × 360. Subsequent manual
 resizing is unrestricted. A static script in its own isolated world uses the
 Popover API to put the existing video in the top layer without moving its DOM
-node or requesting desktop fullscreen. Temporary styles make it fill the WebView
-and expose native media controls. Exit restores the controls and overridden
-styles, retaining unrelated inline changes made by the website. The layout menu
+node or requesting desktop fullscreen. A user-origin stylesheet scoped to the
+selected open popover makes it fill the WebView and gives it an opaque black
+backdrop, while the script exposes native media controls. Its important rules
+take precedence over inline sizing, including important declarations rewritten
+by responsive players such as YouTube on resize. The site's inline styles are
+never modified. Exit removes the temporary marker and restores the controls,
+leaving the site's latest layout intact. The layout menu
 probes for supported videos when opened and after page loads; stale results are
 discarded. Embedded frames, shadow DOM, and existing website popovers are excluded.
 The option stays disabled when WebKit lacks the Popover API.

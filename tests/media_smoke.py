@@ -468,6 +468,52 @@ def run():
                 "priority": "important",
                 "fit": "cover",
             }
+            # Simulate a site player rewriting even inline important sizing on resize.
+            yield from javascript(
+                window,
+                "window.siteLayoutUpdates = 0; window.updateVideoLayout = () => {"
+                "document.querySelector('video').style.cssText = "
+                "'width:288px!important;height:162px!important;left:24px;top:32px;' + "
+                "'transform:translateX(8px);object-fit:cover;--site-marker:kept'; "
+                "window.siteLayoutUpdates++; }; "
+                "addEventListener('resize', updateVideoLayout); updateVideoLayout(); return true;",
+            )
+            window.activate_action("win.video-player", None)
+            yield from wait("responsive video size", lambda: window.get_height() == 360)
+            for width, height in ((640, 360), (720, 480)):
+                window.set_default_size(width, height)
+                yield from wait(
+                    "resized responsive video",
+                    lambda size=(width, height): (window.get_width(), window.get_height()) == size,
+                )
+                layout = yield from javascript(
+                    window,
+                    "updateVideoLayout(); const video = document.querySelector('video'); "
+                    "const rect = video.getBoundingClientRect(); return {"
+                    "left:rect.left,top:rect.top,width:rect.width,height:rect.height,"
+                    "viewportWidth:innerWidth,viewportHeight:innerHeight,"
+                    "backdrop:getComputedStyle(video, '::backdrop').backgroundColor,"
+                    "style:video.style.cssText,updates:siteLayoutUpdates};",
+                )
+                assert layout["left"] == layout["top"] == 0, layout
+                assert layout["width"] == layout["viewportWidth"] == width, layout
+                assert layout["height"] == layout["viewportHeight"] == height, layout
+                assert layout["backdrop"] == "rgb(0, 0, 0)", layout
+                assert layout["updates"] > 1
+            window.activate_action("win.page-layout", None)
+            yield from wait("responsive page restored", lambda: window.get_height() == 700)
+            restored = yield from javascript(
+                window,
+                "const video = document.querySelector('video'); return {style:video.style.cssText,"
+                "controls:video.controls,popover:video.hasAttribute('popover'),"
+                "marker:video.hasAttribute('data-mini-browser-video')};",
+            )
+            assert restored == {
+                "style": layout["style"],
+                "controls": False,
+                "popover": False,
+                "marker": False,
+            }, restored
             window.activate_action("win.video-player", None)
             yield from wait("video before navigation", lambda: window.get_height() == 360)
             window.load_uri(origin + "/silent")

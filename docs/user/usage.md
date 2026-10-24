@@ -57,8 +57,10 @@ Its initial window proportions match the video's own aspect ratio, usually at
 freely. When video dimensions are unavailable, the default is 640 × 360 (16:9).
 The playing video is preferred; otherwise the
 largest visible video is selected. It stays attached to its page, with its
-original styling and controls restored when you leave video mode. Videos in
-embedded frames, shadow DOM, or existing website popovers are not supported.
+original styling and controls restored when you leave video mode.
+Responsive players such as YouTube stay fitted to the video window as it resizes,
+with the surrounding page and its controls hidden behind a black backdrop.
+Videos in embedded frames, shadow DOM, or existing website popovers are not supported.
 Video mode requires WebKit's Popover API; older versions leave this option disabled.
 
 Choose **Full page** or press Escape to return to the previous size and

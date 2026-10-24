@@ -6,6 +6,39 @@ from .gtk import GLib, WebKit
 
 WORLD = "mini-browser-video"
 INITIALIZE = "globalThis.__miniBrowserVideo = null;"
+# User-origin !important rules outrank even the inline !important sizes that
+# site players rewrite on resize. Leave those inline styles owned by the site.
+STYLE = """
+video[data-mini-browser-video="active"]:popover-open {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-width: 0 !important;
+    background: black !important;
+    object-fit: contain !important;
+    box-sizing: border-box !important;
+    aspect-ratio: auto !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition-property: none !important;
+    animation-name: none !important;
+    pointer-events: auto !important;
+    clip-path: none !important;
+    filter: none !important;
+}
+video[data-mini-browser-video="active"]:popover-open::backdrop {
+    background: black !important;
+}
+"""
 CONTROL = """
 let saved = globalThis.__miniBrowserVideo;
 const restore = () => {
@@ -14,15 +47,8 @@ const restore = () => {
     if (video.matches(':popover-open')) video.hidePopover();
     video.removeAttribute('popover');
     video.controls = saved.controls;
-    if (video.style.cssText === saved.appliedStyle) {
-        if (saved.originalStyle === null) video.removeAttribute('style');
-        else video.setAttribute('style', saved.originalStyle);
-    } else {
-        for (const [name, value, priority] of saved.styles) {
-            if (value) video.style.setProperty(name, value, priority);
-            else video.style.removeProperty(name);
-        }
-    }
+    if (saved.marker === null) video.removeAttribute('data-mini-browser-video');
+    else video.setAttribute('data-mini-browser-video', saved.marker);
     globalThis.__miniBrowserVideo = null;
 };
 const dimensions = async video => {
@@ -59,30 +85,12 @@ videos.sort((a, b) => area(b) - area(a));
 const video = videos.find(item => !item.paused && !item.ended) || videos[0];
 if (!video) return false;
 if (document.fullscreenElement) await document.exitFullscreen();
-const styles = {
-    position: 'fixed', top: '0', right: '0', bottom: '0', left: '0',
-    width: '100vw', height: '100vh',
-    'min-width': '0', 'min-height': '0', 'max-width': 'none', 'max-height': 'none',
-    'margin-top': '0', 'margin-right': '0', 'margin-bottom': '0', 'margin-left': '0',
-    'padding-top': '0', 'padding-right': '0', 'padding-bottom': '0', 'padding-left': '0',
-    'border-top-width': '0', 'border-right-width': '0',
-    'border-bottom-width': '0', 'border-left-width': '0',
-    'background-color': 'black', 'background-image': 'none',
-    'object-fit': 'contain', 'box-sizing': 'border-box', 'aspect-ratio': 'auto',
-    display: 'block', visibility: 'visible', opacity: '1', transform: 'none',
-    'transition-property': 'none', 'animation-name': 'none', 'pointer-events': 'auto',
-    'clip-path': 'none', filter: 'none'
-};
-saved = {video, controls: video.controls, originalStyle: video.getAttribute('style'),
-    styles: Object.keys(styles).map(name =>
-    [name, video.style.getPropertyValue(name), video.style.getPropertyPriority(name)])};
+saved = {video, controls: video.controls, marker: video.getAttribute('data-mini-browser-video')};
 globalThis.__miniBrowserVideo = saved;
 try {
     video.controls = true;
+    video.setAttribute('data-mini-browser-video', 'active');
     video.setAttribute('popover', 'manual');
-    for (const [name, value] of Object.entries(styles))
-        video.style.setProperty(name, value, 'important');
-    saved.appliedStyle = video.style.cssText;
     video.showPopover();
     if (!video.matches(':popover-open')) { restore(); return false; }
     return await dimensions(video);
@@ -96,6 +104,16 @@ class VideoPlayer:
         self._probe_generation = 0
         manager = webview.get_user_content_manager()
         if not getattr(manager, "_mini_video_world", False):
+            manager.add_style_sheet(
+                WebKit.UserStyleSheet.new_for_world(
+                    STYLE,
+                    WebKit.UserContentInjectedFrames.TOP_FRAME,
+                    WebKit.UserStyleLevel.USER,
+                    WORLD,
+                    None,
+                    None,
+                )
+            )
             manager.add_script(
                 WebKit.UserScript.new_for_world(
                     INITIALIZE,
