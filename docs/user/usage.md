@@ -56,9 +56,17 @@ and focus the layout button. The bar overlays the player and hides after you
 move away; it stays visible while its controls have keyboard focus or either menu
 is open. Full page restores the usual title bar.
 Escape also restores Full page.
+Back (or Alt+Left) also returns to Full page while a player is open, keeping the
+same page and playback position. In Full page mode it returns through history.
+
+Drag the audio artwork, track details, or video surface to move the player window.
+Playback buttons remain clickable, and the video's bottom control strip stays
+available for seeking and volume changes.
 
 Start audio on a page, then choose **Audio player**. It switches the window to a
 compact 360 × 200 native player while the same page keeps playing.
+The player and its revealed title bar use a dark appearance, including when the
+desktop uses a light theme. Returning to Full page restores the usual title bar.
 
 The player shows a square cover flush against the left edge, filling the window's
 height. Track title, artist or album (when supplied by the website), website,

@@ -94,7 +94,7 @@ class CoverLayout(Gtk.LayoutManager):
 
 class AudioPlayer(Gtk.Box):
     def __init__(self, webview, notify):
-        super().__init__()
+        super().__init__(css_classes=["osd"])
         self.webview = webview
         self.notify = notify
         self._request = None
@@ -123,7 +123,7 @@ class AudioPlayer(Gtk.Box):
         self.placeholder = Gtk.Image(
             icon_name="audio-x-generic-symbolic", pixel_size=56, css_classes=["dim-label"]
         )
-        artwork = Gtk.Overlay(child=self.cover, css_classes=["view"])
+        artwork = Gtk.Overlay(child=self.cover, css_classes=["osd"])
         artwork.add_overlay(self.placeholder)
         self.cover_frame = Gtk.Box(layout_manager=CoverLayout())
         self.cover_frame.append(artwork)

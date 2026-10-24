@@ -36,6 +36,12 @@ desktop. Media checks verify manual pinning, pinning by default in both player
 layouts, and restoration of the page's prior pin setting.
 Separate pin checks cover independent windows, rejection of unrelated D-Bus
 callers, compositor state notifications, rapid requests, and extension restarts.
+The runner also loads a test-only pointer extension in that disposable desktop.
+It only accepts owned MediaSmoke windows, injects real pointer drags/clicks, and
+checks compositor window positions. Media checks cover draggable audio/video
+surfaces, clickable playback controls, the video control strip, normal page
+interaction, and Back restoring Full page without navigation. This helper is
+never installed with the application.
 Audio sinks are disabled only for the
 test processes, using GStreamer's clocked fake sink for silent playback checks.
 The GNOME process and test process groups are stopped and temporary desktop data

@@ -45,7 +45,14 @@ In both media layouts the header overlays the content and hides by default.
 Moving to the top eight logical pixels reveals it; leaving the header hides it
 after 1.5 seconds, unless a header control has keyboard focus or either menu
 is open. F10 reveals and focuses the layout button. Restoring the page restores
-the permanent header. Video uses the native OSD header style for contrast.
+the permanent header. Both media layouts use the native dark OSD header style.
+The audio player and missing-artwork placeholder also use dark OSD styling,
+independently of the system appearance and other browser windows.
+Media surfaces support primary-button window dragging after GTK's drag threshold.
+Native audio buttons and the video's bottom control strip retain their gestures;
+ordinary video clicks are replayed by GTK when no drag occurs. The compositor
+performs the move using the original input event. Back and Alt+Left leave either
+media layout without navigating; normal history behavior resumes in Full page.
 
 `window_pin.py` connects each window's pin toggle to the bundled Mini Browser Pin
 GNOME Shell extension. GTK 4 provides no always-on-top request for GNOME Wayland;

@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from mini_browser.application import BrowserApplication
-from mini_browser.gtk import GLib, Gtk
+from mini_browser.gtk import Gio, GLib, Gtk
 from mini_browser.media import video_window_size
 from mini_browser.window import (
     AUDIO_HEIGHT,
@@ -158,6 +158,47 @@ def run():
                 "win.page-layout" if window.audio_mode else "win.audio-player", None
             )
 
+        def frame(window):
+            return (
+                app.get_dbus_connection()
+                .call_sync(
+                    "io.github.stone.MiniBrowser.TestPointer",
+                    "/io/github/stone/MiniBrowser/TestPointer",
+                    "io.github.stone.MiniBrowser.TestPointer",
+                    "Frame",
+                    GLib.Variant("(o)", (window.pin.path,)),
+                    GLib.VariantType.new("(iiii)"),
+                    Gio.DBusCallFlags.NONE,
+                    1500,
+                    None,
+                )
+                .unpack()
+            )
+
+        def pointer(window, x, y, dx=0, dy=0):
+            result = {}
+
+            def finished(connection, response):
+                try:
+                    connection.call_finish(response)
+                    result["done"] = True
+                except Exception as error:
+                    fail(error)
+
+            app.get_dbus_connection().call(
+                "io.github.stone.MiniBrowser.TestPointer",
+                "/io/github/stone/MiniBrowser/TestPointer",
+                "io.github.stone.MiniBrowser.TestPointer",
+                "Pointer",
+                GLib.Variant("(odddd)", (window.pin.path, x, y, dx, dy)),
+                None,
+                Gio.DBusCallFlags.NONE,
+                3000,
+                None,
+                finished,
+            )
+            yield from wait("real pointer interaction", lambda: result.get("done", False))
+
         def scenario(window):
             assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
             yield from wait(
@@ -238,6 +279,40 @@ def run():
                 assert window.player.cover.get_content_fit() == Gtk.ContentFit.COVER
 
             check_cover()
+            original_frame = frame(window)
+            yield from pointer(window, 80, 80, 90, 60)
+            moved_frame = frame(window)
+            assert moved_frame[:2] != original_frame[:2], (original_frame, moved_frame)
+            assert moved_frame[2:] == original_frame[2:]
+            valid, bounds = window.player.mute_button.compute_bounds(window)
+            assert valid
+            muted = window.webview.get_is_muted()
+            yield from pointer(
+                window,
+                bounds.get_x() + bounds.get_width() / 2,
+                bounds.get_y() + bounds.get_height() / 2,
+            )
+            yield from wait(
+                "audio button still clicks", lambda: window.webview.get_is_muted() != muted
+            )
+            assert frame(window) == moved_frame
+            window.player.mute_button.emit("clicked")
+            assert not window.webview.can_go_back()
+            assert window.back_button.get_sensitive()
+            audio_uri = window.webview.get_uri()
+            window.back_button.emit("clicked")
+            yield from wait("audio Back restores full page", lambda: window.get_height() == 700)
+            assert not window.audio_mode and window.webview.get_uri() == audio_uri
+            assert window.document_generation == generation and window.webview.is_playing_audio()
+            toggle_audio(window)
+            yield from wait(
+                "audio after Back",
+                lambda: window.get_height() == AUDIO_HEIGHT and not window._layout_source,
+            )
+            print(
+                "PASS: audio surface drag, real playback button click, Back without navigation",
+                flush=True,
+            )
             window.set_default_size(420, 240)
             yield from wait(
                 "resized square cover",
@@ -531,6 +606,41 @@ def run():
                 "video pins by default", lambda: window.pin.pinned and not window.pin.pending
             )
             yield from wait("hidden video header", lambda: window.toolbar.get_top_bar_height() == 0)
+            original_frame = frame(window)
+            yield from pointer(window, 240, 120, 75, 45)
+            assert frame(window)[:2] != original_frame[:2]
+            yield from javascript(
+                window,
+                "window.videoClicks = 0; "
+                "document.addEventListener('click', () => videoClicks++, true); return true;",
+            )
+            click_frame = frame(window)
+            yield from pointer(window, 240, 120)
+            clicks = yield from javascript(window, "return videoClicks;")
+            assert clicks == 1, clicks
+            assert frame(window) == click_frame
+            yield from pointer(window, 240, window.get_height() - 24, 30, 0)
+            assert frame(window) == click_frame
+            video_uri = window.webview.get_uri()
+            assert window.back_button.get_sensitive()
+            window.back_button.emit("clicked")
+            yield from wait("video Back restores full page", lambda: window.get_height() == 700)
+            assert not window.video_mode and window.webview.get_uri() == video_uri
+            assert window.document_generation == video_generation
+            full_frame = frame(window)
+            yield from pointer(window, 240, 320, 30, 20)
+            assert frame(window) == full_frame
+            window.activate_action("win.video-player", None)
+            yield from wait("video after Back", lambda: window.get_height() == 360)
+            print(
+                "PASS: video drag, click/seek controls, normal page drag, Back without navigation",
+                flush=True,
+            )
+            # The real video click above can pause playback; resume the fixture
+            # before checking that its clock advances in the existing scenario.
+            yield from javascript(
+                window, "await document.querySelector('video').play(); return true;"
+            )
             assert not window.is_fullscreen()
             assert window.webview is original_view
             assert window.document_generation == video_generation

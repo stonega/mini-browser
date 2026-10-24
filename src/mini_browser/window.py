@@ -42,6 +42,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._header_source = 0
         self._header_pointer = False
         self._media_generation = 0
+        self._media_drag_origin = None
         self.document_generation = 0
         self.webview = WebKit.WebView(network_session=app.network_session)
         self._user_content_manager = self.webview.get_user_content_manager()
@@ -145,6 +146,11 @@ class BrowserWindow(Adw.ApplicationWindow):
         motion.connect("motion", self._header_motion)
         motion.connect("leave", self._header_leave)
         self.toolbar.add_controller(motion)
+        self.media_drag = Gtk.GestureDrag(button=1, propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        self.media_drag.connect("drag-begin", self._media_drag_begin)
+        self.media_drag.connect("drag-update", self._media_drag_update)
+        self.media_drag.connect("drag-end", self._media_drag_end)
+        self.stack.add_controller(self.media_drag)
         self.connect("notify::focus-widget", self._header_focus_changed)
         self._audio_changed()
         self.set_focus(self.home_entry)
@@ -304,8 +310,16 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _navigation_changed(self, *_):
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
-        self.lookup_action("back").set_enabled(browsing and self.webview.can_go_back())
+        media = self.audio_mode or self.video_mode
+        self.lookup_action("back").set_enabled(browsing and (media or self.webview.can_go_back()))
+        self.back_button.set_tooltip_text("Return to Full page" if media else "Back (Alt+Left)")
         self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
+
+    def _back(self):
+        if self.audio_mode or self.video_mode:
+            self._restore_page()
+        else:
+            self.webview.go_back()
 
     def _uri_changed(self, *_):
         if self._closing:
@@ -321,14 +335,61 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _set_media_header(self, immersive):
         self._media_generation += 1
+        self._media_drag_origin = None
+        self.media_drag.reset()
         self._cancel_header_hide()
         self._header_pointer = False
         self.toolbar.set_extend_content_to_top_edge(immersive)
         self.toolbar.set_reveal_top_bars(not immersive)
-        if self.video_mode:
+        if immersive:
             self.headerbar.add_css_class("osd")
         else:
             self.headerbar.remove_css_class("osd")
+        self._navigation_changed()
+
+    def _media_drag_begin(self, gesture, x, y):
+        self._media_drag_origin = None
+        target = self.stack.pick(x, y, Gtk.PickFlags.DEFAULT)
+        allowed = (self.audio_mode or self.video_mode) and not self.get_visible_dialog()
+        while target and target != self.stack:
+            if isinstance(target, (Gtk.Button, Gtk.Range, Gtk.Editable)):
+                allowed = False
+                break
+            target = target.get_parent()
+        if self.video_mode:
+            # Keep the native seek/volume control strip available for scrubbing.
+            valid, bounds = self.webview.compute_bounds(self.stack)
+            if valid and y >= bounds.get_y() + bounds.get_height() - min(
+                72, bounds.get_height() / 3
+            ):
+                allowed = False
+        event = gesture.get_current_event()
+        if not allowed or event is None:
+            gesture.set_state(Gtk.EventSequenceState.DENIED)
+            return
+        valid, surface_x, surface_y = event.get_position()
+        if not valid:
+            gesture.set_state(Gtk.EventSequenceState.DENIED)
+            return
+        self._media_drag_origin = (surface_x, surface_y, event.get_time())
+        # WebKit claims presses immediately. Hold this sequence until it is
+        # either a window drag or a click replayed by GTK on denial below.
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+
+    def _media_drag_update(self, gesture, offset_x, offset_y):
+        origin = self._media_drag_origin
+        if origin is None or not self.stack.drag_check_threshold(
+            0, 0, int(offset_x), int(offset_y)
+        ):
+            return
+        self._media_drag_origin = None
+        self.get_surface().begin_move(gesture.get_device(), gesture.get_current_button(), *origin)
+        gesture.reset()
+
+    def _media_drag_end(self, gesture, *_):
+        if self._media_drag_origin is not None:
+            self._media_drag_origin = None
+            gesture.set_state(Gtk.EventSequenceState.DENIED)
 
     def _header_has_focus(self):
         focus = self.get_focus()
@@ -520,7 +581,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "video-player": self._show_video_player,
             "close": self.close,
             "reload": self._retry,
-            "back": self.webview.go_back,
+            "back": self._back,
             "forward": self.webview.go_forward,
             "stop": self._stop,
             "import": lambda: import_dialog(self),

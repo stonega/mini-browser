@@ -1,0 +1,6 @@
+{
+    "uuid": "mini-browser-pointer-tests@io.github.stone",
+    "name": "Mini Browser Pointer Tests",
+    "description": "Private virtual-desktop input for Mini Browser smoke fixtures only.",
+    "shell-version": ["45", "46", "47", "48", "49", "50", "51"]
+}

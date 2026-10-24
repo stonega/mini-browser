@@ -12,9 +12,10 @@ from pathlib import Path
 PROJECT = Path(__file__).resolve().parent.parent
 DISPLAY_NAME = "mini-browser-test-0"
 PIN_EXTENSION = "mini-browser-pin@io.github.stone"
+POINTER_EXTENSION = "mini-browser-pointer-tests@io.github.stone"
 
 
-def enable_pin_extension(shell):
+def enable_extension(shell, uuid):
     from gi.repository import Gio, GLib
 
     bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
@@ -26,18 +27,43 @@ def enable_pin_extension(shell):
                 "/org/gnome/Shell",
                 "org.gnome.Shell.Extensions",
                 "EnableExtension",
-                GLib.Variant("(s)", (PIN_EXTENSION,)),
+                GLib.Variant("(s)", (uuid,)),
                 GLib.VariantType.new("(b)"),
                 Gio.DBusCallFlags.NONE,
                 1000,
                 None,
             ).unpack()[0]
             if enabled:
-                return
+                info = bus.call_sync(
+                    "org.gnome.Shell",
+                    "/org/gnome/Shell",
+                    "org.gnome.Shell.Extensions",
+                    "GetExtensionInfo",
+                    GLib.Variant("(s)", (uuid,)),
+                    GLib.VariantType.new("(a{sv})"),
+                    Gio.DBusCallFlags.NONE,
+                    1000,
+                    None,
+                ).unpack()[0]
+                errors = bus.call_sync(
+                    "org.gnome.Shell",
+                    "/org/gnome/Shell",
+                    "org.gnome.Shell.Extensions",
+                    "GetExtensionErrors",
+                    GLib.Variant("(s)", (uuid,)),
+                    GLib.VariantType.new("(as)"),
+                    Gio.DBusCallFlags.NONE,
+                    1000,
+                    None,
+                ).unpack()[0]
+                if errors:
+                    raise RuntimeError(f"Could not enable {uuid}: {'; '.join(errors)}")
+                if info.get("state") == 1:
+                    return
         except GLib.Error:
             pass
         time.sleep(0.1)
-    raise RuntimeError("Could not enable Mini Browser Pin in virtual GNOME")
+    raise RuntimeError(f"Could not enable {uuid} in virtual GNOME")
 
 
 def stop_process_group(process):
@@ -167,7 +193,8 @@ def run_tests(root, arguments):
                     raise RuntimeError("Virtual GNOME did not start a Wayland display")
                 time.sleep(0.1)
             environment = silent_audio_environment(address)
-            enable_pin_extension(shell)
+            enable_extension(shell, PIN_EXTENSION)
+            enable_extension(shell, POINTER_EXTENSION)
             print("Running UI tests in virtual GNOME (1280 × 1024, silent audio)", flush=True)
             for filename in ("smoke.py", "pin_smoke.py", "media_smoke.py", "password_smoke.py"):
                 if shell.poll() is not None:
@@ -182,6 +209,7 @@ def run_tests(root, arguments):
                 finally:
                     stop_process_group(test)
                 if result:
+                    print(log_path.read_text(errors="replace")[-6000:], file=sys.stderr)
                     print(
                         f"{filename} exited with status {result} (PID {test.pid})", file=sys.stderr
                     )
@@ -250,6 +278,10 @@ def main():
         shutil.copytree(
             PROJECT / "data/gnome-shell" / PIN_EXTENSION,
             root / "data/gnome-shell/extensions" / PIN_EXTENSION,
+        )
+        shutil.copytree(
+            PROJECT / "tests/gnome-shell" / POINTER_EXTENSION,
+            root / "data/gnome-shell/extensions" / POINTER_EXTENSION,
         )
         log_path = root / "session.log"
         with log_path.open("wb") as log:
