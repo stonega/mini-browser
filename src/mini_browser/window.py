@@ -110,6 +110,14 @@ class BrowserWindow(Adw.ApplicationWindow):
             tooltip_text="Back (Alt+Left)",
             action_name="win.back",
         )
+        self.back_history = Gtk.Popover(position=Gtk.PositionType.BOTTOM)
+        self.back_history.set_parent(self.back_button)
+        self.back_history.connect("notify::visible", self._menu_changed)
+        history_press = Gtk.GestureLongPress(
+            button=1, touch_only=False, propagation_phase=Gtk.PropagationPhase.CAPTURE
+        )
+        history_press.connect("pressed", self._back_history_pressed)
+        self.back_button.add_controller(history_press)
         self.headerbar.pack_start(self.back_button)
         header_actions = Gtk.Box(spacing=0)
         self.pin_button = Gtk.ToggleButton(icon_name="view-pin-symbolic", tooltip_text="Pin on top")
@@ -125,6 +133,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.layout_button.get_popover().connect("notify::visible", self._layout_menu_changed)
         header_actions.append(self.layout_button)
         menu = Gio.Menu()
+        menu.append("New Window", "app.new-window")
         menu.append("Settings", "win.settings")
         menu.append(f"About {APP_NAME}", "win.about")
         self.menu_button = Gtk.MenuButton(
@@ -345,6 +354,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._queue_header_hide()
 
     def _navigation_changed(self, *_):
+        if self.back_history.get_visible():
+            self.back_history.popdown()
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
         media = self.audio_mode or self.video_mode
         self.lookup_action("back").set_enabled(browsing and (media or self.webview.can_go_back()))
@@ -356,6 +367,82 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._restore_page()
         else:
             self.webview.go_back()
+
+    def _back_history_pressed(self, gesture, _x, _y):
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+        self._show_back_history()
+
+    def _show_back_history(self):
+        if self._closing:
+            return
+        self.toolbar.set_reveal_top_bars(True)
+        history = self.webview.get_back_forward_list()
+        entries = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        entries.append(
+            Gtk.Label(
+                label="Back history",
+                xalign=0,
+                css_classes=["heading"],
+                margin_start=8,
+                margin_end=8,
+                margin_top=4,
+                margin_bottom=6,
+            )
+        )
+        for offset in range(1, 21):
+            item = history.get_nth_item(-offset)
+            if item is None:
+                break
+            uri = item.get_uri() or ""
+            title = " ".join((item.get_title() or uri or "Untitled page").split())
+            body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+            body.append(
+                Gtk.Label(
+                    label=title, xalign=0, ellipsize=Pango.EllipsizeMode.END, max_width_chars=26
+                )
+            )
+            body.append(
+                Gtk.Label(
+                    label=uri,
+                    xalign=0,
+                    ellipsize=Pango.EllipsizeMode.END,
+                    max_width_chars=32,
+                    css_classes=["caption", "dim-label"],
+                )
+            )
+            button = Gtk.Button(child=body, css_classes=["flat"], tooltip_text=f"{title}\n{uri}")
+            button.connect("clicked", lambda _button, target=item: self._jump_back(target))
+            entries.append(button)
+        if history.get_back_item() is None:
+            entries.append(
+                Gtk.Label(
+                    label="No previous pages",
+                    css_classes=["dim-label"],
+                    margin_start=8,
+                    margin_end=8,
+                    margin_top=8,
+                    margin_bottom=8,
+                )
+            )
+        self.back_history.set_child(
+            Gtk.ScrolledWindow(
+                child=entries,
+                hscrollbar_policy=Gtk.PolicyType.NEVER,
+                min_content_width=240,
+                max_content_width=300,
+                max_content_height=360,
+                propagate_natural_width=True,
+                propagate_natural_height=True,
+            )
+        )
+        self.back_history.popup()
+
+    def _jump_back(self, item):
+        self.back_history.popdown()
+        if item not in self.webview.get_back_forward_list().get_back_list_with_limit(20):
+            return
+        self._restore_page()
+        self.webview.go_to_back_forward_list_item(item)
 
     def _uri_changed(self, *_):
         if self._closing:
@@ -448,6 +535,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             or self._header_has_focus()
             or self.layout_button.get_popover().get_visible()
             or self.menu_button.get_popover().get_visible()
+            or self.back_history.get_visible()
         ):
             self.toolbar.set_reveal_top_bars(False)
         return GLib.SOURCE_REMOVE
@@ -783,6 +871,8 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _close_requested(self, *_):
         self._closing = True
+        self.back_history.popdown()
+        self.back_history.unparent()
         self.pin.close()
         self._cancel_header_hide()
         if self._layout_source:

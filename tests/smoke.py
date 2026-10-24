@@ -305,7 +305,16 @@ def run():
                     assert len(windows) == 1
                     assert window.webview.get_uri() == base + "/submitted"
                     # Explicit new-window requests remain available to the user.
-                    app.activate_action("new-window", None)
+                    menu = window.menu_button.get_menu_model()
+                    index = next(
+                        index
+                        for index in range(menu.get_n_items())
+                        if menu.get_item_attribute_value(index, "label", None).get_string()
+                        == "New Window"
+                    )
+                    action = menu.get_item_attribute_value(index, "action", None).get_string()
+                    assert action == "app.new-window"
+                    window.activate_action(action, None)
                     state["phase"] = 25
                 elif state["phase"] == 25:
                     assert len(windows) == 2

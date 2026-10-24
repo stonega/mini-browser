@@ -48,9 +48,9 @@ class WindowPin:
         self.button.set_active(self.pinned)
         self.button.set_sensitive(not self.pending and not self._enabling)
         self.button.set_tooltip_text(
-            "Unpin from top"
+            "Unpin window"
             if self.available and self.pinned
-            else "Pin on top"
+            else "Pin on top and on all workspaces"
             if self.available
             else "Set up pinning"
         )
@@ -64,7 +64,7 @@ class WindowPin:
             heading="Enable window pinning",
             body=(
                 "Pinning needs the Mini Browser Pin GNOME extension. "
-                "Enable it to keep this window on top."
+                "Enable it to keep this window on top and visible on all workspaces."
             ),
         )
         dialog.add_response("cancel", "Cancel")

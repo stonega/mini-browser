@@ -17,15 +17,18 @@ you open a site in another Mini Browser window.
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
 saved passwords, Devices, and shortcuts.
+Choose **New Window** in the same menu (or press Ctrl+N) to open another portrait window.
 Choose **About Mini Browser** in the same menu to see the app version and license.
 
-Ctrl+N opens another portrait window. Website links that request a new tab or
-window open in the current window, as do ordinary links. Scripted popup flows
-that need a separate window handle or build a blank popup are unsupported.
+Website links that request a new tab or window open in the current window, as do
+ordinary links. Scripted popup flows that need a separate window handle or build
+a blank popup are unsupported.
 All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.
 
 Drag the header bar to move the window. Close it with its close button or Ctrl+W.
+Press and hold Back with the mouse or a touchscreen to list up to 20 earlier
+pages from this window, newest first. Select a page to jump directly to it.
 
 ## Phone apps
 
@@ -76,8 +79,10 @@ Click the layout icon before the main menu to choose **Full page**,
 **Audio player**, or **Video player**. Unavailable options are disabled; the menu
 checks for videos again each time you open it. Full page uses a page-shaped icon.
 
-The pin button immediately before the layout button keeps a window above other
-windows. Audio and video modes turn it on automatically; click it to unpin the
+The pin button immediately before the layout button turns on both GNOME's
+**Always on Top** and **Always on Visible Workspace**, keeping the window above
+other windows and visible as you switch workspaces. Unpinning turns both off.
+Audio and video modes turn pinning on automatically; click it to unpin the
 player. Returning to Full page restores the pin setting from before media mode.
 Each window has its own pin setting.
 

@@ -22,9 +22,9 @@ An `Adw.ToolbarView` places a native
 control above the content. The home body contains
 only a search/address entry and up to six recent-site tiles. Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
-The three-line main menu follows the layout button and offers Settings and an
-`Adw.AboutDialog` displaying the app's name, version, and license. Full page uses
-the native `view-paged-symbolic` icon.
+The three-line main menu follows the layout button and offers New Window,
+Settings, and an `Adw.AboutDialog` displaying the app's name, version, and license.
+Full page uses the native `view-paged-symbolic` icon.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track WebKit's back-forward list and
@@ -32,6 +32,12 @@ are disabled on the home page. URI notifications and load events also refresh
 their state. Same-document URL changes (History API or fragments) leave media
 mode and restore the browsing header, just like full-page navigation.
 WebKit's user agent is unchanged.
+
+Long-pressing Back opens a native popover with up to 20 previous WebKit navigation
+entries, nearest first. Selection jumps to the existing back-forward-list item;
+it does not create a new navigation entry. Navigation dismisses stale lists, and
+an open history popover keeps the immersive header visible. Normal Back clicks
+retain their page-history or media-layout behavior.
 
 WebKit's `is-playing-audio` notification enables Audio player for a loaded page.
 Audio mode keeps that WebView alive but unmapped and requests a
@@ -56,17 +62,20 @@ media layout without navigating; normal history behavior resumes in Full page.
 
 `window_pin.py` connects each window's pin toggle to the bundled Mini Browser Pin
 GNOME Shell extension. GTK 4 provides no always-on-top request for GNOME Wayland;
-the extension calls Mutter's `make_above`/`unmake_above`. Its narrow session D-Bus
-interface matches both the caller's unique bus name and GTK window object path,
+the extension pairs Mutter's `make_above`/`unmake_above` with `stick`/`unstick`
+to control Always on Top and Always on Visible Workspace together. Its narrow
+session D-Bus interface matches both the caller's unique bus name and GTK window object path,
 and only handles Mini Browser application IDs. It never matches page titles.
-Replies and unicast change signals report the compositor's actual `above` state.
-Calls are asynchronous, stale replies are ignored, and mapping races receive a
+Replies and unicast change signals report pinned only when both compositor
+settings are active. Changes to either setting through GNOME's window menu update
+the toggle. Calls are asynchronous, stale replies are ignored, and mapping races receive a
 bounded retry. Unavailable pinning keeps the button clickable and opens a native
 setup dialog. Enable Pinning activates the installed GNOME extension; newly
 installed extensions require signing out and back in before GNOME can load them.
 Entering either media mode requests pinning; returning to the page restores the
 previous requested setting. Manual unpinning remains available during playback.
-Disabling the extension restores the original state of windows it controlled.
+Disabling the extension restores each original flag independently for windows it
+controlled.
 
 `audio_player.py` implements native controls. Mute uses WebKit's page-wide API.
 The left cover fills the player's height with no margins; a width-for-height

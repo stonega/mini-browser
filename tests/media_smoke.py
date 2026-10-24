@@ -13,6 +13,9 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from pin_smoke import window_flags
+from smoke import widgets
+
 from mini_browser.application import BrowserApplication
 from mini_browser.gtk import Gio, GLib, Gtk
 from mini_browser.media import video_window_size
@@ -57,6 +60,13 @@ class Handler(BaseHTTPRequestHandler):
             content_type = "image/svg+xml"
         elif self.path == "/silent":
             data, content_type = b"<title>Silent page</title>", "text/html"
+        elif self.path.startswith("/history-"):
+            data = {
+                "/history-one": b"<title>History one</title>",
+                "/history-two": b"<title>&lt;b&gt;History two&lt;/b&gt;</title>",
+                "/history-three": b"<title>History three</title>",
+            }[self.path]
+            content_type = "text/html"
         elif self.path in ("/video", "/portrait-video", "/metadata-video"):
             data = b"""<!doctype html><meta name="viewport" content="width=device-width">
             <title>Local video fixture</title><h1>Page outside the video</h1>
@@ -199,6 +209,40 @@ def run():
             )
             yield from wait("real pointer interaction", lambda: result.get("done", False))
 
+        def hold_back(window):
+            valid, bounds = window.back_button.compute_bounds(window)
+            assert valid
+            result = {}
+
+            def finished(connection, response):
+                try:
+                    connection.call_finish(response)
+                    result["done"] = True
+                except Exception as error:
+                    fail(error)
+
+            app.get_dbus_connection().call(
+                "io.github.stone.MiniBrowser.TestPointer",
+                "/io/github/stone/MiniBrowser/TestPointer",
+                "io.github.stone.MiniBrowser.TestPointer",
+                "Hold",
+                GLib.Variant(
+                    "(oddu)",
+                    (
+                        window.pin.path,
+                        bounds.get_x() + bounds.get_width() / 2,
+                        bounds.get_y() + bounds.get_height() / 2,
+                        900,
+                    ),
+                ),
+                None,
+                Gio.DBusCallFlags.NONE,
+                4000,
+                None,
+                finished,
+            )
+            yield from wait("real Back long press", lambda: result.get("done", False))
+
         def scenario(window):
             assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
             yield from wait(
@@ -208,10 +252,12 @@ def run():
             assert not window.pin.pinned and not window.pin_button.get_active()
             window.pin_button.emit("clicked")
             yield from wait("manual page pin", lambda: window.pin.pinned and not window.pin.pending)
+            assert window_flags(window) == (True, True)
             window.pin_button.emit("clicked")
             yield from wait(
                 "manual page unpin", lambda: not window.pin.pinned and not window.pin.pending
             )
+            assert window_flags(window) == (False, False)
             menu = window.layout_button.get_menu_model()
             assert [
                 menu.get_item_attribute_value(index, "label", None).get_string()
@@ -249,11 +295,13 @@ def run():
             yield from wait(
                 "audio pins by default", lambda: window.pin.pinned and not window.pin.pending
             )
+            assert window_flags(window) == (True, True)
             assert window.pin_button.get_active()
             window.pin_button.emit("clicked")
             yield from wait(
                 "audio can unpin", lambda: not window.pin.pinned and not window.pin.pending
             )
+            assert window_flags(window) == (False, False)
             window.pin_button.emit("clicked")
             yield from wait("audio can repin", lambda: window.pin.pinned and not window.pin.pending)
             assert window.stack.get_visible_child_name() == "audio"
@@ -262,6 +310,19 @@ def run():
             assert window.document_generation == generation
             assert window.webview.is_playing_audio()
             assert window.toolbar.get_extend_content_to_top_edge()
+            window._show_back_history()
+            assert window.audio_mode
+            assert any(
+                isinstance(widget, Gtk.Label) and widget.get_label() == "No previous pages"
+                for widget in widgets(window.back_history)
+            )
+            window._cancel_header_hide()
+            window._hide_media_header()
+            assert window.toolbar.get_reveal_top_bars()
+            window.back_history.popdown()
+            yield from wait("closed empty history", lambda: not window.back_history.get_mapped())
+            window.player.mute_button.grab_focus()
+            window._header_leave()
             yield from wait("hidden audio header", lambda: window.toolbar.get_top_bar_height() == 0)
             yield from wait(
                 "audio cover and metadata",
@@ -454,6 +515,7 @@ def run():
             yield from wait(
                 "page pin restored", lambda: not window.pin.pinned and not window.pin.pending
             )
+            assert window_flags(window) == (False, False)
 
             window.pin.set_pinned(True)
             yield from wait(
@@ -470,6 +532,7 @@ def run():
                 "previous page stays pinned",
                 lambda: window.pin.pinned and not window.pin.pending and window.get_height() == 700,
             )
+            assert window_flags(window) == (True, True)
             window.pin.set_pinned(False)
             yield from wait(
                 "page unpinned again", lambda: not window.pin.pinned and not window.pin.pending
@@ -605,6 +668,7 @@ def run():
             yield from wait(
                 "video pins by default", lambda: window.pin.pinned and not window.pin.pending
             )
+            assert window_flags(window) == (True, True)
             yield from wait("hidden video header", lambda: window.toolbar.get_top_bar_height() == 0)
             original_frame = frame(window)
             yield from pointer(window, 240, 120, 75, 45)
@@ -703,6 +767,7 @@ def run():
             yield from wait(
                 "video pin restored", lambda: not window.pin.pinned and not window.pin.pending
             )
+            assert window_flags(window) == (False, False)
             restored = yield from javascript(
                 window,
                 "const video = document.querySelector('video'); return {style:video.style.cssText,"
@@ -856,12 +921,90 @@ def run():
             window.activate_action("win.page-layout", None)
             yield from wait("fallback restored", lambda: window.get_height() == 700)
 
+            # A hold opens real WebKit history and must not also click Back.
+            for path in ("/history-one", "/history-two", "/history-three"):
+                window.load_uri(origin + path)
+                yield from wait(
+                    "history fixture load",
+                    lambda target=origin + path: (
+                        window.webview.get_uri() == target and not window.webview.is_loading()
+                    ),
+                )
+            history_length = window.webview.get_back_forward_list().get_length()
+            valid, bounds = window.back_button.compute_bounds(window)
+            assert valid
+            yield from pointer(
+                window,
+                bounds.get_x() + bounds.get_width() / 2,
+                bounds.get_y() + bounds.get_height() / 2,
+            )
+            yield from wait(
+                "short Back click",
+                lambda: (
+                    window.webview.get_uri() == origin + "/history-two"
+                    and not window.webview.is_loading()
+                ),
+            )
+            assert not window.back_history.get_visible()
+            window.activate_action("win.forward", None)
+            yield from wait(
+                "forward before Back hold",
+                lambda: (
+                    window.webview.get_uri() == origin + "/history-three"
+                    and not window.webview.is_loading()
+                ),
+            )
+            yield from hold_back(window)
+            assert window.back_history.get_visible()
+            assert window.webview.get_uri() == origin + "/history-three"
+            rows = [
+                widget
+                for widget in widgets(window.back_history)
+                if isinstance(widget, Gtk.Button) and widget.get_tooltip_text()
+            ]
+            assert rows[0].get_tooltip_text().endswith("/history-two")
+            assert rows[1].get_tooltip_text().endswith("/history-one")
+            labels = [widget for widget in widgets(rows[0]) if isinstance(widget, Gtk.Label)]
+            assert labels[0].get_label() == "<b>History two</b>" and not labels[0].get_use_markup()
+            if len(sys.argv) > 1:
+                shot = Gtk.Snapshot.new()
+                paintable = Gtk.WidgetPaintable.new(window.back_history)
+                paintable.snapshot(
+                    shot, window.back_history.get_width(), window.back_history.get_height()
+                )
+                texture = window.get_renderer().render_texture(shot.to_node(), None)
+                path = Path(sys.argv[1])
+                assert texture.save_to_png(str(path.with_name(path.stem + "-back-history.png")))
+            rows[1].emit("clicked")
+            yield from wait(
+                "history jumps directly",
+                lambda: (
+                    window.webview.get_uri() == origin + "/history-one"
+                    and not window.webview.is_loading()
+                ),
+            )
+            history = window.webview.get_back_forward_list()
+            assert history.get_length() == history_length
+            assert history.get_nth_item(1).get_uri() == origin + "/history-two"
+            assert history.get_nth_item(2).get_uri() == origin + "/history-three"
+            assert not window.back_history.get_visible()
+            rows[0].emit("clicked")
+            assert window.webview.get_uri() == origin + "/history-one"
+            window._show_back_history()
+            assert window.back_history.get_visible()
+            print(
+                "PASS: real Back long press, ordered literal titles, "
+                "direct history jump, stale selection guard",
+                flush=True,
+            )
+
             # The application remains open in another window when a player closes.
             window.webview.get_settings().set_property(
                 "media-playback-requires-user-gesture", False
             )
             window.load_uri(origin)
             yield from wait("closing fixture load", lambda: not window.webview.is_loading())
+            assert not window.back_history.get_visible()
             yield from javascript(
                 window, "await document.querySelector('audio').play(); return true;"
             )

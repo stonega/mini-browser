@@ -23,6 +23,29 @@ def click_response(widget, label):
     return False
 
 
+def window_flags(window, desired=None):
+    """Read or change independent Mutter flags through the isolated test helper."""
+    interface = "io.github.stone.MiniBrowser.TestPointer"
+    return (
+        window.get_application()
+        .get_dbus_connection()
+        .call_sync(
+            interface,
+            "/io/github/stone/MiniBrowser/TestPointer",
+            interface,
+            "Flags" if desired is None else "SetFlags",
+            GLib.Variant("(o)", (window.pin.path,))
+            if desired is None
+            else GLib.Variant("(obb)", (window.pin.path, *desired)),
+            GLib.VariantType.new("(bb)"),
+            Gio.DBusCallFlags.NONE,
+            1500,
+            None,
+        )
+        .unpack()
+    )
+
+
 def run():
     with tempfile.TemporaryDirectory(prefix="mini-browser-pin-") as temporary:
         root = Path(temporary)
@@ -58,6 +81,24 @@ def run():
             window.pin_button.emit("clicked")
             yield lambda: ready(window) and window.pin.pinned
             assert not other.pin.pinned
+            assert window_flags(window) == (True, True)
+            assert window_flags(other) == (False, False)
+
+            # GNOME's window menu can change either setting independently.
+            window_flags(window, (True, False))
+            yield lambda: not window.pin.pinned and not window.pin_button.get_active()
+            window_flags(window, (True, True))
+            yield lambda: window.pin.pinned and window.pin_button.get_active()
+            window_flags(window, (False, True))
+            yield lambda: not window.pin.pinned and not window.pin_button.get_active()
+            window.pin_button.emit("clicked")
+            yield lambda: ready(window) and window.pin.pinned
+            assert window_flags(window) == (True, True)
+            window.pin_button.emit("clicked")
+            yield lambda: ready(window) and not window.pin.pinned
+            assert window_flags(window) == (False, False)
+            window.pin_button.emit("clicked")
+            yield lambda: ready(window) and window.pin.pinned
 
             # A separate bus client cannot control this app's windows.
             outsider = Gio.DBusConnection.new_for_address_sync(
@@ -109,6 +150,7 @@ def run():
             yield lambda: ready(window) and window.pin.pinned
             extension(False)
             yield lambda: not window.pin.available
+            assert window_flags(window) == (False, False)
             assert window.pin_button.get_sensitive()
             assert not window.pin_button.get_active()
             with patch(
@@ -136,12 +178,41 @@ def run():
             window.pin.set_pinned(False)
             yield lambda: ready(window) and not window.pin.pinned
             assert window.pin_button.get_sensitive()
+            assert window_flags(window) == (False, False)
             assert not other.pin.pinned
+
+            # Extension shutdown restores each original flag, including mixed states.
+            extension(False)
+            yield lambda: not window.pin.available
+            above_only, sticky_only = app.new_window(), app.new_window()
+            yield lambda: all(
+                probe.get_mapped() and probe.pin.path for probe in (above_only, sticky_only)
+            )
+            window_flags(above_only, (True, False))
+            window_flags(sticky_only, (False, True))
+            extension(True)
+            yield lambda: all(ready(probe) for probe in (window, other, above_only, sticky_only))
+            assert not above_only.pin.pinned and not sticky_only.pin.pinned
+            for probe in (above_only, sticky_only):
+                probe.pin.set_pinned(True)
+            yield lambda: all(
+                ready(probe) and probe.pin.pinned for probe in (above_only, sticky_only)
+            )
+            assert window_flags(above_only) == window_flags(sticky_only) == (True, True)
+            extension(False)
+            yield lambda: not window.pin.available
+            assert window_flags(above_only) == (True, False)
+            assert window_flags(sticky_only) == (False, True)
+            above_only.close()
+            sticky_only.close()
+            extension(True)
+            yield lambda: ready(window) and ready(other)
             window.close()
             other.close()
             state["completed"] = True
             print(
-                "PASS: independent window pins, caller ownership, compositor signals, "
+                "PASS: above/all-workspace pins, independent windows, caller ownership, "
+                "independent compositor signals, mixed-state restoration, "
                 "rapid requests, extension disable/re-enable, missing-extension guidance, "
                 "enable from pin button"
             )

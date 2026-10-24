@@ -18,6 +18,20 @@ const XML = `<node><interface name="${NAME}">
         <arg type="d" direction="in"/><arg type="d" direction="in"/>
         <arg type="d" direction="in"/><arg type="d" direction="in"/>
     </method>
+    <method name="Hold">
+        <arg type="o" direction="in"/>
+        <arg type="d" direction="in"/><arg type="d" direction="in"/>
+        <arg type="u" direction="in"/>
+    </method>
+    <method name="Flags">
+        <arg type="o" direction="in"/>
+        <arg type="b" direction="out"/><arg type="b" direction="out"/>
+    </method>
+    <method name="SetFlags">
+        <arg type="o" direction="in"/>
+        <arg type="b" direction="in"/><arg type="b" direction="in"/>
+        <arg type="b" direction="out"/><arg type="b" direction="out"/>
+    </method>
 </interface></node>`;
 
 export default class PointerTests extends Extension {
@@ -36,7 +50,8 @@ export default class PointerTests extends Extension {
 
     _window(path, invocation) {
         const window = global.get_window_actors().map(actor => actor.meta_window).find(w =>
-            w.get_gtk_application_id()?.startsWith('io.github.stone.MiniBrowser.MediaSmoke.') &&
+            ['MediaSmoke', 'PinSmoke'].some(kind =>
+                w.get_gtk_application_id()?.startsWith(`io.github.stone.MiniBrowser.${kind}.`)) &&
             w.get_gtk_unique_bus_name() === invocation.get_sender() &&
             w.get_gtk_window_object_path() === path);
         if (!window)
@@ -52,14 +67,43 @@ export default class PointerTests extends Extension {
         invocation.return_value(new GLib.Variant('(iiii)', [rect.x, rect.y, rect.width, rect.height]));
     }
 
+    FlagsAsync([path], invocation) {
+        const window = this._window(path, invocation);
+        if (window)
+            invocation.return_value(new GLib.Variant('(bb)', [window.is_above(), window.is_on_all_workspaces()]));
+    }
+
+    SetFlagsAsync([path, above, sticky], invocation) {
+        const window = this._window(path, invocation);
+        if (!window)
+            return;
+        if (above)
+            window.make_above();
+        else
+            window.unmake_above();
+        if (sticky)
+            window.stick();
+        else
+            window.unstick();
+        invocation.return_value(new GLib.Variant('(bb)', [window.is_above(), window.is_on_all_workspaces()]));
+    }
+
     PointerAsync([path, x, y, dx, dy], invocation) {
+        this._interact(path, x, y, dx, dy, 0, invocation);
+    }
+
+    HoldAsync([path, x, y, duration], invocation) {
+        this._interact(path, x, y, 0, 0, duration, invocation);
+    }
+
+    _interact(path, x, y, dx, dy, hold, invocation) {
         const window = this._window(path, invocation);
         if (!window)
             return;
         const rect = window.get_frame_rect();
         if (this._timer || ![x, y, dx, dy].every(Number.isFinite) ||
             x < 0 || y < 0 || x >= rect.width || y >= rect.height ||
-            Math.abs(dx) > 150 || Math.abs(dy) > 150) {
+            Math.abs(dx) > 150 || Math.abs(dy) > 150 || hold > 2000) {
             invocation.return_dbus_error('org.freedesktop.DBus.Error.InvalidArgs', 'Invalid test interaction.');
             return;
         }
@@ -71,6 +115,11 @@ export default class PointerTests extends Extension {
         let step = 0;
         this._timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
             step++;
+            if (step === 5 && hold > 0) {
+                hold -= 80;
+                step--;
+                return GLib.SOURCE_CONTINUE;
+            }
             if (step < 4)
                 motion(0);
             else if (step === 4) {

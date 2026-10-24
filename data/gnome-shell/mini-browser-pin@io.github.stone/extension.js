@@ -41,11 +41,17 @@ export default class MiniBrowserPin extends Extension {
             return null;
         }
         if (!this._windows.has(window)) {
-            const entry = {original: window.is_above(), managed: false};
-            entry.changed = window.connect('notify::above', () => {
+            const entry = {
+                above: window.is_above(),
+                sticky: window.is_on_all_workspaces(),
+                managed: false,
+            };
+            const changed = () => {
                 Gio.DBus.session.emit_signal(sender, OBJECT_PATH, BUS_NAME,
-                    'PinnedChanged', new GLib.Variant('(ob)', [path, window.is_above()]));
-            });
+                    'PinnedChanged', new GLib.Variant('(ob)', [path, this._pinned(window)]));
+            };
+            entry.changed = ['notify::above', 'notify::on-all-workspaces'].map(
+                signal => window.connect(signal, changed));
             entry.closed = window.connect('unmanaged', () => this._forget(window));
             this._windows.set(window, entry);
         }
@@ -55,7 +61,7 @@ export default class MiniBrowserPin extends Extension {
     GetPinnedAsync([path], invocation) {
         const window = this._find(path, invocation);
         if (window)
-            invocation.return_value(new GLib.Variant('(b)', [window.is_above()]));
+            invocation.return_value(new GLib.Variant('(b)', [this._pinned(window)]));
     }
 
     SetPinnedAsync([path, pinned], invocation) {
@@ -63,16 +69,29 @@ export default class MiniBrowserPin extends Extension {
         if (!window)
             return;
         this._windows.get(window).managed = true;
-        if (pinned)
+        this._apply(window, pinned, pinned);
+        invocation.return_value(new GLib.Variant('(b)', [this._pinned(window)]));
+    }
+
+    _pinned(window) {
+        return window.is_above() && window.is_on_all_workspaces();
+    }
+
+    _apply(window, above, sticky) {
+        if (above)
             window.make_above();
         else
             window.unmake_above();
-        invocation.return_value(new GLib.Variant('(b)', [window.is_above()]));
+        if (sticky)
+            window.stick();
+        else
+            window.unstick();
     }
 
     _forget(window) {
         const entry = this._windows.get(window);
-        window.disconnect(entry.changed);
+        for (const signal of entry.changed)
+            window.disconnect(signal);
         window.disconnect(entry.closed);
         this._windows.delete(window);
     }
@@ -82,12 +101,8 @@ export default class MiniBrowserPin extends Extension {
         this._export.unexport();
         for (const [window, entry] of this._windows) {
             this._forget(window);
-            if (entry.managed) {
-                if (entry.original)
-                    window.make_above();
-                else
-                    window.unmake_above();
-            }
+            if (entry.managed)
+                this._apply(window, entry.above, entry.sticky);
         }
         this._windows = null;
         this._export = null;
