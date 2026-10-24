@@ -17,6 +17,15 @@ Requires:       gtk4 >= 4.12
 Requires:       libadwaita >= 1.5
 Requires:       webkitgtk6.0 >= 2.40
 Requires:       python3-cryptography >= 44
+Requires:       gstreamer1
+Requires:       gstreamer1-plugins-base
+Requires:       gstreamer1-plugins-good
+Requires:       gstreamer1-plugins-bad-free
+Requires:       gstreamer1-plugin-gtk4
+Recommends:     gstreamer1-plugin-openh264
+Suggests:       android-tools
+Suggests:       scrcpy >= 3
+Suggests:       uxplay >= 1.73
 
 %description
 A native GNOME browser with one page per portrait window, a native header

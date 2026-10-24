@@ -124,6 +124,19 @@ def silent_audio_environment(address):
 
 
 def run_tests(root, arguments):
+    tests = {
+        "devices": "device_smoke.py",
+        "browser": "smoke.py",
+        "pin": "pin_smoke.py",
+        "media": "media_smoke.py",
+        "passwords": "password_smoke.py",
+    }
+    filenames = tuple(tests.values())
+    if arguments and arguments[0].startswith("--test="):
+        selected = arguments[0].split("=", 1)[1]
+        if selected not in tests:
+            raise ValueError("Choose --test=devices, browser, pin, media, or passwords.")
+        filenames, arguments = (tests[selected],), arguments[1:]
     log_path = root / "gnome-shell.log"
     command = [
         "gnome-shell",
@@ -196,7 +209,7 @@ def run_tests(root, arguments):
             enable_extension(shell, PIN_EXTENSION)
             enable_extension(shell, POINTER_EXTENSION)
             print("Running UI tests in virtual GNOME (1280 × 1024, silent audio)", flush=True)
-            for filename in ("smoke.py", "pin_smoke.py", "media_smoke.py", "password_smoke.py"):
+            for filename in filenames:
                 if shell.poll() is not None:
                     raise RuntimeError("Virtual GNOME exited during the UI tests")
                 test = subprocess.Popen(

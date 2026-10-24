@@ -19,8 +19,48 @@ Development commands:
 ./scripts/check
 ruff format src tests scripts/install
 ./scripts/smoke
+./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
 ./scripts/build-rpm
 ```
+
+## Phone mirroring dependencies
+
+Phone windows additionally use GStreamer's introspection bindings, H.264 parser
+and decoder, RTP plugins, and the native GTK 4 paintable sink. On Fedora:
+
+```sh
+sudo dnf install gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good \
+  gstreamer1-plugins-bad-free gstreamer1-plugin-gtk4 gstreamer1-plugin-openh264
+```
+
+Android requires `adb` (Fedora's `android-tools`) and scrcpy major version 3, 4,
+or 5 with the server from the exact same release. Follow the
+[upstream Linux installation instructions](https://github.com/Genymobile/scrcpy/blob/master/doc/linux.md)
+for scrcpy; package/repository availability varies. The app searches beside the
+scrcpy executable and in `share/scrcpy/scrcpy-server` under its installation
+prefix, then `/usr/share/scrcpy` and `/usr/local/share/scrcpy`. Set
+`SCRCPY_SERVER_PATH` if the matching server is elsewhere. No device server is
+downloaded automatically. USB debugging authorization is required; wireless ADB
+must already be paired outside the app.
+
+iPhone viewing requires [UxPlay](https://github.com/FDH2/UxPlay) 1.73 or newer
+with `-vrtp` support (`uxplay` is packaged by Fedora). It also needs working
+local-network service discovery, usually Avahi for packaged versions, and
+firewall access for AirPlay/mDNS. The app does not change firewall rules or
+system services. Each receiver uses its own empty configuration, stable local
+identity, private client register, and displayed pairing code. Video is forwarded
+only over loopback into GTK, without a second display window. Audio is disabled.
+Missing dependencies produce a reconnectable error in the phone window.
+
+The phone smoke test requires `openh264enc` and `openh264dec` (provided by
+`gstreamer1-plugin-openh264`), along with the plugins above. It creates fake ADB,
+scrcpy, and UxPlay executables inside a temporary directory and puts only these
+ahead of the system tools. It exercises real H.264 decoding and RTP delivery,
+Settings, tile persistence, input mapping, reconnect, session-lock cleanup, and
+iPhone stream loss/recovery in the isolated desktop. It never accesses real
+phones. Optional captures include `-android.png` and `-iphone.png`.
+
+## Verification environment
 
 `check` runs standard-library unit tests, Ruff lint and format checks, and Python
 byte compilation. `smoke` starts a disposable GNOME Shell with a 1280 × 1024

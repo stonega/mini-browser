@@ -340,6 +340,12 @@ def settings_dialog(window):
             "Browser",
             [
                 (
+                    "Devices",
+                    "Show Android phones and iPhones as apps",
+                    "phone-symbolic",
+                    "win.devices",
+                ),
+                (
                     "Bookmarks and history",
                     "Browse your saved pages and visits",
                     "user-bookmarks-symbolic",

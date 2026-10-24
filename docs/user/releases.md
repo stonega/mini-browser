@@ -1,5 +1,16 @@
 # Release notes
 
+## Unreleased
+
+- Save Android phones and iPhones in Settings → Devices, then open their app
+  tiles on Home in native phone windows.
+- Android streams through the matching installed scrcpy server and supports
+  basic taps, swipes, navigation keys, and ASCII typing through ADB.
+- iPhone viewing uses an authenticated UxPlay AirPlay receiver and phone-side
+  Screen Mirroring. Desktop iPhone input and phone audio are not yet supported.
+- Phone sessions clear their screens and stop helpers on close or desktop lock.
+  Synthetic helper tests cover native H.264/RTP rendering, input, and cleanup.
+
 ## 0.2.3 — October 24, 2026
 
 - Links requesting another tab or window open in the current window. Use Ctrl+N

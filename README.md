@@ -7,7 +7,8 @@ A native GNOME web browser with a small footprint on your screen.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
 - A pin button before the layout icon, with always-on-top enabled by default in media layouts.
-- A home page with a search/address bar and recently opened site tiles.
+- A home page with a search/address bar, recent sites, and saved phone app tiles.
+- Native Android mirroring with basic input, and authenticated iPhone AirPlay viewing.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
 - Shared, persistent website sessions across Mini Browser windows.
@@ -50,7 +51,7 @@ From this directory:
 
 Each argument opens its own window. The home page has a search/address field
 and tiles for recently opened sites. The header bar's three-line menu, after the
-layout button, contains Settings for imports, passwords, and your library, plus
+layout button, contains Settings for devices, imports, passwords, and your library, plus
 About Mini Browser with the app version and license. While browsing, the header
 bar sits above the page. The narrow window lets responsive websites use their compact
 layout; the browser keeps WebKit's normal user agent.

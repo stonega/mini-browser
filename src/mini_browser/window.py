@@ -189,7 +189,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             ),
         )
         recent = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        recent.append(Gtk.Label(label="Recently opened", xalign=0, css_classes=["heading"]))
+        recent.append(Gtk.Label(label="Apps", xalign=0, css_classes=["heading"]))
         self.recent_tiles = Gtk.FlowBox(
             css_classes=["recent-sites"],
             selection_mode=Gtk.SelectionMode.NONE,
@@ -215,8 +215,44 @@ class BrowserWindow(Adw.ApplicationWindow):
     def refresh_recents(self):
         self.recent_tiles.remove_all()
         records = self.library.recent_apps()
-        self.recent_empty.set_visible(not records)
-        self.recent_tiles.set_visible(bool(records))
+        devices = self.get_application().devices.all()
+        self.recent_empty.set_visible(not records and not devices)
+        self.recent_tiles.set_visible(bool(records or devices))
+        for device in devices:
+            body = Gtk.Box(
+                orientation=Gtk.Orientation.VERTICAL,
+                spacing=8,
+                margin_top=12,
+                margin_bottom=12,
+                margin_start=4,
+                margin_end=4,
+                halign=Gtk.Align.CENTER,
+            )
+            body.append(Gtk.Image(icon_name="phone-symbolic", pixel_size=44))
+            body.append(
+                Gtk.Label(
+                    label=device.name,
+                    lines=2,
+                    wrap=True,
+                    ellipsize=Pango.EllipsizeMode.END,
+                    max_width_chars=10,
+                    width_chars=8,
+                    justify=Gtk.Justification.CENTER,
+                    css_classes=["heading"],
+                )
+            )
+            body.append(
+                Gtk.Label(
+                    label="Android" if device.kind == "android" else "iPhone",
+                    css_classes=["caption", "dim-label"],
+                )
+            )
+            button = Gtk.Button(child=body, css_classes=["flat", "card"], tooltip_text=device.name)
+            button.connect(
+                "clicked",
+                lambda _button, device_id=device.id: self.get_application().open_device(device_id),
+            )
+            self.recent_tiles.append(button)
         for record in records:
             host = record["site"].split("://", 1)[1].removeprefix("www.")
             title = " ".join((record["title"] or host).split())
@@ -574,6 +610,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "address": lambda: address_dialog(self),
             "home": self.show_home,
             "settings": lambda: settings_dialog(self),
+            "devices": self._devices_dialog,
             "about": lambda: about_dialog(self),
             "show-header": self._show_header,
             "page-layout": self._restore_page,
@@ -599,6 +636,11 @@ class BrowserWindow(Adw.ApplicationWindow):
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda _a, _p, cb=callback: cb())
             self.add_action(action)
+
+    def _devices_dialog(self):
+        from .device_dialogs import devices_dialog
+
+        devices_dialog(self)
 
     def load_uri(self, uri):
         if not is_web_url(uri):
@@ -670,7 +712,10 @@ class BrowserWindow(Adw.ApplicationWindow):
                 try:
                     self.library.record_visit(uri, view.get_title())
                     for window in self.get_application().get_windows():
-                        if window.stack.get_visible_child_name() == "home":
+                        if (
+                            isinstance(window, BrowserWindow)
+                            and window.stack.get_visible_child_name() == "home"
+                        ):
                             window.refresh_recents()
                 except Exception:
                     self.toast("Could not save this visit to history.")

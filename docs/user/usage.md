@@ -2,7 +2,7 @@
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
-The home page also shows up to six recently opened sites. A native GNOME header
+The home page also shows saved phones and up to six recently opened sites. A native GNOME header
 bar shows Back, the page title, pin, layout icon, three-line main menu, and close button.
 Back returns to the previous page and is disabled when there is no previous page.
 Open the address
@@ -16,7 +16,7 @@ you open a site in another Mini Browser window.
 
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
-saved passwords, and shortcuts.
+saved passwords, Devices, and shortcuts.
 Choose **About Mini Browser** in the same menu to see the app version and license.
 
 Ctrl+N opens another portrait window. Website links that request a new tab or
@@ -26,6 +26,49 @@ All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.
 
 Drag the header bar to move the window. Close it with its close button or Ctrl+W.
+
+## Phone apps
+
+Open **Settings → Devices** to add an Android phone or iPhone. Its app tile stays
+on Home beside your recent sites. Open the tile to show the phone in a native
+window; opening it again focuses that same window. Rename or remove phones in
+Devices. Removing a phone stops its session and deletes its local AirPlay pairing
+data after the receiver has stopped.
+
+For Android, install ADB and scrcpy with its matching server (see the
+[setup guide](../implementation/setup.md#phone-mirroring-dependencies)). Enable
+USB debugging in Android Developer options, connect by USB, and approve this
+computer on the phone. Choose **Find connected phones**, select the phone, and
+add it. An already paired wireless ADB address also works; Mini Browser does not
+enable wireless debugging or pair wireless ADB for you.
+
+Click to tap, drag to swipe or long-press, and scroll to swipe. Focus the phone
+image to type ASCII text or use Backspace, Enter, Tab, Delete, and the arrow keys.
+Right-click sends Android Back. The phone window's menu offers Back, Home, and
+the app switcher. Input goes only to the selected phone while its window is
+active. Use the phone keyboard for other languages. ADB input can have noticeable
+latency; true multitouch and keyboard modifier combinations are not supported.
+
+For iPhone, install UxPlay 1.73 or newer. Open the tile, keep both devices on the
+same local network, and choose the displayed receiver name in **iPhone Control
+Center → Screen Mirroring**. Enter the four-digit pairing code if asked. Keep
+the phone unlocked and use it to control the screen. Paired clients are checked
+against this tile's private registration file; subsequent receiver sessions are
+restricted to the first paired phone. Add a separate tile for another iPhone.
+Discovery or network isolation/firewall settings can prevent a connection.
+
+This release mirrors video only. iPhone desktop input, phone audio forwarding,
+DRM-protected iPhone video, and Apple's locked-phone iPhone Mirroring behavior
+are not supported. Live streams are not recorded. Phone names and Android
+connection identifiers are kept in the private app library, independently of
+web history; AirPlay public pairing records are stored under the app's private
+`devices` directory.
+
+Use the phone window's menu to **Disconnect** or **Reconnect**; Escape disconnects
+and Ctrl+R/F5 reconnects. Closing the window stops its helper and clears the
+screen. Screen lock and sleep disconnect all phones when session notifications
+are available; select Reconnect explicitly after returning. An interrupted
+iPhone stream clears the old image and waits for Screen Mirroring to resume.
 
 ## Media layouts
 

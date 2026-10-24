@@ -1,10 +1,14 @@
 """GNOME application lifecycle, shared web session, and desktop actions."""
 
 import os
+import shutil
 import sys
+import time
+import weakref
 from pathlib import Path
 
 from . import APP_ID
+from .devices import DeviceStore
 from .gtk import Adw, Gdk, Gio, GLib, Gtk, WebKit
 from .navigation import address_to_uri
 from .storage import Library
@@ -42,6 +46,7 @@ class BrowserApplication(Adw.Application):
                 background: none;
                 box-shadow: none;
             }
+            .phone-screen { background: black; }
         """)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), styles, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
@@ -51,6 +56,11 @@ class BrowserApplication(Adw.Application):
         self.data_dir.chmod(0o700)
         self.cache_dir.chmod(0o700)
         self.library = Library(self.data_dir / "library.sqlite3")
+        self.devices = DeviceStore(self.library)
+        self.device_windows = {}
+        self.device_transports = set()
+        self.removed_devices = set()
+        self.device_dialogs = weakref.WeakSet()
         self.vault = PasswordVault(self.data_dir / "passwords.vault")
         self.vault_requests = set()
         self._vault_timer = GLib.timeout_add_seconds(2, self._expire_vault)
@@ -116,6 +126,7 @@ class BrowserApplication(Adw.Application):
         def changed(_bus, _sender, _path, _interface, _signal, parameters, _data=None):
             if parameters.unpack()[0]:
                 self.lock_vault()
+                self.disconnect_devices()
 
         for bus_type, sender, interface, signal, path in [
             (
@@ -149,6 +160,12 @@ class BrowserApplication(Adw.Application):
                 pass  # Manual locking and the timeout work without session services.
 
     def do_shutdown(self):
+        self.disconnect_devices()
+        deadline = time.monotonic() + 10
+        for transport in tuple(self.device_transports):
+            transport.stop()
+            if transport.thread:
+                transport.thread.join(timeout=max(0, deadline - time.monotonic()))
         self.lock_vault()
         GLib.source_remove(self._vault_timer)
         for connection, subscription in self._lock_subscriptions:
@@ -182,6 +199,73 @@ class BrowserApplication(Adw.Application):
             window.load_uri(uri)
         window.present()
         return window
+
+    def open_device(self, device_id):
+        from .device_window import DeviceWindow
+
+        device = next((item for item in self.devices.all() if item.id == device_id), None)
+        if device is None:
+            return None
+        window = self.device_windows.get(device.id)
+        if window is None:
+            window = DeviceWindow(self, device)
+            self.device_windows[device.id] = window
+        window.present()
+        return window
+
+    def refresh_devices(self):
+        records = {device.id: device for device in self.devices.all()}
+        for device_id, window in tuple(self.device_windows.items()):
+            if device_id in records:
+                window.device = records[device_id]
+                window.set_title(window.device.name)
+                window.title_widget.set_title(window.device.name)
+        for window in self.get_windows():
+            if isinstance(window, BrowserWindow):
+                window.refresh_recents()
+        for dialog in tuple(self.device_dialogs):
+            dialog.refresh()
+
+    def remove_device(self, device_id):
+        if device_id not in {device.id for device in self.devices.all()}:
+            return
+        self.devices.remove(device_id)
+        self.removed_devices.add(device_id)
+        window = self.device_windows.get(device_id)
+        if window:
+            window.close()
+        self._remove_pairing_data(device_id)
+        self.refresh_devices()
+
+    def finish_device_transport(self, transport):
+        self.device_transports.discard(transport)
+        try:
+            if transport.device.id in self.removed_devices:
+                self._remove_pairing_data(transport.device.id)
+        except OSError:
+            window = self.get_active_window()
+            if window:
+                window.toast("Phone removed, but local pairing data could not be deleted.")
+        finally:
+            self.release()
+        return GLib.SOURCE_REMOVE
+
+    def _remove_pairing_data(self, device_id):
+        if any(transport.device.id == device_id for transport in self.device_transports):
+            return
+        # IDs come from the registry, never from an address or phone-supplied path.
+        if len(device_id) != 32 or any(char not in "0123456789abcdef" for char in device_id):
+            return
+        directory = self.data_dir / "devices" / device_id
+        if directory.is_dir():
+            shutil.rmtree(directory)
+        self.removed_devices.discard(device_id)
+
+    def disconnect_devices(self):
+        for window in tuple(self.device_windows.values()):
+            window.disconnect("Session locked or stopped. Select Reconnect to resume.")
+        for transport in tuple(self.device_transports):
+            transport.stop()
 
     def _download_started(self, _session, download):
         """Choose a destination for every download; never silently overwrite a file."""

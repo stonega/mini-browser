@@ -133,6 +133,46 @@ local to the account, with private app directories and a mode-0600 library
 database. Password CSV import and filling use the separate encrypted vault;
 Chrome's encrypted login database, cookies, and signed-in sessions are not copied.
 
+## Phone windows
+
+`devices.py` owns a typed phone registry in a separate `devices` table in the
+private library. Android addresses deduplicate, while iPhones receive distinct
+receiver identities. Device entries never enter website recents or history.
+`BrowserWindow` renders saved phone tiles before recent sites; management belongs
+to the native Devices preferences dialog. `BrowserApplication` reuses one
+`DeviceWindow` per phone and tracks all transports, including sessions stopping
+after their windows close. An application hold lasts until helper cleanup ends.
+
+`AndroidTransport` uses the installed scrcpy release's own server in raw H.264
+mode, with an explicitly selected ADB device, a random abstract socket, and an
+ephemeral loopback forwarding port. A private, uniquely named server copy is
+pushed to `/data/local/tmp` and removed on shutdown. Server metadata framing is
+disabled; the application does not implement scrcpy's version-dependent control
+protocol. Basic taps, swipes, keys, and ASCII text use a bounded input queue of
+ADB commands with each remote argument quoted. Input requires the active
+streaming window. Coordinates exclude letterboxing and scale to the phone's
+native display size, swapping axes when the stream rotates.
+
+`IPhoneTransport` runs UxPlay 1.73+ with video RTP forwarding to an already bound
+loopback receiver. It disables audio and uses a per-tile empty configuration,
+stable receiver MAC, random four-digit pairing code, and mode-0600 client register
+under a mode-0700 directory. On later sessions, the receiver restricts connections
+to the first registered device. This is AirPlay viewing with an unlocked phone;
+desktop control and Apple's locked-phone mirroring are not implemented.
+
+`DeviceVideo` keeps encoded frames in memory, using bounded `appsrc` buffering
+for Android and `udpsrc`/RTP for iPhone, H.264 parsing/decoding, and
+`gtk4paintablesink` in a `Gtk.Picture`. It renders directly in the native window.
+GTK updates run on the main loop; transport work runs on background threads.
+Generation checks discard stale callbacks after disconnect/reconnect. Stream
+loss, decoder errors, close, screen lock, and sleep clear the image; lock/sleep
+requires explicit reconnect. Helper output is discarded instead of logging
+device metadata or input. Removal waits for helper shutdown before deleting
+pairing data. Synthetic helper tests cover the native video path without phones.
+
+See [phone mirroring research](phone-mirroring.md) for platform constraints and
+the deferred iPhone Bluetooth/AssistiveTouch control option.
+
 ## Passwords
 
 `vault.py` is independent of GTK and desktop keyring services. New vaults and
