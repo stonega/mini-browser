@@ -25,7 +25,10 @@ native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcut
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track WebKit's back-forward list and
-are disabled on the home page. WebKit's user agent is unchanged.
+are disabled on the home page. URI notifications and load events also refresh
+their state. Same-document URL changes (History API or fragments) leave media
+mode and restore the browsing header, just like full-page navigation.
+WebKit's user agent is unchanged.
 
 WebKit's `is-playing-audio` notification enables Audio player for a loaded page.
 Audio mode keeps that WebView alive but unmapped and requests a

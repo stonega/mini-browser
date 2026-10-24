@@ -131,6 +131,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.set_content(self.toolbar)
         self._add_actions()
         self.webview.get_back_forward_list().connect("changed", self._navigation_changed)
+        self.webview.connect("notify::uri", self._uri_changed)
         self.stack.connect("notify::visible-child-name", self._navigation_changed)
         self._navigation_changed()
         motion = Gtk.EventControllerMotion(propagation_phase=Gtk.PropagationPhase.CAPTURE)
@@ -293,6 +294,13 @@ class BrowserWindow(Adw.ApplicationWindow):
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
         self.lookup_action("back").set_enabled(browsing and self.webview.can_go_back())
         self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
+
+    def _uri_changed(self, *_):
+        if self._closing:
+            return
+        # History API and fragment navigation do not emit load-changed.
+        self._restore_page()
+        self._navigation_changed()
 
     def _cancel_header_hide(self):
         if self._header_source:
@@ -585,6 +593,7 @@ class BrowserWindow(Adw.ApplicationWindow):
                             window.refresh_recents()
                 except Exception:
                     self.toast("Could not save this visit to history.")
+        self._navigation_changed()
         self._audio_changed()
 
     def _show_error(self, uri, message):

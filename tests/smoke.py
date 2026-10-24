@@ -154,8 +154,9 @@ def run():
                                 "javascript-can-open-windows-automatically",
                                 True,
                             )
-                            view.evaluate_javascript("document.querySelector('a').click()", -1)
-                            state["phase"] = 2
+                            state["initial_uri"] = view.get_uri()
+                            view.evaluate_javascript("history.pushState({}, '', '/spa')", -1)
+                            state["phase"] = 11
                         except Exception as exc:
                             fail(exc)
 
@@ -168,12 +169,83 @@ def run():
                         evaluated,
                     )
                     state["phase"] = 10
+                elif state["phase"] == 11 and window.webview.get_uri() == base + "/spa":
+                    assert window.webview.can_go_back()
+                    assert window.back_button.get_visible() and window.back_button.get_mapped()
+                    assert window.back_button.get_sensitive()
+                    window.back_button.emit("clicked")
+                    state["phase"] = 12
+                elif state["phase"] == 12 and window.webview.get_uri() == state["initial_uri"]:
+                    assert not window.back_button.get_sensitive()
+                    window.webview.evaluate_javascript("location.hash = 'section'", -1)
+                    state["phase"] = 13
+                elif (
+                    state["phase"] == 13
+                    and window.webview.get_uri() == state["initial_uri"] + "#section"
+                ):
+                    assert window.back_button.get_sensitive()
+                    window.back_button.emit("clicked")
+                    state["phase"] = 14
+                elif state["phase"] == 14 and window.webview.get_uri() == state["initial_uri"]:
+                    address_dialog(window)
+                    dialog = window.get_visible_dialog()
+                    entry = next(
+                        widget for widget in widgets(dialog) if isinstance(widget, Gtk.Entry)
+                    )
+                    entry.set_text(base + "/typed")
+                    entry.emit("activate")
+                    state["phase"] = 15
+                elif (
+                    state["phase"] == 15
+                    and window.webview.get_uri() == base + "/typed"
+                    and not window.webview.is_loading()
+                ):
+                    assert window.back_button.get_sensitive()
+                    window.back_button.emit("clicked")
+                    state["phase"] = 16
+                elif (
+                    state["phase"] == 16
+                    and window.webview.get_uri() == state["initial_uri"]
+                    and not window.webview.is_loading()
+                ):
+                    window.webview.get_settings().set_property(
+                        "media-playback-requires-user-gesture", False
+                    )
+                    window.webview.evaluate_javascript(
+                        "globalThis.testAudio = new AudioContext(); "
+                        "const oscillator = testAudio.createOscillator(); "
+                        "oscillator.connect(testAudio.destination); oscillator.start(); "
+                        "testAudio.resume();",
+                        -1,
+                    )
+                    state["phase"] = 17
+                elif state["phase"] == 17 and window.lookup_action("audio-player").get_enabled():
+                    window.activate_action("win.audio-player", None)
+                    assert window.audio_mode
+                    assert not window.toolbar.get_reveal_top_bars()
+                    window.webview.evaluate_javascript(
+                        "history.pushState({}, '', '/media-route')", -1
+                    )
+                    state["phase"] = 18
+                elif state["phase"] == 18 and window.webview.get_uri() == base + "/media-route":
+                    assert not window.audio_mode, "URL changes must reveal the browsing header"
+                    assert window.toolbar.get_reveal_top_bars()
+                    assert window.back_button.get_sensitive()
+                    window.webview.evaluate_javascript("testAudio.close()", -1)
+                    window.webview.get_settings().set_property(
+                        "media-playback-requires-user-gesture", True
+                    )
+                    window.back_button.emit("clicked")
+                    state["phase"] = 19
+                elif state["phase"] == 19 and window.webview.get_uri() == state["initial_uri"]:
+                    window.webview.evaluate_javascript("document.querySelector('a').click()", -1)
+                    state["phase"] = 2
                 elif state["phase"] == 2:
                     if window.webview.get_title() != "Second page" or window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
                     assert len(windows) == 1
                     assert window.back_button.get_sensitive()
-                    assert len(app.library.search("history")) == 2
+                    assert len(app.library.search("history")) == 3
                     window.back_button.emit("clicked")
                     state["phase"] = 21
                 elif state["phase"] == 21:
@@ -266,7 +338,8 @@ def run():
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "history, bookmark, settings imports, home entry, recent apps, "
-                        "same-window links/popups/POST, Back, explicit new window, close"
+                        "same-window links/popups/POST, Back for links/typed URLs/History API/"
+                        "fragments, header restored on media URL change, explicit new window, close"
                     )
                     window.close()
                     return GLib.SOURCE_REMOVE

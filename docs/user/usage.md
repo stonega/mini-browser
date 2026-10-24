@@ -60,8 +60,9 @@ Video mode requires WebKit's Popover API; older versions leave this option disab
 
 Choose **Full page** or press Escape to return to the previous size and
 maximized/fullscreen state. This remains available after media pauses or ends.
-Navigating, reloading, returning home, or a page error restores the browsing
-layout automatically. Closing the player closes that page's window.
+Navigating, including URL changes within the same page, reloading, returning
+home, or a page error restores the browsing layout and its Back button
+automatically. Closing the player closes that page's window.
 
 ## Import bookmarks and history
 
