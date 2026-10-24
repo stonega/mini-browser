@@ -28,7 +28,9 @@ Full page uses the native `view-paged-symbolic` icon.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track WebKit's back-forward list and
-are disabled on the home page. URI notifications and load events also refresh
+are disabled on the home page, where the Back button is hidden. On a page without
+back history, the button becomes Home and returns to the start page. Media layouts
+keep Back to restore Full page. URI notifications and load events also refresh
 their state. Same-document URL changes (History API or fragments) leave media
 mode and restore the browsing header, just like full-page navigation.
 WebKit's user agent is unchanged.

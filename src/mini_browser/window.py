@@ -358,8 +358,21 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.back_history.popdown()
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
         media = self.audio_mode or self.video_mode
-        self.lookup_action("back").set_enabled(browsing and (media or self.webview.can_go_back()))
-        self.back_button.set_tooltip_text("Return to Full page" if media else "Back (Alt+Left)")
+        can_go_back = media or self.webview.can_go_back()
+        home_button = browsing and not can_go_back
+        self.back_button.set_visible(browsing)
+        self.lookup_action("back").set_enabled(browsing and can_go_back)
+        self.back_button.set_action_name("win.home" if home_button else "win.back")
+        self.back_button.set_icon_name(
+            "go-home-symbolic" if home_button else "go-previous-symbolic"
+        )
+        self.back_button.set_tooltip_text(
+            "Home (Alt+Home)"
+            if home_button
+            else "Return to Full page"
+            if media
+            else "Back (Alt+Left)"
+        )
         self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
 
     def _back(self):
@@ -369,6 +382,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.webview.go_back()
 
     def _back_history_pressed(self, gesture, _x, _y):
+        if not self.lookup_action("back").get_enabled():
+            return
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
         self._show_back_history()
 

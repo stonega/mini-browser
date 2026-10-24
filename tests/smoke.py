@@ -98,6 +98,7 @@ def run():
                     assert window.stack.get_visible_child_name() == "home"
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.recent_empty.get_visible()
+                    assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
@@ -183,10 +184,12 @@ def run():
                     assert window.webview.can_go_back()
                     assert window.back_button.get_visible() and window.back_button.get_mapped()
                     assert window.back_button.get_sensitive()
+                    assert window.back_button.get_icon_name() == "go-previous-symbolic"
                     window.back_button.emit("clicked")
                     state["phase"] = 12
                 elif state["phase"] == 12 and window.webview.get_uri() == state["initial_uri"]:
-                    assert not window.back_button.get_sensitive()
+                    assert window.back_button.get_sensitive()
+                    assert window.back_button.get_icon_name() == "go-home-symbolic"
                     window.webview.evaluate_javascript("location.hash = 'section'", -1)
                     state["phase"] = 13
                 elif (
@@ -261,8 +264,18 @@ def run():
                 elif state["phase"] == 21:
                     if window.webview.get_title() != "Mini smoke" or window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
-                    assert not window.back_button.get_sensitive()
+                    assert window.back_button.get_sensitive()
+                    assert window.back_button.get_icon_name() == "go-home-symbolic"
                     assert window.lookup_action("forward").get_enabled()
+                    window.back_button.emit("clicked")
+                    assert window.stack.get_visible_child_name() == "home"
+                    assert not window.back_button.get_visible()
+                    window.home_entry.set_text(base)
+                    window.home_entry.emit("activate")
+                    state["phase"] = 211
+                elif state["phase"] == 211:
+                    if window.webview.get_title() != "Mini smoke" or window.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
                     window.webview.evaluate_javascript("window.open('/second', '_blank')", -1)
                     state["phase"] = 22
                 elif state["phase"] == 22:
@@ -330,6 +343,7 @@ def run():
                     window.activate_action("win.home", None)
                     assert window.stack.get_visible_child_name() == "home"
                     assert window.get_title() == "Mini Browser"
+                    assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
                     assert not window.recent_empty.get_visible()
                     state["ready"] = time.monotonic() + 0.2
@@ -358,7 +372,8 @@ def run():
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "history, bookmark, settings imports, home entry, recent apps, "
                         "same-window links/popups/POST, Back for links/typed URLs/History API/"
-                        "fragments, header restored on media URL change, explicit new window, close"
+                        "fragments, Home fallback, hidden home button, header restored on media "
+                        "URL change, explicit new window, close"
                     )
                     window.close()
                     return GLib.SOURCE_REMOVE

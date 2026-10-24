@@ -4,7 +4,9 @@ Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 The home page also shows saved phones and up to six recently opened sites. A native GNOME header
 bar shows Back, the page title, pin, layout icon, three-line main menu, and close button.
-Back returns to the previous page and is disabled when there is no previous page.
+Back is hidden on the home page. On other pages, it returns to the previous page.
+When there is no previous page, it becomes a Home button that returns to the home
+page.
 Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
@@ -147,8 +149,8 @@ Video mode requires WebKit's Popover API; older versions leave this option disab
 Choose **Full page** or press Escape to return to the previous size and
 maximized/fullscreen state. This remains available after media pauses or ends.
 Navigating, including URL changes within the same page, reloading, returning
-home, or a page error restores the browsing layout and its Back button
-automatically. Closing the player closes that page's window.
+home, or a page error restores the browsing layout automatically. Back is hidden
+on the home page. Closing the player closes that page's window.
 
 ## Import bookmarks and history
 
