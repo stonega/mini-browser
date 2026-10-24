@@ -2,9 +2,16 @@
 
 ## Unreleased
 
+- Group phone tiles under Devices and merge USB/Wi-Fi connections to the same
+  physical Android phone, preferring an authorized USB connection.
+- Bundle the pinned scrcpy Android server and have the RPM install ADB, removing
+  the separate scrcpy installation requirement.
+- Detect connected Android phones in the background and show them on Home by
+  default, including authorization/offline state. Save a phone to retain its tile
+  after disconnecting; otherwise detected tiles disappear when unplugged.
 - Save Android phones and iPhones in Settings → Devices, then open their app
   tiles on Home in native phone windows.
-- Android streams through the matching installed scrcpy server and supports
+- Android streams through the bundled scrcpy server and supports
   basic taps, swipes, navigation keys, and ASCII typing through ADB.
 - iPhone viewing uses an authenticated UxPlay AirPlay receiver and phone-side
   Screen Mirroring. Desktop iPhone input and phone audio are not yet supported.

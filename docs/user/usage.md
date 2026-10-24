@@ -2,7 +2,8 @@
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
-The home page also shows saved phones and up to six recently opened sites. A native GNOME header
+Home has a **Devices** group for detected and saved phones and an **Apps** group
+for up to six recently opened sites. A native GNOME header
 bar shows Back, the page title, pin, layout icon, three-line main menu, and close button.
 Back is hidden on the home page. On other pages, it returns to the previous page.
 When there is no previous page, it becomes a Home button that returns to the home
@@ -34,18 +35,31 @@ pages from this window, newest first. Select a page to jump directly to it.
 
 ## Phone apps
 
-Open **Settings → Devices** to add an Android phone or iPhone. Its app tile stays
-on Home beside your recent sites. Open the tile to show the phone in a native
-window; opening it again focuses that same window. Rename or remove phones in
-Devices. Removing a phone stops its session and deletes its local AirPlay pairing
-data after the receiver has stopped.
+Connected Android phones appear in Home's **Devices** group automatically within
+a few seconds. The group is hidden when there are no detected or saved devices.
+Enable USB debugging in Android Developer options, connect by USB, and approve
+this computer on the phone. The tile shows **Connected**, **Allow USB debugging**,
+or **Offline**. Open it to show the phone in a native window; opening it again
+focuses that same window. Detection never opens the screen automatically.
+USB and wireless ADB connections to the same physical phone share one tile;
+an authorized USB connection is preferred. Separate phones of the same model
+remain separate devices.
 
-For Android, install ADB and scrcpy with its matching server (see the
-[setup guide](../implementation/setup.md#phone-mirroring-dependencies)). Enable
-USB debugging in Android Developer options, connect by USB, and approve this
-computer on the phone. Choose **Find connected phones**, select the phone, and
-add it. An already paired wireless ADB address also works; Mini Browser does not
-enable wireless debugging or pair wireless ADB for you.
+There is no separate scrcpy installation: Mini Browser includes its Android
+helper. The RPM automatically installs ADB; source or user-only installations
+need ADB on PATH (see the [setup guide](../implementation/setup.md#phone-mirroring-dependencies)).
+An already paired wireless ADB device also appears; Mini Browser does not enable
+wireless debugging or pair wireless ADB for you.
+
+Automatically detected tiles disappear when their phones disconnect. To keep a
+tile, open **Settings → Devices**, then **Save phone** under Connected Android
+phones. Saved phones remain on Home with a Disconnected status and can be renamed
+or removed in Settings. Removing a saved Android phone does not hide it while
+it is still connected. You can also add a device manually with its ADB address.
+
+Add an iPhone through **Settings → Devices → Add iPhone**. Its saved tile stays
+on Home. Removing it stops the receiver and deletes its local pairing data after
+the receiver has stopped.
 
 Click to tap, drag to swipe or long-press, and scroll to swipe. Focus the phone
 image to type ASCII text or use Backspace, Enter, Tab, Delete, and the arrow keys.

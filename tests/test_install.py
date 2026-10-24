@@ -30,6 +30,10 @@ class InstallTests(unittest.TestCase):
             desktop = (data / "applications/io.github.stone.MiniBrowser.desktop").read_text()
             self.assertIn(f'Exec="{executable}" %U', desktop)
             self.assertTrue((data / "mini-browser/app/mini_browser/application.py").is_file())
+            bundled = data / "mini-browser/app/mini_browser/vendor/scrcpy"
+            self.assertTrue((bundled / "scrcpy-server").is_file())
+            self.assertTrue((bundled / "LICENSE").is_file())
+            self.assertTrue((bundled / "NOTICE").is_file())
             self.assertTrue(
                 (
                     data / "gnome-shell/extensions/mini-browser-pin@io.github.stone/extension.js"

@@ -128,6 +128,7 @@ def run():
         threading.Thread(target=server.serve_forever, daemon=True).start()
         origin = f"http://127.0.0.1:{server.server_port}"
         app = BrowserApplication(
+            discover_devices=False,
             data_dir=root / "data",
             cache_dir=root / "cache",
             application_id=f"io.github.stone.MiniBrowser.MediaSmoke.Run{os.getpid()}",

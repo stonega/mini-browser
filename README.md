@@ -9,6 +9,7 @@ A native GNOME web browser with a small footprint on your screen.
 - A pin button before the layout icon, with always-on-top enabled by default in media layouts.
 - A home page with a search/address bar, recent sites, and saved phone app tiles.
 - Native Android mirroring with basic input, and authenticated iPhone AirPlay viewing.
+- Automatic Android phone tiles, with scrcpy's phone-side helper included in the app.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
 - Shared, persistent website sessions across Mini Browser windows.
@@ -24,7 +25,7 @@ Build and install the native system package:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.3-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.3-3.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 

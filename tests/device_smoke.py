@@ -74,6 +74,19 @@ def run():
                     if not windows:
                         return GLib.SOURCE_CONTINUE
                     home = state["home"] = windows[0]
+                    if not app.connected_android:
+                        return GLib.SOURCE_CONTINUE
+                    assert app.devices.all() == []
+                    detected, status = app.device_tiles()[0]
+                    assert status == "Connected"
+                    assert home.devices_group.get_visible()
+                    assert home.recent_tiles.get_first_child() is None
+                    assert home.recent_empty.get_visible()
+                    home.device_tiles.get_child_at_index(0).get_child().emit("clicked")
+                    state["detected_window"] = app.device_windows[detected.id]
+                    state["detected_window"]._test_paintable = Gtk.WidgetPaintable.new(
+                        state["detected_window"]
+                    )
                     manager = state["manager"] = DevicesDialog(home)
                     editor = state["editor"] = DeviceEditor(manager, "android")
                     editor.find_phones()
@@ -97,10 +110,10 @@ def run():
                     rename.save_button.emit("clicked")
                     assert app.devices.all()[0].id == android.id
                     state["manager"].force_close()
-                    tile = state["home"].recent_tiles.get_child_at_index(0).get_child()
+                    tile = state["home"].device_tiles.get_child_at_index(0).get_child()
                     tile.emit("clicked")
                     window = state["android_window"] = app.device_windows[android.id]
-                    window._test_paintable = Gtk.WidgetPaintable.new(window)
+                    assert window is state["detected_window"]
                     assert app.open_device(android.id) is window
                     assert len(app.device_windows) == 1
                     state["phase"] = 2
@@ -197,6 +210,35 @@ def run():
                     assert not (app.data_dir / "devices" / state["iphone"].id).exists()
                     assert len(app.devices.all()) == 1
                     assert app.library.search("history") == []
+                    (root / "devices.json").write_text(
+                        json.dumps(
+                            [
+                                ["synthetic-phone", "Synthetic Phone", "device"],
+                                ["another-synthetic", "Another phone", "unauthorized"],
+                            ]
+                        )
+                    )
+                    state["phase"] = 11
+                elif phase == 11:
+                    if len(app.device_tiles()) != 2:
+                        return GLib.SOURCE_CONTINUE
+                    assert len(app.devices.all()) == 1
+                    transient, status = app.device_tiles()[1]
+                    assert transient.name == "Another phone" and status == "Allow USB debugging"
+                    state["manager"] = DevicesDialog(state["home"])
+                    assert len(state["manager"].detected_rows) == 1
+                    (root / "devices.json").write_text("[]")
+                    state["phase"] = 12
+                elif phase == 12:
+                    if app.connected_android:
+                        return GLib.SOURCE_CONTINUE
+                    assert len(app.device_tiles()) == 1
+                    assert app.device_tiles()[0][1] == "Disconnected"
+                    assert state["manager"].detected_rows == []
+                    state["manager"].force_close()
+                    app.discovery.stop()
+                    app.discovery.thread.join(timeout=3)
+                    assert app.discovery.stopped.is_set()
                     for filename in root.glob("*.pid"):
                         try:
                             os.kill(int(filename.read_text()), 0)
@@ -207,7 +249,8 @@ def run():
                         window.close()
                     state["completed"] = True
                     print(
-                        "PASS: phone tiles, Settings, H.264/RTP, input, reconnect, lock and cleanup"
+                        "PASS: automatic phones, bundled server, Settings, "
+                        "streams, input and cleanup"
                     )
                     app.quit()
                     return GLib.SOURCE_REMOVE

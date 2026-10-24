@@ -15,7 +15,9 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass
-from pathlib import Path
+from typing import NamedTuple
+
+from . import scrcpy_bundle
 
 KINDS = {"android": "Android", "iphone": "iPhone"}
 SERIAL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:\[\]-]{0,255}\Z")
@@ -31,11 +33,38 @@ class Device:
     kind: str
     name: str
     address: str = ""
+    identity: str = ""
 
     @property
     def receiver_name(self):
         label = self.name.encode("utf-8")[:32].decode("utf-8", errors="ignore")
         return f"Mini Browser {label} {self.id[:8]}"
+
+
+def android_device_id(address):
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"mini-browser:android:{address}").hex
+
+
+class AndroidConnection(NamedTuple):
+    address: str
+    name: str
+    state: str
+    identity: str = ""
+    usb: bool = False
+
+
+def read_android_identity(command, adb, address):
+    """Read only hardware identity, never screen contents or user data."""
+    if address.startswith("emulator-"):
+        return ""
+    for prop in ("ro.serialno", "ro.boot.serialno"):
+        try:
+            value = command([adb, "-s", address, "shell", "getprop", prop], timeout=2).strip()
+        except (DeviceError, OSError):
+            continue
+        if SERIAL.fullmatch(value) and value.casefold() not in {"unknown", "null", "none", "0"}:
+            return value
+    return ""
 
 
 def validate_device(kind, name, address=""):
@@ -56,8 +85,11 @@ class DeviceStore:
         with library.connect() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY, kind TEXT NOT NULL,
-                name TEXT NOT NULL, address TEXT NOT NULL
+                name TEXT NOT NULL, address TEXT NOT NULL, identity TEXT NOT NULL DEFAULT ''
             )""")
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(devices)")}
+            if "identity" not in columns:
+                db.execute("ALTER TABLE devices ADD COLUMN identity TEXT NOT NULL DEFAULT ''")
             db.execute("""CREATE UNIQUE INDEX IF NOT EXISTS android_device_address
                 ON devices(address) WHERE kind = 'android'""")
 
@@ -67,8 +99,13 @@ class DeviceStore:
                 Device(**dict(row)) for row in db.execute("SELECT * FROM devices ORDER BY rowid")
             ]
 
-    def save(self, kind, name, address="", *, device_id=None):
+    def save(self, kind, name, address="", *, device_id=None, identity=""):
         name, address = validate_device(kind, name, address)
+        identity = identity if kind == "android" else ""
+        if identity and not SERIAL.fullmatch(identity):
+            raise ValueError(
+                "The phone's hardware identity is invalid. Reconnect it and try again."
+            )
         with self.library.connect() as db:
             if device_id is not None:
                 current = db.execute(
@@ -77,23 +114,54 @@ class DeviceStore:
                 if current is None or current["kind"] != kind:
                     raise ValueError("This phone is no longer saved. Close Settings and try again.")
                 # Editing a name must not silently change which phone receives input.
-                db.execute("UPDATE devices SET name = ? WHERE id = ?", (name, device_id))
-            else:
-                current = (
-                    db.execute(
-                        "SELECT id FROM devices WHERE kind = 'android' AND address = ?", (address,)
-                    ).fetchone()
-                    if kind == "android"
-                    else None
-                )
-                device_id = current["id"] if current else uuid.uuid4().hex
                 db.execute(
-                    "INSERT INTO devices VALUES (?, ?, ?, ?) "
-                    "ON CONFLICT(id) DO UPDATE SET name = excluded.name",
-                    (device_id, kind, name, address),
+                    "UPDATE devices SET name = ?, identity = CASE WHEN identity = '' "
+                    "THEN ? ELSE identity END WHERE id = ?",
+                    (name, identity, device_id),
+                )
+            else:
+                current = None
+                if identity:
+                    current = db.execute(
+                        "SELECT * FROM devices WHERE kind = 'android' AND identity = ? "
+                        "ORDER BY rowid",
+                        (identity,),
+                    ).fetchone()
+                if current is None and kind == "android":
+                    current = db.execute(
+                        "SELECT * FROM devices WHERE kind = 'android' AND address = ?", (address,)
+                    ).fetchone()
+                    if current and identity and current["identity"] not in {"", identity}:
+                        raise ValueError(
+                            "This address belongs to another saved phone. "
+                            "Remove its saved entry first."
+                        )
+                if current:
+                    device_id = current["id"]
+                elif kind == "android":
+                    device_id = android_device_id(identity or address)
+                else:
+                    device_id = uuid.uuid4().hex
+                db.execute(
+                    "INSERT INTO devices (id, kind, name, address, identity) "
+                    "VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(id) DO UPDATE SET name = excluded.name, identity = "
+                    "CASE WHEN devices.identity = '' "
+                    "THEN excluded.identity ELSE devices.identity END",
+                    (device_id, kind, name, address, identity),
                 )
             row = db.execute("SELECT * FROM devices WHERE id = ?", (device_id,)).fetchone()
         return Device(**dict(row))
+
+    def bind_android_identities(self, connections):
+        with self.library.connect() as db:
+            for connection in connections:
+                if connection.identity:
+                    db.execute(
+                        "UPDATE devices SET identity = ? WHERE kind = 'android' "
+                        "AND address = ? AND identity = ''",
+                        (connection.identity, connection.address),
+                    )
 
     def remove(self, device_id):
         with self.library.connect() as db:
@@ -101,25 +169,16 @@ class DeviceStore:
 
 
 def android_tools():
-    adb, scrcpy = shutil.which("adb"), shutil.which("scrcpy")
-    if not adb or not scrcpy:
+    adb = shutil.which("adb")
+    if not adb:
+        raise DeviceError("Install adb (Android platform tools), then reconnect.")
+    try:
+        server = scrcpy_bundle.server_path()
+    except (OSError, ValueError):
         raise DeviceError(
-            "Install adb (Android platform tools) and scrcpy 3, 4, or 5, then reconnect."
-        )
-    binary = Path(scrcpy).resolve()
-    candidates = [
-        Path(os.environ.get("SCRCPY_SERVER_PATH", "/nonexistent")),
-        binary.with_name("scrcpy-server"),
-        binary.parent.parent / "share/scrcpy/scrcpy-server",
-        Path("/usr/share/scrcpy/scrcpy-server"),
-        Path("/usr/local/share/scrcpy/scrcpy-server"),
-    ]
-    server = next((path for path in candidates if path.is_file()), None)
-    if server is None:
-        raise DeviceError(
-            "Install scrcpy's matching server, or set SCRCPY_SERVER_PATH to its file."
-        )
-    return adb, scrcpy, server
+            "The bundled Android helper is missing or damaged. Reinstall Mini Browser."
+        ) from None
+    return adb, server, scrcpy_bundle.VERSION
 
 
 def parse_android_devices(output):
@@ -136,25 +195,16 @@ def parse_android_devices(output):
 
 
 def discover_android():
+    from .device_discovery import AndroidDiscovery, preferred_connections
+
     adb = shutil.which("adb")
     if not adb:
         raise DeviceError("Install adb (Android platform tools), then find phones again.")
+    scanner = AndroidDiscovery(lambda *_: None)
     try:
-        result = subprocess.run(
-            [adb, "devices", "-l"],
-            capture_output=True,
-            text=True,
-            errors="replace",
-            timeout=10,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise DeviceError(
-            "ADB did not respond. Check Android platform tools and try again."
-        ) from exc
-    if result.returncode:
-        raise DeviceError("ADB could not list phones. Check Android platform tools and try again.")
-    return parse_android_devices(result.stdout)
+        return [tuple(connection[:3]) for connection in preferred_connections(scanner.scan(adb))]
+    finally:
+        scanner.stop()
 
 
 def phone_coordinates(x, y, viewport, frame, native):
@@ -289,10 +339,7 @@ class AndroidTransport(Transport):
         return [self.adb, "-s", self.device.address, *arguments]
 
     def run(self):
-        self.adb, scrcpy, server = android_tools()
-        version = re.search(r"scrcpy\s+(\d+\.\d+(?:\.\d+)?)", self.command([scrcpy, "--version"]))
-        if not version or version[1].split(".")[0] not in {"3", "4", "5"}:
-            raise DeviceError("This scrcpy version is unsupported. Install scrcpy 3, 4, or 5.")
+        self.adb, server, version = android_tools()
         try:
             state = self.command(self.adb_command("get-state")).strip()
         except DeviceError:
@@ -303,6 +350,13 @@ class AndroidTransport(Transport):
             raise DeviceError(
                 "Unlock the Android phone and approve this computer's debugging request."
             )
+        if self.device.identity:
+            actual = read_android_identity(self.command, self.adb, self.device.address)
+            if actual != self.device.identity:
+                raise DeviceError(
+                    "This connection no longer identifies this phone. "
+                    "Choose its connected tile in Devices."
+                )
         sizes = re.findall(
             r"(?:Physical|Override) size:\s*(\d+)x(\d+)",
             self.command(self.adb_command("shell", "wm", "size")),
@@ -327,7 +381,7 @@ class AndroidTransport(Transport):
                 "app_process",
                 "/",
                 "com.genymobile.scrcpy.Server",
-                version[1],
+                version,
                 f"scid={scid:08x}",
                 "log_level=error",
                 "audio=false",
@@ -362,8 +416,8 @@ class AndroidTransport(Transport):
                     connection.close()
             if process.poll() is not None or time.monotonic() > deadline:
                 raise DeviceError(
-                    "Could not start the phone's display. Check debugging authorization and "
-                    "that scrcpy and its server are the same version."
+                    "Could not start the phone's display. Unlock it, check USB debugging "
+                    "permissions, and reconnect."
                 )
             self.cancelled.wait(0.1)
         if self.cancelled.is_set():

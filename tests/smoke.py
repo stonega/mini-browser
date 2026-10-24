@@ -66,6 +66,7 @@ def run():
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_port}"
         app = BrowserApplication(
+            discover_devices=False,
             data_dir=root / "data",
             cache_dir=root / "cache",
             application_id=f"io.github.stone.MiniBrowser.Smoke.Run{os.getpid()}",
@@ -98,6 +99,7 @@ def run():
                     assert window.stack.get_visible_child_name() == "home"
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.recent_empty.get_visible()
+                    assert not window.devices_group.get_visible()
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
                     window.home_entry.set_text(base)

@@ -73,6 +73,7 @@ def run():
             writer.writerow(["Fixture", origin + "/login", USERNAME, PASSWORD])
             writer.writerow(["Other site", "https://other.example", "other", "test secret"])
         app = BrowserApplication(
+            discover_devices=False,
             data_dir=root / "data",
             cache_dir=root / "cache",
             application_id=f"io.github.stone.MiniBrowser.PasswordSmoke.Run{os.getpid()}",

@@ -8,6 +8,7 @@ import weakref
 from pathlib import Path
 
 from . import APP_ID
+from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
 from .gtk import Adw, Gdk, Gio, GLib, Gtk, WebKit
 from .navigation import address_to_uri
@@ -17,11 +18,16 @@ from .window import BrowserWindow
 
 
 class BrowserApplication(Adw.Application):
-    def __init__(self, *, data_dir=None, cache_dir=None, application_id=APP_ID):
+    def __init__(
+        self, *, data_dir=None, cache_dir=None, application_id=APP_ID, discover_devices=True
+    ):
         super().__init__(
             application_id=application_id,
             flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
         )
+        self._discover_devices = discover_devices
+        self._shutting_down = False
+        self.discovery = None
         self.data_dir = Path(
             data_dir
             or Path(
@@ -57,6 +63,8 @@ class BrowserApplication(Adw.Application):
         self.cache_dir.chmod(0o700)
         self.library = Library(self.data_dir / "library.sqlite3")
         self.devices = DeviceStore(self.library)
+        self.connected_android = ()
+        self.discovery_error = None
         self.device_windows = {}
         self.device_transports = set()
         self.removed_devices = set()
@@ -106,6 +114,28 @@ class BrowserApplication(Adw.Application):
         }
         for action, accelerators in shortcuts.items():
             self.set_accels_for_action(action, accelerators)
+        if self._discover_devices:
+            self.discovery = AndroidDiscovery(self._devices_detected)
+            self.discovery.start()
+
+    def _devices_detected(self, records, error):
+        def update():
+            if not self._shutting_down:
+                self.devices.bind_android_identities(records)
+                self.connected_android = records
+                self.discovery_error = error
+                self.refresh_devices()
+            return GLib.SOURCE_REMOVE
+
+        GLib.idle_add(update)
+
+    def device_tiles(self):
+        return device_tiles(self.devices.all(), self.connected_android)
+
+    def android_identity(self, address):
+        return next(
+            (item.identity for item in self.connected_android if item.address == address), ""
+        )
 
     def lock_vault(self):
         self.vault.lock()
@@ -160,6 +190,10 @@ class BrowserApplication(Adw.Application):
                 pass  # Manual locking and the timeout work without session services.
 
     def do_shutdown(self):
+        self._shutting_down = True
+        if self.discovery:
+            self.discovery.stop()
+            self.discovery.thread.join(timeout=3)
         self.disconnect_devices()
         deadline = time.monotonic() + 10
         for transport in tuple(self.device_transports):
@@ -203,7 +237,7 @@ class BrowserApplication(Adw.Application):
     def open_device(self, device_id):
         from .device_window import DeviceWindow
 
-        device = next((item for item in self.devices.all() if item.id == device_id), None)
+        device = next((item for item, _state in self.device_tiles() if item.id == device_id), None)
         if device is None:
             return None
         window = self.device_windows.get(device.id)
@@ -214,7 +248,7 @@ class BrowserApplication(Adw.Application):
         return window
 
     def refresh_devices(self):
-        records = {device.id: device for device in self.devices.all()}
+        records = {device.id: device for device, _state in self.device_tiles()}
         for device_id, window in tuple(self.device_windows.items()):
             if device_id in records:
                 window.device = records[device_id]
@@ -227,14 +261,27 @@ class BrowserApplication(Adw.Application):
             dialog.refresh()
 
     def remove_device(self, device_id):
-        if device_id not in {device.id for device in self.devices.all()}:
+        saved = {device.id: device for device in self.devices.all()}
+        if device_id not in saved:
             return
-        self.devices.remove(device_id)
-        self.removed_devices.add(device_id)
-        window = self.device_windows.get(device_id)
-        if window:
-            window.close()
-        self._remove_pairing_data(device_id)
+        selected = saved[device_id]
+        aliases = [
+            item.id
+            for item in saved.values()
+            if item.id == device_id
+            or (
+                selected.kind == item.kind == "android"
+                and selected.identity
+                and item.identity == selected.identity
+            )
+        ]
+        for alias in aliases:
+            self.devices.remove(alias)
+            self.removed_devices.add(alias)
+            window = self.device_windows.get(alias)
+            if window:
+                window.close()
+            self._remove_pairing_data(alias)
         self.refresh_devices()
 
     def finish_device_transport(self, transport):

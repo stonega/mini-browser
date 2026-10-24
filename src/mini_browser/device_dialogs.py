@@ -20,8 +20,11 @@ class DevicesDialog(Adw.PreferencesDialog):
         self.app = window.get_application()
         page = Adw.PreferencesPage()
         self.saved = Adw.PreferencesGroup(title="Saved phones")
+        self.detected = Adw.PreferencesGroup(title="Connected Android phones")
+        self.detected_rows = []
         self.rows = []
         page.add(self.saved)
+        page.add(self.detected)
         add = Adw.PreferencesGroup(title="Add a phone")
         for kind, subtitle in (
             ("android", "USB or an already paired ADB connection · mouse and keyboard"),
@@ -43,7 +46,10 @@ class DevicesDialog(Adw.PreferencesDialog):
         for row in self.rows:
             self.saved.remove(row)
         self.rows.clear()
-        for device in self.app.devices.all():
+        saved_ids = {device.id for device in self.app.devices.all()}
+        for device, _status in self.app.device_tiles():
+            if device.id not in saved_ids:
+                continue
             row = Adw.ActionRow(
                 title=device.name,
                 subtitle=KINDS[device.kind],
@@ -70,8 +76,43 @@ class DevicesDialog(Adw.PreferencesDialog):
             self.rows.append(row)
             self.saved.add(row)
         self.saved.set_description(
-            None if self.rows else "Add a phone to show it as an app on Home."
+            None if self.rows else "Save a phone to keep its tile after disconnecting."
         )
+        for row in self.detected_rows:
+            self.detected.remove(row)
+        self.detected_rows.clear()
+        saved_ids = {device.id for device in self.app.devices.all()}
+        for device, status in self.app.device_tiles():
+            if device.id in saved_ids:
+                continue
+            row = Adw.ActionRow(title=device.name, subtitle=status, use_markup=False)
+            for icon, tooltip, callback in (
+                (
+                    "media-playback-start-symbolic",
+                    "Open phone",
+                    lambda d=device: self.open_phone(d),
+                ),
+                ("document-save-symbolic", "Save phone", lambda d=device: self.save_detected(d)),
+            ):
+                button = Gtk.Button(icon_name=icon, tooltip_text=tooltip, valign=Gtk.Align.CENTER)
+                button.add_css_class("flat")
+                button.connect("clicked", lambda _button, cb=callback: cb())
+                row.add_suffix(button)
+            self.detected_rows.append(row)
+            self.detected.add(row)
+        self.detected.set_description(
+            self.app.discovery_error or "Connected phones appear on Home automatically."
+        )
+        self.detected.set_visible(bool(self.detected_rows) or bool(self.app.discovery_error))
+
+    def save_detected(self, device):
+        try:
+            self.app.devices.save(
+                device.kind, device.name, device.address, identity=device.identity
+            )
+            self.app.refresh_devices()
+        except (ValueError, OSError, sqlite3.Error):
+            self.window.toast("Could not save phone. Check storage space and try again.")
 
     def open_phone(self, device):
         self.force_close()
@@ -80,7 +121,8 @@ class DevicesDialog(Adw.PreferencesDialog):
     def remove_phone(self, device):
         confirmation = Adw.AlertDialog(
             heading="Remove phone?",
-            body="This removes the app tile and its local pairing data. Your phone's data is kept.",
+            body="This removes the saved tile and local pairing data. Connected Android phones "
+            "still appear automatically. Your phone's data is kept.",
         )
         confirmation.add_response("cancel", "Cancel")
         confirmation.add_response("remove", "Remove")
@@ -161,6 +203,7 @@ class DeviceEditor(Adw.PreferencesDialog):
                 self.name.get_text(),
                 self.address.get_text(),
                 device_id=self.device.id if self.device else None,
+                identity=self.parent.app.android_identity(self.address.get_text()),
             )
             self.parent.app.refresh_devices()
         except (ValueError, OSError, sqlite3.Error) as exc:

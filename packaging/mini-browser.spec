@@ -1,8 +1,8 @@
 Name:           mini-browser
 Version:        0.2.3
-Release:        1%{?dist}
+Release:        3%{?dist}
 Summary:        A small native GNOME web browser
-License:        GPL-3.0-or-later
+License:        GPL-3.0-or-later AND Apache-2.0
 Source0:        %{name}-%{version}.tar.gz
 BuildArch:      noarch
 
@@ -17,14 +17,13 @@ Requires:       gtk4 >= 4.12
 Requires:       libadwaita >= 1.5
 Requires:       webkitgtk6.0 >= 2.40
 Requires:       python3-cryptography >= 44
+Requires:       android-tools
 Requires:       gstreamer1
 Requires:       gstreamer1-plugins-base
 Requires:       gstreamer1-plugins-good
 Requires:       gstreamer1-plugins-bad-free
 Requires:       gstreamer1-plugin-gtk4
 Recommends:     gstreamer1-plugin-openh264
-Suggests:       android-tools
-Suggests:       scrcpy >= 3
 Suggests:       uxplay >= 1.73
 
 %description
@@ -41,6 +40,9 @@ vault with Chrome password CSV import and login filling.
 %install
 install -d %{buildroot}%{_datadir}/%{name}/mini_browser
 install -m 0644 src/mini_browser/*.py %{buildroot}%{_datadir}/%{name}/mini_browser/
+install -d %{buildroot}%{_datadir}/%{name}/mini_browser/vendor/scrcpy
+install -m 0644 src/mini_browser/vendor/scrcpy/* \
+    %{buildroot}%{_datadir}/%{name}/mini_browser/vendor/scrcpy/
 install -Dpm 0755 packaging/mini-browser %{buildroot}%{_bindir}/mini-browser
 install -Dpm 0644 data/io.github.stone.MiniBrowser.desktop \
     %{buildroot}%{_datadir}/applications/io.github.stone.MiniBrowser.desktop
@@ -59,6 +61,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 
 %files
 %license COPYING
+%license src/mini_browser/vendor/scrcpy/LICENSE src/mini_browser/vendor/scrcpy/NOTICE
 %doc README.md docs
 %{_bindir}/mini-browser
 %{_datadir}/%{name}/
@@ -68,6 +71,13 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Sat Oct 24 2026 Mini Browser contributors - 0.2.3-3
+- Group phones under Devices and deduplicate USB/Wi-Fi aliases by hardware identity.
+
+* Sat Oct 24 2026 Mini Browser contributors - 0.2.3-2
+- Bundle the checksum-pinned scrcpy Android server and install ADB as a dependency.
+- Show connected Android phones on Home automatically.
+
 * Sat Oct 24 2026 Mini Browser contributors - 0.2.3-1
 - Add audio/video layouts with immersive headers and intrinsic video sizing.
 - Open new-tab links in the current window and add native Back navigation.

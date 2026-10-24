@@ -1,0 +1,14 @@
+Mini Browser redistributes the unmodified scrcpy-server v5.0.1 release artifact
+from the Genymobile/scrcpy project under the Apache License, Version 2.0.
+The license is included in LICENSE in this directory.
+
+Upstream project and attribution: Genymobile/scrcpy and its contributors
+https://github.com/Genymobile/scrcpy
+Corresponding source: https://github.com/Genymobile/scrcpy/tree/v5.0.1
+
+The upstream release also includes Kotlin runtime metadata. Kotlin is an
+Apache-2.0 project by JetBrains and its contributors:
+https://github.com/JetBrains/kotlin
+
+No changes have been made to the upstream binary. This notice was added by
+Mini Browser; the scrcpy v5.0.1 source distribution has no top-level NOTICE.

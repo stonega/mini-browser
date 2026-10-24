@@ -6,8 +6,10 @@ rendering, and input mapping are tested with synthetic helpers. Physical-device
 compatibility has not been validated; iPhone Bluetooth control remains deferred.
 The sections below preserve the research and distinguish further proposed work.
 
-The implemented Android adapter uses the installed scrcpy release's matching
-server in raw H.264 mode, rather than adopting its private control protocol.
+The implemented Android adapter bundles a checksum-pinned scrcpy 5.0.1 server
+in raw H.264 mode, rather than adopting its private control protocol. A separate
+desktop scrcpy installation is not required. Connected Android phones now appear
+on Home automatically; unsaved detections are transient and never enter history.
 Audio forwarding is disabled on both platforms. See the
 [architecture](architecture.md#phone-windows), [setup](../implementation/setup.md#phone-mirroring-dependencies),
 and [usage guide](../user/usage.md#phone-apps) for current behavior.

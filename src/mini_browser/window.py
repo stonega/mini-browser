@@ -197,17 +197,17 @@ class BrowserWindow(Adw.ApplicationWindow):
                 open_address() if position == Gtk.EntryIconPosition.SECONDARY else None
             ),
         )
+        self.devices_group = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=16, visible=False
+        )
+        self.devices_group.append(Gtk.Label(label="Devices", xalign=0, css_classes=["heading"]))
+        self.device_tiles = self._tile_grid()
+        self.devices_group.append(self.device_tiles)
+        content.append(self.devices_group)
+
         recent = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         recent.append(Gtk.Label(label="Apps", xalign=0, css_classes=["heading"]))
-        self.recent_tiles = Gtk.FlowBox(
-            css_classes=["recent-sites"],
-            selection_mode=Gtk.SelectionMode.NONE,
-            homogeneous=True,
-            min_children_per_line=2,
-            max_children_per_line=3,
-            column_spacing=12,
-            row_spacing=12,
-        )
+        self.recent_tiles = self._tile_grid()
         self.recent_empty = Gtk.Label(
             label="Sites you open will appear here.",
             xalign=0,
@@ -221,13 +221,27 @@ class BrowserWindow(Adw.ApplicationWindow):
         clamp = Adw.Clamp(maximum_size=420, tightening_threshold=360, child=content)
         return Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp)
 
+    @staticmethod
+    def _tile_grid():
+        return Gtk.FlowBox(
+            css_classes=["recent-sites"],
+            selection_mode=Gtk.SelectionMode.NONE,
+            homogeneous=True,
+            min_children_per_line=2,
+            max_children_per_line=3,
+            column_spacing=12,
+            row_spacing=12,
+        )
+
     def refresh_recents(self):
         self.recent_tiles.remove_all()
+        self.device_tiles.remove_all()
         records = self.library.recent_apps()
-        devices = self.get_application().devices.all()
-        self.recent_empty.set_visible(not records and not devices)
-        self.recent_tiles.set_visible(bool(records or devices))
-        for device in devices:
+        devices = self.get_application().device_tiles()
+        self.devices_group.set_visible(bool(devices))
+        self.recent_empty.set_visible(not records)
+        self.recent_tiles.set_visible(bool(records))
+        for device, subtitle in devices:
             body = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL,
                 spacing=8,
@@ -252,16 +266,20 @@ class BrowserWindow(Adw.ApplicationWindow):
             )
             body.append(
                 Gtk.Label(
-                    label="Android" if device.kind == "android" else "iPhone",
+                    label=subtitle,
+                    ellipsize=Pango.EllipsizeMode.END,
+                    max_width_chars=14,
                     css_classes=["caption", "dim-label"],
                 )
             )
-            button = Gtk.Button(child=body, css_classes=["flat", "card"], tooltip_text=device.name)
+            button = Gtk.Button(
+                child=body, css_classes=["flat", "card"], tooltip_text=f"{device.name}\n{subtitle}"
+            )
             button.connect(
                 "clicked",
                 lambda _button, device_id=device.id: self.get_application().open_device(device_id),
             )
-            self.recent_tiles.append(button)
+            self.device_tiles.append(button)
         for record in records:
             host = record["site"].split("://", 1)[1].removeprefix("www.")
             title = " ".join((record["title"] or host).split())

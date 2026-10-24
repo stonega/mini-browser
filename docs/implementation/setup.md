@@ -33,15 +33,19 @@ sudo dnf install gstreamer1 gstreamer1-plugins-base gstreamer1-plugins-good \
   gstreamer1-plugins-bad-free gstreamer1-plugin-gtk4 gstreamer1-plugin-openh264
 ```
 
-Android requires `adb` (Fedora's `android-tools`) and scrcpy major version 3, 4,
-or 5 with the server from the exact same release. Follow the
-[upstream Linux installation instructions](https://github.com/Genymobile/scrcpy/blob/master/doc/linux.md)
-for scrcpy; package/repository availability varies. The app searches beside the
-scrcpy executable and in `share/scrcpy/scrcpy-server` under its installation
-prefix, then `/usr/share/scrcpy` and `/usr/local/share/scrcpy`. Set
-`SCRCPY_SERVER_PATH` if the matching server is elsewhere. No device server is
-downloaded automatically. USB debugging authorization is required; wireless ADB
-must already be paired outside the app.
+Mini Browser bundles the unmodified scrcpy 5.0.1 Android server, its Apache-2.0
+license, attribution, and release provenance in `src/mini_browser/vendor/scrcpy`.
+Its pinned SHA-256 is verified before every connection. The desktop scrcpy
+executable and an external scrcpy package are not required; nothing is downloaded
+at runtime. Source and user installations include the same bundle as the RPM.
+
+Android still uses `adb` (Fedora's `android-tools`). The RPM declares it as a
+required dependency, so DNF installs it automatically. For source or user-only
+installs, make ADB available on PATH (`sudo dnf install android-tools` on Fedora).
+USB debugging authorization is required; wireless ADB must already be paired
+outside the app. Connected devices are enumerated on a background thread every
+three seconds. Authorized, unauthorized, and offline devices appear as Home
+tiles automatically; opening a screen always requires user activation.
 
 iPhone viewing requires [UxPlay](https://github.com/FDH2/UxPlay) 1.73 or newer
 with `-vrtp` support (`uxplay` is packaged by Fedora). It also needs working
@@ -53,12 +57,13 @@ only over loopback into GTK, without a second display window. Audio is disabled.
 Missing dependencies produce a reconnectable error in the phone window.
 
 The phone smoke test requires `openh264enc` and `openh264dec` (provided by
-`gstreamer1-plugin-openh264`), along with the plugins above. It creates fake ADB,
-scrcpy, and UxPlay executables inside a temporary directory and puts only these
-ahead of the system tools. It exercises real H.264 decoding and RTP delivery,
-Settings, tile persistence, input mapping, reconnect, session-lock cleanup, and
-iPhone stream loss/recovery in the isolated desktop. It never accesses real
-phones. Optional captures include `-android.png` and `-iphone.png`.
+`gstreamer1-plugin-openh264`), along with the plugins above. It creates fake ADB
+and UxPlay executables in a temporary directory and puts them ahead of the system
+tools; no desktop scrcpy helper is provided. It checks automatic tile discovery,
+authorization state, unplugging, saved-device identity, the actual bundled server
+transfer, real H.264/RTP rendering, input, reconnect, and session cleanup. Other
+UI tests explicitly disable discovery to avoid enumerating real devices.
+Optional captures include `-android.png` and `-iphone.png`.
 
 ## Verification environment
 
@@ -111,7 +116,7 @@ imports private Chrome data or uses the system keyring.
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.3-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.3-3.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 

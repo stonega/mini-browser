@@ -20,7 +20,9 @@ compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
 `Adw.HeaderBar` with Back, the page title, pin toggle, layout menu, main menu, and close
 control above the content. The home body contains
-only a search/address entry and up to six recent-site tiles. Settings uses a
+only a search/address entry, a Devices group for detected and saved phones, and
+an Apps group with up to six recent-site tiles. Empty device groups are hidden.
+Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 The three-line main menu follows the layout button and offers New Window,
 Settings, and an `Adw.AboutDialog` displaying the app's name, version, and license.
@@ -150,21 +152,40 @@ Chrome's encrypted login database, cookies, and signed-in sessions are not copie
 
 `devices.py` owns a typed phone registry in a separate `devices` table in the
 private library. Android addresses deduplicate, while iPhones receive distinct
-receiver identities. Device entries never enter website recents or history.
-`BrowserWindow` renders saved phone tiles before recent sites; management belongs
-to the native Devices preferences dialog. `BrowserApplication` reuses one
+receiver identities. `AndroidDiscovery` enumerates ADB on a worker every three
+seconds and dispatches only changed snapshots to the main loop. Detected phones
+stay in memory, include authorization/offline status, and merge with saved entries
+by hardware identity with address fallback. New Android IDs are deterministic
+so saving a detected phone retains
+its existing window and session. Existing saved IDs remain valid. Detection is
+stopped and its subprocess reaped at shutdown; it never opens a screen. Device
+entries never enter website recents or history. `BrowserWindow` renders detected
+and saved phone tiles in a separate Devices group before the Apps website group;
+management belongs in Devices preferences. Each group has its own tile grid and
+visibility state, so devices do not suppress the empty website hint.
+Authorized transports resolve the phone's hardware serial, cached briefly, so USB
+and Wi-Fi aliases merge into one physical device. USB is preferred among equally
+authorized transports; the saved tile ID and custom name are retained when the
+connection changes. Saved records migrate to an optional hardware identity and
+matching aliases share a tile. Opening an identified phone verifies its identity
+again before starting video or accepting input. Device model names are never
+used to identify or merge phones.
+`BrowserApplication` reuses one
 `DeviceWindow` per phone and tracks all transports, including sessions stopping
 after their windows close. An application hold lasts until helper cleanup ends.
 
-`AndroidTransport` uses the installed scrcpy release's own server in raw H.264
-mode, with an explicitly selected ADB device, a random abstract socket, and an
+`AndroidTransport` uses the bundled scrcpy 5.0.1 server in raw H.264 mode, with
+an explicitly selected ADB device, a random abstract socket, and an
 ephemeral loopback forwarding port. A private, uniquely named server copy is
 pushed to `/data/local/tmp` and removed on shutdown. Server metadata framing is
 disabled; the application does not implement scrcpy's version-dependent control
 protocol. Basic taps, swipes, keys, and ASCII text use a bounded input queue of
 ADB commands with each remote argument quoted. Input requires the active
 streaming window. Coordinates exclude letterboxing and scale to the phone's
-native display size, swapping axes when the stream rotates.
+native display size, swapping axes when the stream rotates. The bundled binary's
+SHA-256 is verified before use and its exact version is passed to the server.
+It is distributed offline with its Apache-2.0 license and provenance. Neither a
+desktop scrcpy executable nor a runtime download is needed. The RPM requires ADB.
 
 `IPhoneTransport` runs UxPlay 1.73+ with video RTP forwarding to an already bound
 loopback receiver. It disables audio and uses a per-tile empty configuration,

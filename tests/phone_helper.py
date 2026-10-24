@@ -5,6 +5,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import socket
 import sys
 import time
@@ -16,13 +17,25 @@ def main():
     tool = Path(sys.argv[0]).name
     arguments = sys.argv[1:]
     (root / f"{tool}-{os.getpid()}.pid").write_text(str(os.getpid()))
-    if tool == "scrcpy":
-        print("scrcpy 5.0.1")
-    elif tool == "adb":
+    if tool == "adb":
         if arguments == ["devices", "-l"]:
-            print("List of devices attached\nsynthetic-phone device model:Synthetic_Phone")
+            records = root / "devices.json"
+            phones = (
+                json.loads(records.read_text())
+                if records.exists()
+                else [["synthetic-phone", "Synthetic Phone", "device"]]
+            )
+            print("List of devices attached")
+            for address, model, state in phones:
+                print(f"{address} {state} model:{model.replace(' ', '_')}")
             return
-        assert arguments[:2] == ["-s", "synthetic-phone"], "Only generated phones may be tested"
+        allowed = {"synthetic-phone"}
+        if (root / "devices.json").exists():
+            allowed.update(record[0] for record in json.loads((root / "devices.json").read_text()))
+        assert arguments[0] == "-s" and arguments[1] in allowed, (
+            "Only generated phones may be tested"
+        )
+        address = arguments[1]
         arguments = arguments[2:]
         if arguments == ["get-state"]:
             if (root / "unauthorized").exists():
@@ -31,6 +44,16 @@ def main():
             print("device")
         elif arguments[:2] == ["shell", "wm"]:
             print("Physical size: 1080x2160")
+        elif arguments[:2] == ["shell", "getprop"]:
+            identities = root / "identities.json"
+            known = (
+                json.loads(identities.read_text())
+                if identities.exists()
+                else {"synthetic-phone": "synthetic-phone"}
+            )
+            print(known.get(address, ""))
+        elif arguments[0] == "push":
+            shutil.copyfile(arguments[1], root / "pushed-server")
         elif arguments[:2] == ["forward", "tcp:0"]:
             with socket.socket() as connection:
                 connection.bind(("127.0.0.1", 0))
@@ -38,6 +61,8 @@ def main():
             (root / "android-port").write_text(str(port))
             print(port)
         elif "app_process" in arguments:
+            version = arguments[arguments.index("com.genymobile.scrcpy.Server") + 1]
+            (root / "server-version").write_text(version)
             with socket.socket() as server:
                 server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 server.bind(("127.0.0.1", int((root / "android-port").read_text())))
