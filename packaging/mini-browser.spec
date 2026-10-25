@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.2.4
+Version:        0.2.5
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0
@@ -71,6 +71,9 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Sun Oct 25 2026 Mini Browser contributors - 0.2.5-1
+- Document COPR installation, updates, and verified source RPM publishing.
+
 * Sat Oct 24 2026 Mini Browser contributors - 0.2.4-1
 - Add Android and iPhone mirroring with a bundled, checksum-pinned scrcpy server.
 - Discover connected Android phones in a Devices group and merge USB/Wi-Fi aliases.

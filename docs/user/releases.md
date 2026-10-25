@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.2.5 — October 25, 2026
+
+- Document installation and automatic package updates through the Mini Browser
+  COPR repository for Fedora 43–45 and Rawhide on x86_64 and aarch64.
+- Add maintainer instructions for publishing verified source RPMs to COPR and
+  checking every enabled build target.
+
+This release refreshes the packaged documentation. Browser features are unchanged
+from 0.2.4. Restart existing browser windows after upgrading.
+
 ## 0.2.4 — October 24, 2026
 
 - Group phone tiles under Devices and merge USB/Wi-Fi connections to the same

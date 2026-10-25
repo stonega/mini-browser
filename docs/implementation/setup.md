@@ -130,7 +130,7 @@ To build a local package instead:
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.4-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.2.5-1.fc45.noarch.rpm
 /usr/bin/mini-browser
 ```
 
@@ -144,7 +144,7 @@ Release maintainers submit the verified source RPM to COPR, then check that each
 enabled target succeeds before announcing repository availability:
 
 ```sh
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.2.4-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.2.5-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 
