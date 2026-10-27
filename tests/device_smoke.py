@@ -80,7 +80,10 @@ def run():
                     detected, status = app.device_tiles()[0]
                     assert status == "Connected"
                     assert home.devices_group.get_visible()
-                    assert home.recent_tiles.get_first_child() is None
+                    assert (
+                        home.recent_tiles.get_child_at_index(0).get_child() == home.deepseek_button
+                    )
+                    assert home.recent_tiles.get_child_at_index(1) is None
                     assert home.recent_empty.get_visible()
                     home.device_tiles.get_child_at_index(0).get_child().emit("clicked")
                     state["detected_window"] = app.device_windows[detected.id]

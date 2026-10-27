@@ -7,7 +7,8 @@ A native GNOME web browser with a small footprint on your screen.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
 - A pin button before the layout icon, with always-on-top enabled by default in media layouts.
-- A home page with a search/address bar, recent sites, and saved phone app tiles.
+- A home page with a search/address bar, DeepSeek Harness, recent sites, and phone tiles.
+- A DeepSeek launcher with its official icon and managed local-server lifetime.
 - Native Android mirroring with basic input, and authenticated iPhone AirPlay viewing.
 - Automatic Android phone tiles, with scrcpy's phone-side helper included in the app.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
@@ -63,7 +64,9 @@ From this directory:
 ```
 
 Each argument opens its own window. The home page has a search/address field
-and tiles for recently opened sites. The header bar's three-line menu, after the
+and tiles for DeepSeek Harness and recently opened sites. DeepSeek starts on
+demand using `npx @deepseek-ai/dsh web` and stops when its last window leaves;
+Node.js and npm must be on your desktop's PATH. The header bar's three-line menu, after the
 layout button, contains Settings for devices, imports, passwords, and your library, plus
 About Mini Browser with the app version and license. While browsing, the header
 bar sits above the page. The narrow window lets responsive websites use their compact

@@ -2,6 +2,7 @@
 
 from . import APP_NAME, autofill
 from .audio_player import AudioPlayer
+from .deepseek import ICON as DEEPSEEK_ICON
 from .dialogs import (
     about_dialog,
     address_dialog,
@@ -35,6 +36,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.failed = False
         self.failed_uri = None
         self._closing = False
+        self._deepseek_owner = None
+        self._deepseek_pending = False
         self.audio_mode = False
         self.video_mode = False
         self._video_available = False
@@ -246,7 +249,17 @@ class BrowserWindow(Adw.ApplicationWindow):
         devices = self.get_application().device_tiles()
         self.devices_group.set_visible(bool(devices))
         self.recent_empty.set_visible(not records)
-        self.recent_tiles.set_visible(bool(records))
+        self.recent_tiles.set_visible(True)
+        icon = Gtk.Image.new_from_file(str(DEEPSEEK_ICON))
+        icon.set_pixel_size(44)
+        self.deepseek_button = self._app_tile(
+            "DeepSeek Harness",
+            "Starting…" if self._deepseek_pending else "Local app",
+            icon,
+            self._open_deepseek,
+        )
+        self.deepseek_button.set_sensitive(not self._deepseek_pending)
+        self.recent_tiles.append(self.deepseek_button)
         for device, subtitle in devices:
             body = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL,
@@ -289,46 +302,94 @@ class BrowserWindow(Adw.ApplicationWindow):
         for record in records:
             host = record["site"].split("://", 1)[1].removeprefix("www.")
             title = " ".join((record["title"] or host).split())
-            body = Gtk.Box(
-                orientation=Gtk.Orientation.VERTICAL,
-                spacing=8,
-                margin_top=12,
-                margin_bottom=12,
-                margin_start=4,
-                margin_end=4,
-                halign=Gtk.Align.CENTER,
+            button = self._app_tile(
+                title,
+                host,
+                Adw.Avatar(size=44, text=host, show_initials=True),
+                lambda _button, url=record["url"]: self.load_uri(url),
             )
-            body.append(Adw.Avatar(size=44, text=host, show_initials=True))
-            body.append(
-                Gtk.Label(
-                    label=title,
-                    lines=2,
-                    wrap=True,
-                    wrap_mode=Pango.WrapMode.WORD_CHAR,
-                    ellipsize=Pango.EllipsizeMode.END,
-                    max_width_chars=10,
-                    width_chars=8,
-                    justify=Gtk.Justification.CENTER,
-                    css_classes=["heading"],
-                )
-            )
-            body.append(
-                Gtk.Label(
-                    label=host,
-                    ellipsize=Pango.EllipsizeMode.END,
-                    max_width_chars=12,
-                    css_classes=["caption", "dim-label"],
-                )
-            )
-            button = Gtk.Button(
-                child=body,
-                css_classes=["flat", "card"],
-                tooltip_text=f"{title}\n{record['site']}",
-            )
-            button.connect("clicked", lambda _button, url=record["url"]: self.load_uri(url))
+            button.set_tooltip_text(f"{title}\n{record['site']}")
             self.recent_tiles.append(button)
 
+    @staticmethod
+    def _app_tile(title, subtitle, icon, callback):
+        body = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=8,
+            margin_top=12,
+            margin_bottom=12,
+            margin_start=4,
+            margin_end=4,
+            halign=Gtk.Align.CENTER,
+        )
+        body.append(icon)
+        body.append(
+            Gtk.Label(
+                label=title,
+                lines=2,
+                wrap=True,
+                wrap_mode=Pango.WrapMode.WORD_CHAR,
+                ellipsize=Pango.EllipsizeMode.END,
+                max_width_chars=10,
+                width_chars=8,
+                justify=Gtk.Justification.CENTER,
+                css_classes=["heading"],
+            )
+        )
+        body.append(
+            Gtk.Label(
+                label=subtitle,
+                ellipsize=Pango.EllipsizeMode.END,
+                max_width_chars=12,
+                css_classes=["caption", "dim-label"],
+            )
+        )
+        button = Gtk.Button(
+            child=body, css_classes=["flat", "card"], tooltip_text=f"{title}\n{subtitle}"
+        )
+        button.connect("clicked", callback)
+        return button
+
+    def _open_deepseek(self, *_):
+        if self._closing or self._deepseek_pending:
+            return
+        self._release_deepseek()
+        owner = self._deepseek_owner = object()
+        self._deepseek_pending = True
+        self.refresh_recents()
+
+        def changed(uri, error):
+            def update():
+                if self._closing or self._deepseek_owner is not owner:
+                    return GLib.SOURCE_REMOVE
+                self._deepseek_pending = False
+                if error:
+                    self.show_home()
+                    dialog = Adw.AlertDialog(heading="DeepSeek Harness stopped", body=error)
+                    dialog.add_response("close", "Close")
+                    dialog.add_response("retry", "Try again")
+                    dialog.set_default_response("retry")
+                    dialog.set_close_response("close")
+                    dialog.connect(
+                        "response", lambda _d, answer: answer == "retry" and self._open_deepseek()
+                    )
+                    dialog.present(self)
+                else:
+                    self.load_uri(uri)
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(update)
+
+        self.get_application().deepseek.acquire(owner, changed)
+
+    def _release_deepseek(self):
+        owner, self._deepseek_owner = self._deepseek_owner, None
+        self._deepseek_pending = False
+        if owner is not None:
+            self.get_application().deepseek.release(owner)
+
     def show_home(self):
+        self._release_deepseek()
         self._restore_page()
         self.webview.stop_loading()
         self.refresh_recents()
@@ -476,6 +537,12 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.webview.go_to_back_forward_list_item(item)
 
     def _uri_changed(self, *_):
+        if (
+            self._deepseek_owner is not None
+            and not self._deepseek_pending
+            and not self.get_application().deepseek.owns_uri(self.webview.get_uri() or "")
+        ):
+            self._release_deepseek()
         if self._closing:
             return
         # History API and fragment navigation do not emit load-changed.
@@ -766,6 +833,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         if not is_web_url(uri):
             self.toast("Mini Browser opens http:// and https:// websites.")
             return
+        if not self.get_application().deepseek.owns_uri(uri):
+            self._release_deepseek()
         self.failed_uri = None
         self._restore_page()
         self.stack.set_visible_child_name("web")
@@ -786,7 +855,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         elif event == Web.LoadEvent.FINISHED and not self.failed:
             self._probe_video()
             uri = view.get_uri() or ""
-            if is_web_url(uri):
+            if is_web_url(uri) and not self.get_application().deepseek.owns_uri(uri):
                 try:
                     self.library.record_visit(uri, view.get_title())
                     for window in self.get_application().get_windows():
@@ -858,6 +927,7 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _close_requested(self, *_):
         self._closing = True
+        self._release_deepseek()
         self.back_history.popdown()
         self.back_history.unparent()
         self.pin.close()

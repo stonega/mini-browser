@@ -126,6 +126,7 @@ def silent_audio_environment(address):
 def run_tests(root, arguments):
     tests = {
         "devices": "device_smoke.py",
+        "deepseek": "deepseek_smoke.py",
         "browser": "smoke.py",
         "pin": "pin_smoke.py",
         "media": "media_smoke.py",
@@ -138,7 +139,7 @@ def run_tests(root, arguments):
         selected = arguments[0].split("=", 1)[1]
         if selected not in tests:
             raise ValueError(
-                "Choose --test=devices, browser, pin, media, passwords, cef, or engine."
+                "Choose --test=devices, deepseek, browser, pin, media, passwords, cef, or engine."
             )
         filenames, arguments = (tests[selected],), arguments[1:]
     log_path = root / "gnome-shell.log"

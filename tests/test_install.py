@@ -49,6 +49,11 @@ class InstallTests(unittest.TestCase):
             desktop = (data / "applications/io.github.stone.MiniBrowser.desktop").read_text()
             self.assertIn(f'Exec="{executable}" %U', desktop)
             self.assertTrue((data / "mini-browser/app/mini_browser/application.py").is_file())
+            self.assertTrue(
+                (data / "mini-browser/app/mini_browser/process_supervisor.py").is_file()
+            )
+            icon = data / "mini-browser/app/mini_browser/icons/deepseek.svg"
+            self.assertIn("Copyright (c) 2026 DeepSeek", icon.read_text())
             bundled = data / "mini-browser/app/mini_browser/vendor/scrcpy"
             self.assertTrue((bundled / "scrcpy-server").is_file())
             self.assertTrue((bundled / "LICENSE").is_file())

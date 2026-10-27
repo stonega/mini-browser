@@ -3,7 +3,7 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 Home has a **Devices** group for detected and saved phones and an **Apps** group
-for up to six recently opened sites. A native GNOME header
+with DeepSeek Harness and up to six recently opened sites. A native GNOME header
 bar always includes a Home button, followed by Back when available, the page
 title, pin, layout icon, three-line main menu, and close button.
 Home returns to the home page even when browsing history is available.
@@ -36,6 +36,25 @@ resized; the default portrait size does not force a mobile user agent.
 Drag the header bar to move the window. Close it with its close button or Ctrl+W.
 Press and hold Back with the mouse or a touchscreen to list up to 20 earlier
 pages from this window, newest first. Select a page to jump directly to it.
+
+## DeepSeek Harness
+
+Open **DeepSeek Harness** in Home's **Apps** group to start its local web server
+and open it inside Mini Browser. The tile uses DeepSeek's official whale icon.
+Node.js and npm's `npx` must be available on the desktop session's PATH. On first
+launch, npx downloads the official package; starting it can take a few minutes.
+Configure models and choose a workspace in DeepSeek's own interface.
+
+DeepSeek windows share one server. Returning Home, navigating to another site,
+or closing a DeepSeek window releases that window's session. The server and its
+child processes stop when the last DeepSeek window leaves, including during
+startup. Closing Mini Browser also stops them; a separate supervisor handles
+abrupt app exits. Startup failures offer **Try again**. Closing a server stops
+any agent tasks it is running, so let tasks finish before leaving its last window.
+
+DeepSeek keeps its own settings and sessions in its usual location (`~/.dsh`,
+or `DSH_HOME` when set). Mini Browser starts it from your home directory and does
+not delete that data. DeepSeek pages do not create duplicate recent-site tiles.
 
 ## Phone apps
 

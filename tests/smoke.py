@@ -355,7 +355,7 @@ def run():
                         path = Path(sys.argv[1])
                         snapshot(window, str(path.with_name(path.stem + "-settings.png")))
                     window.get_visible_dialog().force_close()
-                    window.recent_tiles.get_first_child().get_child().emit("clicked")
+                    window.recent_tiles.get_child_at_index(1).get_child().emit("clicked")
                     state["phase"] = 4
                 elif (
                     state["phase"] == 4

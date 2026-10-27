@@ -22,7 +22,8 @@ An `Adw.ToolbarView` places a native
 `Adw.HeaderBar` with Home, Back, the page title, pin toggle, layout menu, main menu, and close
 control above the content. The home body contains
 only a search/address entry, a Devices group for detected and saved phones, and
-an Apps group with up to six recent-site tiles. Empty device groups are hidden.
+an Apps group with a built-in DeepSeek Harness tile and up to six recent-site
+tiles. Empty device groups are hidden.
 Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 The three-line main menu follows the layout button and offers New Window,
@@ -145,6 +146,28 @@ use; open home windows refresh after another window records a visit. Tiles use
 native initial avatars and make no background requests to the saved websites.
 Card buttons draw their own rounded hover and pressed states; the surrounding
 FlowBox children remain transparent to avoid a second outline around each tile.
+
+`deepseek.py` owns the built-in local app independently of GTK. Window tokens
+lease one shared server. Its worker invokes `npx --yes @deepseek-ai/dsh web
+--no-open --host 127.0.0.1 --port 0` from the user's home directory. The official
+`dsh web:` announcement provides the authenticated startup URL; only loopback
+root URLs are accepted. Output is bounded in memory, continuously drained, and
+never logged or forwarded to error dialogs. Managed origins are excluded from
+the library so startup tokens and duplicate app tiles are not saved there.
+The official MIT-licensed SVG is bundled with its source revision and license.
+
+Returning Home, external navigation and window closure release leases. The last
+release cancels even an incomplete startup. Rapid reacquisition waits for cleanup
+before spawning a fresh server. Startup has a five-minute deadline; exits and
+timeouts report an actionable error and permit an explicit retry. GTK callbacks
+run through GLib and check the window token to discard obsolete results.
+`process_supervisor.py` runs in a private process group shared with npx and its
+descendants. A pipe held only by Mini Browser ties the group to the app's life,
+including abrupt exits. Cleanup sends SIGTERM, allows two seconds for shutdown,
+then sends SIGKILL to remaining group members. App shutdown joins the worker;
+no import hold or surviving browser window keeps an unused DeepSeek server alive.
+Synthetic executables test sharing, cancellation, races, timeouts, crashes,
+descendant cleanup, abrupt owner death, and real Chromium navigation.
 
 Website content stays in Chromium's sandbox. TLS errors show an error page without
 an override. Unsupported external URI schemes are not launched. Browser data is

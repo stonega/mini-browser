@@ -8,6 +8,7 @@ import weakref
 from pathlib import Path
 
 from . import APP_ID
+from .deepseek import DeepSeekHarness
 from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
 from .gtk import Adw, Gdk, Gio, GLib, Gtk, Web
@@ -36,6 +37,7 @@ class BrowserApplication(Adw.Application):
         self._discover_devices = discover_devices
         self._shutting_down = False
         self.discovery = None
+        self.deepseek = DeepSeekHarness()
         self.data_dir = Path(
             data_dir
             or Path(
@@ -197,6 +199,7 @@ class BrowserApplication(Adw.Application):
 
     def do_shutdown(self):
         self._shutting_down = True
+        self.deepseek.close()
         if self.discovery:
             self.discovery.stop()
             self.discovery.thread.join(timeout=3)

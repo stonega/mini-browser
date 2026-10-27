@@ -3,8 +3,13 @@
 Use `/usr/bin/python3` with distribution-provided PyGObject, GTK 4.12+,
 libadwaita 1.5+, the bundled CEF 156 runtime, and cryptography 44+ with Argon2id support.
 A pip-only virtual environment will
-not usually see native GI bindings. No Bun/npm dependencies are needed for this
-native desktop app.
+not usually see native GI bindings. No JavaScript build pipeline is needed for
+this native desktop app. The optional DeepSeek Harness tile runs the upstream
+CLI using Node.js and npm's `npx` from the desktop session's PATH. The first
+launch downloads `@deepseek-ai/dsh`; it is not bundled in the RPM. Mini Browser
+uses `--no-open`, an explicit loopback bind and an OS-assigned port, then opens
+the CLI's authenticated readiness URL. See the
+[official CLI reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md).
 
 On Fedora:
 
@@ -22,6 +27,7 @@ Development commands:
 ruff format src tests scripts/install
 ./scripts/smoke
 ./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
+./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
 ./scripts/build-rpm
 ```
 
