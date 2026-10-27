@@ -124,6 +124,12 @@ install -m 0644 data/gnome-shell/mini-browser-pin@io.github.stone/* \
     %{buildroot}%{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 /usr/bin/python3 -m compileall -q --invalidation-mode=checked-hash \
     -s %{buildroot} -p / %{buildroot}%{_datadir}/%{name}
+%if %{cef_codecs}
+# The checksum-pinned upstream libjpeg carries a standard /usr/lib RUNPATH.
+# Preserve that binary; allow standard library paths while retaining every
+# other RPM RPATH check (including insecure, empty and relative paths).
+export QA_RPATHS=0x0001
+%endif
 
 %check
 ./scripts/check
