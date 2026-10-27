@@ -337,6 +337,10 @@ including fragmented MP4 through MediaSource; canvas-generated video alone does
 not exercise a decoder. User installation fingerprints every runtime file,
 including resources reached through development symlinks, and retains immutable
 old runtime directories when replacing the active runtime symlink.
+Fedora RPMs select this codec build on Fedora 45+ x86_64 (glibc 2.44), with
+private OpenH264 included so decoding does not depend on a system codec stub.
+Older Fedora builds and ARM retain the stock SDK. Source RPMs contain every
+pinned input; native-library loading is checked in each buildroot before packaging.
 
 `page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
 Windowless Chromium's clipboard does not provide that desktop integration.

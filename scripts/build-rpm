@@ -34,20 +34,28 @@ with tarfile.open(source, "w:gz") as archive:
     for path in sorted(files):
         archive.add(path, arcname=f"{name}-{version}/{path.relative_to(project)}", recursive=False)
 
-# Include both pinned SDKs so one source RPM can build every enabled COPR target.
-release = json.loads((project / "native/cef/release.json").read_text())
-for architecture, distribution in release["architectures"].items():
-    subprocess.run(
-        [
-            str(project / "scripts/build-cef"),
-            "--download-only",
-            "--architecture",
-            architecture,
-        ],
-        check=True,
-    )
-    sdk_name = f"cef_binary_{release['version']}_{distribution['platform']}_minimal.tar.bz2"
-    shutil.copy2(project / "build" / sdk_name, top / "SOURCES" / sdk_name)
+# Include all pinned SDKs and codec packages for offline COPR builds. The spec
+# chooses the codec runtime only on architectures/distros supporting its ABI.
+for manifest, flags in [("release.json", []), ("codecs.json", ["--codecs"])]:
+    release = json.loads((project / "native/cef" / manifest).read_text())
+    for architecture, distribution in release["architectures"].items():
+        subprocess.run(
+            [
+                str(project / "scripts/build-cef"),
+                "--download-only",
+                "--architecture",
+                architecture,
+                *flags,
+            ],
+            check=True,
+        )
+        sdk_name = f"cef_binary_{release['version']}_{distribution['platform']}_minimal.tar.bz2"
+        shutil.copy2(project / "build" / sdk_name, top / "SOURCES" / sdk_name)
+    for package in release.get("runtime_packages", []):
+        shutil.copy2(
+            project / "build/cef-codec-packages" / package["filename"],
+            top / "SOURCES" / package["filename"],
+        )
 
 spec = top / "SPECS/mini-browser.spec"
 shutil.copy2(project / "packaging/mini-browser.spec", spec)

@@ -52,11 +52,13 @@ smoke suite also tests the Chromium-backed navigation, media and password flows.
 
 The standard official CEF SDK does not enable H.264/AAC. Some YouTube videos,
 especially livestreams, require these codecs and otherwise report that the
-browser cannot play the video. For a codec-enabled source/user installation:
+browser cannot play the video. Fedora 45 and Rawhide x86_64 RPMs include the
+codec-enabled runtime. A source/user codec build requires x86_64 and glibc 2.44
+or newer (Fedora 45+):
 
 ```sh
 sudo dnf install zstd at-spi2-atk brotli double-conversion fontconfig \
-  libjpeg-turbo openh264 libxml2 libxslt libwebp opus dav1d flac-libs \
+  libxml2 libxslt libwebp opus dav1d flac-libs \
   freetype harfbuzz highway libXcomposite libXdamage libXrandr pulseaudio-libs
 ./scripts/build-cef --codecs
 ./scripts/check
@@ -68,11 +70,13 @@ Close all Mini Browser windows and reopen it after installing. This option
 replaces `build/cef/runtime` with a checksum-pinned Arch Linux CEF build using
 Chromium 156.0.8078.48, the same Chromium revision as the standard runtime.
 It builds the bridge against the exact matching official SDK and bundles only
-the required private libjpeg, simdutf and minizip libraries and their licenses.
+the required private libjpeg, simdutf, minizip and OpenH264 libraries and licenses.
 The script checks remaining system dependencies before linking. Downloads are
 build-time only; no system package or browser profile is replaced. The source
-RPM and ordinary `build-cef` command still use the stock official SDK on both
-architectures. The codec option currently supports x86_64 only and does not add
+RPM includes all pinned inputs for offline builds; it selects the stock official
+SDK on Fedora 43/44 and aarch64, where the codec runtime's ABI is unavailable.
+The ordinary `build-cef` command still selects the stock SDK. The codec option
+currently supports x86_64 only and does not add
 Widevine/DRM support. Runtime package provenance and SHA-256 pins are recorded in
 `native/cef/codecs.json` and copied into the built runtime.
 
@@ -195,12 +199,14 @@ To build a local package instead:
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff cmake ninja-build gcc-c++
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.3.0-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.3.1-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
-The source RPM includes pinned official CEF SDKs for both x86_64 and aarch64;
-RPM builds run offline after source preparation. Binary RPMs are architecture-specific.
+The source RPM includes pinned official CEF SDKs for both x86_64 and aarch64,
+the matching codec SDK and verified codec runtime packages. RPM builds run
+offline after source preparation. Fedora 45 and Rawhide x86_64 builds enable
+H.264/AAC; Fedora 43/44 and ARM retain the stock engine. Binary RPMs are architecture-specific.
 The build uses `build/rpm` and writes the binary and source RPMs into `dist/`.
 The binary package installs `/usr/bin/mini-browser`, modules under
 `/usr/share/mini-browser`, the desktop entry, icon, license, and docs. DNF resolves
@@ -211,7 +217,7 @@ Release maintainers submit the verified source RPM to COPR, then check that each
 enabled target succeeds before announcing repository availability:
 
 ```sh
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.3.0-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.3.1-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 

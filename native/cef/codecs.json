@@ -54,6 +54,18 @@
       "libraries": [
         "libjpeg.so.8"
       ]
+    },
+    {
+      "name": "openh264",
+      "filename": "openh264-2.7.0-1-x86_64.pkg.tar.zst",
+      "sha256": "c0635a401aada4bc8d2811241c649ed114b834193fe51759c43af12a9c9cebac",
+      "mirrors": [
+        "https://geo.mirror.pkgbuild.com/extra/os/x86_64/",
+        "https://archive.archlinux.org/packages/o/openh264/"
+      ],
+      "libraries": [
+        "libopenh264.so.8"
+      ]
     }
   ]
 }

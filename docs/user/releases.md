@@ -1,5 +1,26 @@
 # Release notes
 
+## 0.3.1 — October 27, 2026
+
+- Enable H.264/AAC playback, including MediaSource streaming, in Fedora 45 and
+  Rawhide x86_64 RPMs using a checksum-pinned codec-enabled CEF runtime.
+- Retain the stock engine on Fedora 43/44 and aarch64; H.264/AAC remains
+  unavailable there. The codec runtime requires glibc 2.44. Widevine is not included.
+- Make website Copy buttons write to the GNOME clipboard after a user action,
+  including the local DeepSeek page, with origin/document/focus safeguards.
+- Remember Full page window sizes separately for websites, phones and script apps.
+- Add a DeepSeek Harness Home tile with a managed local server, shared sessions,
+  cancellation, crash handling and cleanup when its last window closes.
+- Fingerprint the complete installed runtime so changing codecs or resources
+  selects a new immutable runtime without overwriting libraries used by open windows.
+
+Close all Mini Browser windows and reopen the app after upgrading. The library,
+website sessions and encrypted vault are preserved. The DeepSeek tile requires
+Node.js and npm's `npx`; its first launch downloads the upstream CLI.
+Synthetic H.264/AAC file and streaming playback passed in the native GTK app.
+Anonymous YouTube verification required sign-in, so actual YouTube playback was
+not verified end to end.
+
 ## 0.3.0 — October 27, 2026
 
 - Migrate the main app to sandboxed Chromium/CEF, retaining GTK and libadwaita.

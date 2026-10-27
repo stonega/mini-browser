@@ -19,7 +19,8 @@ A native GNOME web browser with a small footprint on your screen.
 See the [release notes](docs/user/releases.md) for the latest changes.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-The 0.3.0 release migrates the main app while preserving the native GNOME interface.
+Version 0.3.1 adds H.264/AAC playback on Fedora 45+ x86_64, native page Copy,
+remembered window sizes and a DeepSeek Harness launcher.
 
 ## Fedora RPM
 
@@ -37,7 +38,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.3.0-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.3.1-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
@@ -175,8 +176,10 @@ It never imports a real Chrome profile.
 GNOME Shell and `dbus-run-session` are required. Test windows run on a private
 headless Wayland display with silent audio, without opening on your desktop.
 
-Some YouTube videos and livestreams require H.264/AAC, which the stock CEF SDK
-does not enable. See the [codec-enabled x86_64 build](docs/implementation/setup.md#h264aac-web-video-x86_64)
+Some YouTube videos and livestreams require H.264/AAC. Fedora 45 and Rawhide
+x86_64 RPMs include a codec-enabled runtime; older Fedora versions and ARM use
+the stock CEF engine without those codecs. See the
+[codec-enabled x86_64 build](docs/implementation/setup.md#h264aac-web-video-x86_64)
 and its encoded-video smoke check (`./scripts/smoke --test=codecs`).
 
 See [architecture](docs/design/architecture.md) and [setup notes](docs/implementation/setup.md).
