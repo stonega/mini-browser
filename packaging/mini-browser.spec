@@ -2,7 +2,7 @@ Name:           mini-browser
 Version:        0.3.0
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
-License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause
+License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT
 Source0:        %{name}-%{version}.tar.gz
 ExclusiveArch:  x86_64 aarch64
 %global cef_version 156.0.14+g4fa4ab5+chromium-156.0.8078.48
@@ -18,6 +18,13 @@ Source2:        https://cef-builds.spotifycdn.com/cef_binary_%{cef_version}_linu
 BuildRequires:  cmake >= 3.21
 BuildRequires:  ninja-build
 BuildRequires:  gcc-c++
+# The helper links libcef and its upstream Linux shared-library dependencies.
+BuildRequires:  gtk3
+BuildRequires:  nss
+BuildRequires:  alsa-lib
+BuildRequires:  mesa-libgbm
+BuildRequires:  cups-libs
+BuildRequires:  systemd-libs
 BuildRequires:  python3 >= 3.11
 BuildRequires:  python3-cryptography >= 44
 BuildRequires:  desktop-file-utils
