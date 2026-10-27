@@ -30,7 +30,7 @@ def running(pid):
     try:
         state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
         return state not in {"Z", "X"}
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return False
 
 
