@@ -65,6 +65,11 @@ DeepSeek keeps its own settings and sessions in its usual location (`~/.dsh`,
 or `DSH_HOME` when set). Mini Browser starts it from your home directory and does
 not delete that data. DeepSeek pages do not create duplicate recent-site tiles.
 
+Text Copy buttons work with GNOME's clipboard, including DeepSeek's local HTTP
+page. Keep the page active and click its Copy button, then paste into another
+app normally. HTTPS and loopback HTTP support this; the local server does not
+need HTTPS. Pages cannot read the desktop clipboard through this integration.
+
 ## Phone apps
 
 Connected Android phones appear in Home's **Devices** group automatically within

@@ -325,6 +325,20 @@ at 8 MiB. Chromium's own credential-saving service is disabled. Camera, micropho
 and geolocation permission prompts are currently denied. DRM/Widevine and
 proprietary codecs are not bundled; HTML video support depends on CEF's codecs.
 
+`page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
+Windowless Chromium's clipboard does not provide that desktop integration.
+A main-world `writeText` adapter passes text to an isolated world, which checks
+transient user activation and invokes Chromium's original Clipboard API first.
+Successful writes use a named DevTools binding to reach GTK. The host additionally
+checks the main frame, exact secure origin, document identity, navigation
+generation, mapped/focused view, active window and a recent native mouse/key
+event. Writes are limited to 1 MiB of UTF-8 text. Replies use typed protocol
+arguments, and clipboard contents are never logged or inserted into script
+source. No desktop clipboard reads are exposed to pages.
+HTTPS and loopback HTTP support this path: loopback is already a
+[potentially trustworthy origin](https://www.w3.org/TR/secure-contexts/#is-origin-trustworthy),
+so the local DeepSeek server needs no certificate or security override.
+
 `native/cef/release.json` pins official SDK release metadata. `scripts/build-cef`
 verifies the archive before extraction and builds with CMake/Ninja. There are no
 runtime downloads. Shipping a Chromium update requires rebuilding and distributing

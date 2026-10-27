@@ -40,6 +40,8 @@ export default class PointerTests extends Extension {
             ? global.stage.get_context().get_backend()
             : Clutter.get_default_backend();
         this._pointer = backend.get_default_seat().create_virtual_device(Clutter.InputDeviceType.POINTER_DEVICE);
+        // GTK receives native focus only when the headless seat has a keyboard.
+        this._keyboard = backend.get_default_seat().create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
         this._export = Gio.DBusExportedObject.wrapJSObject(XML, this);
         this._export.export(Gio.DBus.session, PATH);
         this._name = Gio.bus_own_name_on_connection(
@@ -50,7 +52,7 @@ export default class PointerTests extends Extension {
 
     _window(path, invocation) {
         const window = global.get_window_actors().map(actor => actor.meta_window).find(w =>
-            ['MediaSmoke', 'PinSmoke'].some(kind =>
+            ['MediaSmoke', 'PinSmoke', 'EngineSmoke'].some(kind =>
                 w.get_gtk_application_id()?.startsWith(`io.github.stone.MiniBrowser.${kind}.`)) &&
             w.get_gtk_unique_bus_name() === invocation.get_sender() &&
             w.get_gtk_window_object_path() === path);
@@ -148,6 +150,6 @@ export default class PointerTests extends Extension {
             this._pointer.notify_button(GLib.get_monotonic_time(), 1, Clutter.ButtonState.RELEASED);
         Gio.bus_unown_name(this._name);
         this._export.unexport();
-        this._pointer = this._export = null;
+        this._keyboard = this._pointer = this._export = null;
     }
 }

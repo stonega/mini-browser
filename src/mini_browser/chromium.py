@@ -17,6 +17,8 @@ from pathlib import Path
 
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Graphene, Gtk
 
+from . import page_clipboard
+
 PAINT = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int)
 EVENT = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p)
 RESULT = ctypes.CFUNCTYPE(
@@ -344,6 +346,7 @@ class View(Gtk.Widget):
         self.dialogs = set()
         self._media_busy = False
         self._media_source = GLib.timeout_add(400, self._poll_audio)
+        self.page_clipboard = page_clipboard.PageClipboard(self)
         self._input()
         self.bridge.create(self.identifier)
 
@@ -351,7 +354,30 @@ class View(Gtk.Widget):
         self.session.command(self, method, parameters, callback)
 
     def _prepare(self):
-        operations = [("Page.enable", {}), ("Runtime.enable", {}), ("WebAudio.enable", {})]
+        operations = [
+            ("Page.enable", {}),
+            ("Runtime.enable", {}),
+            ("WebAudio.enable", {}),
+            (
+                "Runtime.addBinding",
+                {
+                    "name": page_clipboard.BINDING,
+                    "executionContextName": page_clipboard.WORLD,
+                },
+            ),
+            (
+                "Page.addScriptToEvaluateOnNewDocument",
+                {"source": page_clipboard.MAIN_SCRIPT, "runImmediately": True},
+            ),
+            (
+                "Page.addScriptToEvaluateOnNewDocument",
+                {
+                    "source": page_clipboard.ISOLATED_SCRIPT,
+                    "worldName": page_clipboard.WORLD,
+                    "runImmediately": True,
+                },
+            ),
+        ]
         operations.extend(
             (
                 "Page.addScriptToEvaluateOnNewDocument",
@@ -412,6 +438,8 @@ class View(Gtk.Widget):
         elif kind == "Runtime.executionContextCreated":
             context = data["context"]
             self.contexts[context["id"]] = context
+        elif kind == "Runtime.bindingCalled":
+            self.page_clipboard.handle(data)
         elif kind == "Runtime.executionContextsCleared":
             self.contexts.clear()
             self.audio_contexts.clear()
@@ -444,6 +472,7 @@ class View(Gtk.Widget):
             return
         self.loading = True
         self.generation += 1
+        self.page_clipboard.reset()
         self.audio_contexts.clear()
         self._set_audio(False)
         self.emit("load-changed", LoadEvent.STARTED)
@@ -740,6 +769,7 @@ class View(Gtk.Widget):
 
     def _press(self, gesture, count, x, y):
         self.grab_focus()
+        self.page_clipboard.user_input()
         self.bridge.mouse(
             self.identifier, int(x), int(y), gesture.get_current_button(), 0, min(count, 2)
         )
@@ -813,6 +843,7 @@ class View(Gtk.Widget):
     def _key_pressed(self, controller, value, code, state):
         if self._host_shortcut(value, state):
             return False
+        self.page_clipboard.user_input()
         if state & Gdk.ModifierType.CONTROL_MASK:
             operation = {Gdk.KEY_c: "copy", Gdk.KEY_x: "cut", Gdk.KEY_v: "paste"}.get(
                 Gdk.keyval_to_lower(value)

@@ -322,6 +322,7 @@ public:
                        const void *parameters, size_t size) override {
     const auto name = method.ToString();
     if (name.rfind("Runtime.executionContext", 0) != 0 &&
+        name != "Runtime.bindingCalled" &&
         name != "Page.frameNavigated" &&
         name != "Page.navigatedWithinDocument" &&
         name.rfind("WebAudio.context", 0) != 0 &&

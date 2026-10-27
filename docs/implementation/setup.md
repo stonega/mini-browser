@@ -43,7 +43,9 @@ and TLS verification enabled; it has no insecure fallback.
 
 `./scripts/smoke --test=cef` checks the main application's rendered pixels,
 renderer sandbox, native input, resize, reload and live video frames. `./scripts/smoke --test=engine` verifies native upload/download, certificate
-rejection, both refresh actions, and cookies/storage across a process restart. The default
+rejection, both refresh actions, page Copy buttons reaching the native clipboard,
+and cookies/storage across a process restart. Clipboard checks use a real pointer
+click in the disposable desktop and synthetic text only. The default
 smoke suite also tests the Chromium-backed navigation, media and password flows.
 
 ## Phone mirroring dependencies
@@ -111,7 +113,7 @@ the Full page dimensions when closing a compact player. Unit tests also verify
 library upgrades, persistence across library reopen, separate app namespaces,
 invalid dimensions, and storage failure handling.
 The runner also loads a test-only pointer extension in that disposable desktop.
-It only accepts owned MediaSmoke and PinSmoke windows, reads/changes independent
+It only accepts owned MediaSmoke, PinSmoke and EngineSmoke windows, reads/changes independent
 compositor flags, injects real pointer drags/clicks, and checks compositor window
 positions. Media checks cover draggable audio/video surfaces, clickable playback
 controls, the video control strip, normal page

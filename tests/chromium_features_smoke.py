@@ -35,6 +35,11 @@ class Handler(BaseHTTPRequestHandler):
             else (
                 b"<!doctype html><title>Engine fixture</title>"
                 b'<input type=file id=upload onchange="document.title=this.files[0].name">'
+                b'<button style="position:absolute;left:20px;top:80px;width:240px;height:40px" '
+                b"onclick=\"navigator.clipboard.writeText('synthetic page copy"
+                b"\\n\\u526a\\u8cbc\\u7c3f')"
+                b".then(()=>document.title='copy complete')"
+                b".catch(e=>document.title='copy failed:'+e.name)\">Copy text</button>"
             )
         )
         self.send_response(200)
@@ -43,6 +48,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/octet-stream")
         else:
             self.send_header("Content-Type", "text/html")
+        if self.path == "/blocked":
+            self.send_header("Permissions-Policy", "clipboard-write=()")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
@@ -91,7 +98,7 @@ def run(root, origin, secure=None, *, persistence_only=False):
         cache_dir=root / "cache",
         discover_devices=False,
         silent=True,
-        application_id=f"io.github.stone.MiniBrowser.Engine.Run{os.getpid()}",
+        application_id=f"io.github.stone.MiniBrowser.EngineSmoke.Run{os.getpid()}",
     )
     errors, state = [], {"step": "starting", "completed": False}
 
@@ -115,6 +122,46 @@ def run(root, origin, secure=None, *, persistence_only=False):
         window.webview.evaluate_javascript(expression, -1, None, None, None, completed)
         yield from wait("script", lambda: bool(result))
         return result[0]
+
+    def click_copy(window):
+        valid, bounds = window.webview.compute_bounds(window)
+        assert valid
+        clicked = []
+
+        def pointer_finished(connection, result):
+            connection.call_finish(result)
+            clicked.append(True)
+
+        app.get_dbus_connection().call(
+            "io.github.stone.MiniBrowser.TestPointer",
+            "/io/github/stone/MiniBrowser/TestPointer",
+            "io.github.stone.MiniBrowser.TestPointer",
+            "Pointer",
+            GLib.Variant(
+                "(odddd)",
+                (window.pin.path, bounds.get_x() + 40, bounds.get_y() + 100, 0.0, 0.0),
+            ),
+            None,
+            Gio.DBusCallFlags.NONE,
+            3000,
+            None,
+            pointer_finished,
+        )
+        yield from wait("real copy click", lambda: bool(clicked))
+        yield from wait("page copy", lambda: window.webview.get_title().startswith("copy "))
+
+    def clipboard_text(window):
+        copied = []
+
+        def read_clipboard(clipboard, result):
+            try:
+                copied.append(clipboard.read_text_finish(result))
+            except GLib.Error:
+                copied.append(None)
+
+        window.webview.get_clipboard().read_text_async(None, read_clipboard)
+        yield from wait("native clipboard", lambda: bool(copied))
+        return copied[0]
 
     def scenario(window):
         window.load_uri(origin)
@@ -140,6 +187,29 @@ def run(root, origin, secure=None, *, persistence_only=False):
                         not window.webview.is_loading() and Handler.visits > visits
                     ),
                 )
+            capabilities = yield from javascript(
+                window, "({secure:isSecureContext,clipboard:!!navigator.clipboard})"
+            )
+            assert capabilities == {"secure": True, "clipboard": True}, capabilities
+            yield from click_copy(window)
+            assert window.webview.get_title() == "copy complete", window.webview.get_title()
+            expected = "synthetic page copy\n剪貼簿"
+            assert (yield from clipboard_text(window)) == expected
+            window.webview.page_clipboard.reset()
+            denied = yield from javascript(
+                window, "navigator.clipboard.writeText('background').then(()=>true,e=>e.name)"
+            )
+            assert denied == "NotAllowedError", denied
+            denied = yield from javascript(
+                window, "navigator.clipboard.readText().then(()=>true,e=>e.name)"
+            )
+            assert denied == "NotAllowedError", denied
+            assert (yield from clipboard_text(window)) == expected
+            window.load_uri(origin + "blocked")
+            yield from wait("clipboard policy page", lambda: not window.webview.is_loading())
+            yield from click_copy(window)
+            assert window.webview.get_title() == "copy failed:NotAllowedError"
+            assert (yield from clipboard_text(window)) == expected
             destination, upload = root / "download.txt", root / "upload.txt"
             upload.write_text("synthetic upload")
 
@@ -221,7 +291,8 @@ def main():
                 timeout=30,
             )
             print(
-                "PASS: both refresh actions, native upload/download, TLS rejection, "
+                "PASS: page Copy to GTK clipboard, background/read/policy guards, "
+                "both refresh actions, native upload/download, TLS rejection, "
                 "cookies and local storage across restart",
                 flush=True,
             )
