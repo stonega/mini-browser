@@ -105,6 +105,11 @@ layouts, and restoration of the page's prior pin setting.
 Separate pin checks cover independent windows, rejection of unrelated D-Bus
 callers, independent above/workspace state notifications, rapid requests, and
 restoration of both original flags on extension shutdown.
+Window size checks cover resizing, same-host navigation, distinct hosts, closing
+and reopening phone windows, script restarts with new local ports, and preserving
+the Full page dimensions when closing a compact player. Unit tests also verify
+library upgrades, persistence across library reopen, separate app namespaces,
+invalid dimensions, and storage failure handling.
 The runner also loads a test-only pointer extension in that disposable desktop.
 It only accepts owned MediaSmoke and PinSmoke windows, reads/changes independent
 compositor flags, injects real pointer drags/clicks, and checks compositor window

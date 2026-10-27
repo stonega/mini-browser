@@ -7,6 +7,7 @@ from .device_video import DeviceVideo
 from .devices import KINDS, AndroidTransport, DeviceError, IPhoneTransport, phone_coordinates
 from .gtk import Adw, Gdk, Gio, GLib, Gtk
 from .window_pin import WindowPin
+from .window_size import DEFAULT_SIZE, WindowSizeMemory
 
 KEYS = {
     Gdk.KEY_BackSpace: "67",
@@ -23,7 +24,12 @@ KEYS = {
 
 class DeviceWindow(Adw.ApplicationWindow):
     def __init__(self, app, device):
-        super().__init__(application=app, title=device.name, default_width=420, default_height=780)
+        super().__init__(
+            application=app,
+            title=device.name,
+            default_width=DEFAULT_SIZE[0],
+            default_height=DEFAULT_SIZE[1],
+        )
         self.device = device
         self._closing = False
         self.generation = 0
@@ -100,6 +106,8 @@ class DeviceWindow(Adw.ApplicationWindow):
         keys.connect("key-pressed", self._key_pressed)
         self.picture.add_controller(keys)
         self.connect("close-request", self._close_requested)
+        self.window_size = WindowSizeMemory(self, app.library)
+        self.window_size.select(("device", device.id))
         self._set_input_enabled(False)
         GLib.idle_add(self._open)
 
@@ -343,6 +351,7 @@ class DeviceWindow(Adw.ApplicationWindow):
         return False
 
     def _close_requested(self, *_):
+        self.window_size.close()
         self._closing = True
         self.pin.close()
         self.disconnect()

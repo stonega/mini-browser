@@ -33,6 +33,15 @@ a blank popup are unsupported.
 All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.
 
+Mini Browser remembers each app's last window size across restarts. Website
+sizes are shared by hostname: `sds.example.com/first` and
+`sds.example.com/second` share a size, while another subdomain has its own.
+HTTP/HTTPS and port changes share the same hostname size. Phones remember their
+size by device ID, and script apps such as DeepSeek Harness by their launch
+command, even when the local server changes port. Home and apps without a saved
+size use 420 × 780. Audio/video layouts preserve the saved Full page size;
+maximized and fullscreen windows remember their normal dimensions.
+
 Drag the header bar to move the window. Close it with its close button or Ctrl+W.
 Press and hold Back with the mouse or a touchscreen to list up to 20 earlier
 pages from this window, newest first. Select a page to jump directly to it.
@@ -263,8 +272,8 @@ master password is never saved to disk.
 
 To reset browser data, first close every Mini Browser window and wait for any
 import or download to finish. Remove `library.sqlite3` to clear bookmarks and
-history. Remove the `chromium` data directory to reset
-website sessions and site storage. Keep the `app` subdirectory if you installed
+history, saved devices and remembered window sizes. Remove the `chromium` data
+directory to reset website sessions and site storage. Keep the `app` subdirectory if you installed
 the application with `scripts/install`.
 
 

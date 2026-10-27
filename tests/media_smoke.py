@@ -25,6 +25,7 @@ from mini_browser.window import (
     DEFAULT_HEIGHT,
     DEFAULT_WIDTH,
 )
+from mini_browser.window_size import web_app_key
 
 
 def tone():
@@ -1001,8 +1002,10 @@ def run():
             )
             yield from wait("closing fixture audio", lambda: window.webview.is_playing_audio())
             window.activate_action("win.audio-player", None)
+            normal_size = tuple(window._page_size)
             other = app.new_window()
             window.close()
+            assert app.library.window_size(*web_app_key(origin)) == normal_size
             yield from wait("closed player unloads", lambda: not original_view.is_playing_audio())
             yield from wait(
                 "CEF page destroyed",
@@ -1020,7 +1023,8 @@ def run():
                 "immersive header reveal/menus/keyboard, landscape/portrait/metadata video sizing, "
                 "live frames, native controls, unchanged DOM parent, "
                 "audio/video switching, page restoration, Escape, closed-player cleanup; "
-                "manual pins, default media pins, previous pin restoration"
+                "manual pins, default media pins, previous pin restoration, "
+                "saved Full page size after closing a player"
             )
             other.close()
 

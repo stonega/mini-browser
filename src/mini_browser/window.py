@@ -2,6 +2,7 @@
 
 from . import APP_NAME, autofill
 from .audio_player import AudioPlayer
+from .deepseek import COMMAND as DEEPSEEK_COMMAND
 from .deepseek import ICON as DEEPSEEK_ICON
 from .dialogs import (
     about_dialog,
@@ -17,9 +18,9 @@ from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
 from .video_player import VideoPlayer
 from .window_pin import WindowPin
+from .window_size import DEFAULT_SIZE, WindowSizeMemory, script_app_key, web_app_key
 
-DEFAULT_WIDTH = 420
-DEFAULT_HEIGHT = 780
+DEFAULT_WIDTH, DEFAULT_HEIGHT = DEFAULT_SIZE
 AUDIO_WIDTH = 420
 AUDIO_HEIGHT = 200
 
@@ -42,6 +43,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.video_mode = False
         self._video_available = False
         self._layout_source = 0
+        self._layout_state = None
         self._header_source = 0
         self._header_pointer = False
         self._media_generation = 0
@@ -173,6 +175,27 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._audio_changed()
         self.set_focus(self.home_entry)
         self.connect("close-request", self._close_requested)
+        self.window_size = WindowSizeMemory(
+            self, self.library, capture=self._normal_window_size, resize=self._resize_window
+        )
+
+    def _normal_window_size(self):
+        if self.audio_mode or self.video_mode or self._layout_source:
+            return None
+        return self.get_default_size()
+
+    def _resize_window(self, width, height):
+        maximized, fullscreen = self._layout_state or (self.is_maximized(), self.is_fullscreen())
+        self._resize_layout(width, height, maximized=maximized, fullscreen=fullscreen)
+
+    def _select_window_size(self, uri):
+        key = (
+            script_app_key(DEEPSEEK_COMMAND)
+            if self.get_application().deepseek.owns_uri(uri)
+            else web_app_key(uri)
+        )
+        if key is not None:
+            self.window_size.select(key)
 
     def _home(self):
         content = Gtk.Box(
@@ -356,6 +379,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._release_deepseek()
         owner = self._deepseek_owner = object()
         self._deepseek_pending = True
+        self._restore_page()
+        self.window_size.select(script_app_key(DEEPSEEK_COMMAND))
         self.refresh_recents()
 
         def changed(uri, error):
@@ -391,6 +416,7 @@ class BrowserWindow(Adw.ApplicationWindow):
     def show_home(self):
         self._release_deepseek()
         self._restore_page()
+        self.window_size.select(None)
         self.webview.stop_loading()
         self.refresh_recents()
         self.stack.set_visible_child_name("home")
@@ -547,6 +573,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             return
         # History API and fragment navigation do not emit load-changed.
         self._restore_page()
+        if self.stack.get_visible_child_name() != "home":
+            self._select_window_size(self.webview.get_uri() or "")
         self._navigation_changed()
 
     def _cancel_header_hide(self):
@@ -673,6 +701,7 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _remember_page_layout(self):
         if not self.audio_mode and not self.video_mode:
+            self.window_size.capture()
             self._page_size = self.get_default_size()
             self._page_maximized = self.is_maximized()
             self._page_fullscreen = self.is_fullscreen()
@@ -761,6 +790,7 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _resize_layout(self, width, height, *, maximized=False, fullscreen=False):
         if self._layout_source:
             GLib.source_remove(self._layout_source)
+        self._layout_state = (maximized, fullscreen)
         if self.is_fullscreen():
             self.unfullscreen()
         if self.is_maximized():
@@ -783,6 +813,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             if not normal and GLib.get_monotonic_time() < deadline:
                 return GLib.SOURCE_CONTINUE
             self._layout_source = 0
+            self._layout_state = None
+            self.window_size.capture()
             if maximized:
                 self.maximize()
             if fullscreen:
@@ -837,6 +869,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._release_deepseek()
         self.failed_uri = None
         self._restore_page()
+        self._select_window_size(uri)
         self.stack.set_visible_child_name("web")
         self.webview.load_uri(uri)
         self.webview.grab_focus()
@@ -926,6 +959,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.toasts.add_toast(Adw.Toast(title=message, timeout=4))
 
     def _close_requested(self, *_):
+        self.window_size.close()
         self._closing = True
         self._release_deepseek()
         self.back_history.popdown()

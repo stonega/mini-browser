@@ -199,6 +199,9 @@ class BrowserApplication(Adw.Application):
 
     def do_shutdown(self):
         self._shutting_down = True
+        for window in self.get_windows():
+            if hasattr(window, "window_size"):
+                window.window_size.close()
         self.deepseek.close()
         if self.discovery:
             self.discovery.stop()

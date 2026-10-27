@@ -363,12 +363,58 @@ def run():
                     and window.webview.get_uri() == base + "/second"
                 ):
                     assert window.stack.get_visible_child_name() == "web"
+                    state["size_window"] = window
+                    window.set_default_size(620, 690)
+                    state["phase"] = 41
+                elif state["phase"] == 41:
+                    window = state["size_window"]
+                    if (window.get_width(), window.get_height()) != (620, 690):
+                        return GLib.SOURCE_CONTINUE
+                    window.load_uri(base + "/resized")
+                    state["phase"] = 42
+                elif state["phase"] == 42:
+                    window = state["size_window"]
+                    if window.webview.is_loading() or window.webview.get_uri() != base + "/resized":
+                        return GLib.SOURCE_CONTINUE
+                    assert window.get_default_size() == (620, 690)
+                    other_base = f"http://localhost:{server.server_port}"
+                    state["other_base"] = other_base
+                    state["size_window"] = app.new_window(other_base + "/other-host")
+                    window.close()
+                    state["phase"] = 43
+                elif state["phase"] == 43:
+                    window = state["size_window"]
+                    if window.webview.is_loading() or window._layout_source:
+                        return GLib.SOURCE_CONTINUE
+                    assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                    window.set_default_size(730, 620)
+                    state["phase"] = 44
+                elif state["phase"] == 44:
+                    window = state["size_window"]
+                    if (window.get_width(), window.get_height()) != (730, 620):
+                        return GLib.SOURCE_CONTINUE
+                    window.load_uri(base + "/reopened")
+                    state["phase"] = 45
+                elif state["phase"] == 45:
+                    window = state["size_window"]
+                    if window.webview.is_loading() or window._layout_source:
+                        return GLib.SOURCE_CONTINUE
+                    assert window.get_default_size() == (620, 690)
+                    assert (window.get_width(), window.get_height()) == (620, 690)
+                    window.load_uri(state["other_base"] + "/again")
+                    state["phase"] = 46
+                elif state["phase"] == 46:
+                    window = state["size_window"]
+                    if window.webview.is_loading() or window._layout_source:
+                        return GLib.SOURCE_CONTINUE
+                    assert window.get_default_size() == (730, 620)
+                    assert (window.get_width(), window.get_height()) == (730, 620)
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "history, bookmark, settings imports, home entry, recent apps, "
                         "same-window links/popups/POST, Back for links/typed URLs/History API/"
                         "fragments, persistent Home button, header restored on media "
-                        "URL change, explicit new window, close"
+                        "URL change, explicit new window, remembered per-host sizes, close"
                     )
                     window.close()
                     return GLib.SOURCE_REMOVE
@@ -393,7 +439,7 @@ def run():
             server.shutdown()
         if errors:
             raise SystemExit("; ".join(errors))
-        if state["phase"] != 4:
+        if state["phase"] != 46:
             raise SystemExit("Smoke test exited before completion")
 
 

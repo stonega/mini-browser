@@ -93,9 +93,15 @@ def run():
                     assert app.library.recent_apps() == []
                     assert "token=" not in state["first"].webview.get_uri()
                     state["pid"] = runs(helpers)[0]["pid"]
+                    state["second"].set_default_size(850, 650)
                     state["first"].close()
+                    state["phase"] = 21
+                elif phase == 21:
+                    second = state["second"]
+                    if (second.get_width(), second.get_height()) != (850, 650):
+                        return GLib.SOURCE_CONTINUE
                     assert running(state["pid"])
-                    state["second"].home_button.emit("clicked")
+                    second.home_button.emit("clicked")
                     state["phase"] = 3
                 elif phase == 3 and not running(state["pid"]):
                     # Cancel a slow startup through Home, then immediately reopen.
@@ -110,6 +116,7 @@ def run():
                     second.deepseek_button.emit("clicked")
                     state["phase"] = 5
                 elif phase == 5 and loaded(state["second"]):
+                    assert state["second"].get_default_size() == (850, 650)
                     live = [item for item in runs(helpers) if running(item["pid"])]
                     assert len(live) == 1
                     os.kill(live[0]["pid"], signal.SIGTERM)
@@ -129,6 +136,7 @@ def run():
                     button.emit("clicked")
                     state["phase"] = 7
                 elif phase == 7 and loaded(state["second"]):
+                    assert state["second"].get_default_size() == (850, 650)
                     assert app.library.search("history") == []
                     assert app.library.recent_apps() == []
                     state["completed"] = True

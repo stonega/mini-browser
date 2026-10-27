@@ -16,6 +16,18 @@ blank popups and programmatic POST popups that bypass submission events are
 unsupported. Explicit application new-window actions still create windows, all
 sharing the storage session.
 
+`window_size.py` remembers the last normal window dimensions in the library's
+`window_sizes` table. Keys have separate web, device and script namespaces: web
+keys are normalized hostnames (ignoring path, scheme and port while retaining
+subdomains), phone keys are device IDs, and script keys are serialized launch
+commands rather than temporary server URLs. Existing libraries gain the table
+without changing history or bookmarks. Resizes are saved after a short debounce
+and flushed on app changes, window close and application shutdown. Home and new
+apps default to 420 × 780. Unchanged windows do not overwrite newer saved sizes.
+GTK's default dimensions retain the normal size while maximized or fullscreen;
+those states themselves are not restored across launches. Temporary audio/video
+layouts never replace the full-page dimensions.
+
 An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native

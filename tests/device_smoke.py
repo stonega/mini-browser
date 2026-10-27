@@ -128,6 +128,7 @@ def run():
                     assert window.frame_size == (240, 480), window.frame_size
                     assert window.native_size == (1080, 2160)
                     assert window.picture.get_paintable() is not None
+                    window.set_default_size(550, 740)
                     state["first_frame"] = window.video.last_frame
                     state["phase"] = 3
                 elif phase == 3:
@@ -165,7 +166,12 @@ def run():
                 elif phase == 5:
                     if app.device_transports:
                         return GLib.SOURCE_CONTINUE
-                    state["android_window"].activate_action("win.reload", None)
+                    window = state["android_window"]
+                    assert window.get_default_size() == (550, 740)
+                    window.close()
+                    window = state["android_window"] = app.open_device(state["android"].id)
+                    window._test_paintable = Gtk.WidgetPaintable.new(window)
+                    assert window.get_default_size() == (550, 740)
                     state["phase"] = 6
                 elif phase == 6:
                     window = state["android_window"]
@@ -176,6 +182,7 @@ def run():
                     assert window.state == "disconnected"
                     assert window.picture.get_paintable() is None
                     state["iphone_window"] = app.open_device(state["iphone"].id)
+                    assert state["iphone_window"].get_default_size() == (420, 780)
                     state["iphone_window"]._test_paintable = Gtk.WidgetPaintable.new(
                         state["iphone_window"]
                     )

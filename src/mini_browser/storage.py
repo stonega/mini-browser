@@ -34,8 +34,38 @@ class Library:
                     title TEXT NOT NULL,
                     last_opened REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS window_sizes (
+                    kind TEXT NOT NULL,
+                    app_key TEXT NOT NULL,
+                    width INTEGER NOT NULL CHECK (width > 0),
+                    height INTEGER NOT NULL CHECK (height > 0),
+                    PRIMARY KEY (kind, app_key)
+                );
             """)
         path.chmod(0o600)
+
+    def window_size(self, kind: str, app_key: str) -> tuple[int, int] | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT width, height FROM window_sizes WHERE kind=? AND app_key=?",
+                (kind, app_key),
+            ).fetchone()
+        if row is None or any(
+            type(value) is not int or not 0 < value <= 2**31 - 1 for value in row
+        ):
+            return None
+        return tuple(row)
+
+    def save_window_size(self, kind: str, app_key: str, width: int, height: int):
+        if any(type(value) is not int or not 0 < value <= 2**31 - 1 for value in (width, height)):
+            raise ValueError("Window dimensions must be positive GTK integers.")
+        with self.connect() as db:
+            db.execute(
+                """INSERT INTO window_sizes VALUES (?, ?, ?, ?)
+                   ON CONFLICT(kind, app_key) DO UPDATE SET
+                     width=excluded.width, height=excluded.height""",
+                (kind, app_key, width, height),
+            )
 
     @contextmanager
     def connect(self):
