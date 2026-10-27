@@ -41,6 +41,7 @@ BuildRequires:  mesa-libgbm
 BuildRequires:  cups-libs
 BuildRequires:  systemd-libs
 BuildRequires:  python3 >= 3.11
+BuildRequires:  python3-gobject
 BuildRequires:  python3-cryptography >= 44
 BuildRequires:  desktop-file-utils
 BuildRequires:  ruff

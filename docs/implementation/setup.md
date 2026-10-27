@@ -217,6 +217,7 @@ Release maintainers submit the verified source RPM to COPR, then check that each
 enabled target succeeds before announcing repository availability:
 
 ```sh
+./scripts/build-rpm --source-only
 copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.3.1-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```

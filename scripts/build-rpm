@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build local binary/source RPMs from an explicit source-only archive."""
 
+import argparse
 import json
 import shutil
 import subprocess
@@ -9,6 +10,11 @@ import tomllib
 from pathlib import Path
 
 project = Path(__file__).resolve().parent.parent
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument(
+    "--source-only", action="store_true", help="Prepare only the offline source RPM"
+)
+options = parser.parse_args()
 metadata = tomllib.loads((project / "pyproject.toml").read_text())
 version = metadata["project"]["version"]
 name = "mini-browser"
@@ -63,7 +69,7 @@ shutil.copy2(project / "packaging/mini-browser.spec", spec)
 subprocess.run(
     [
         "rpmbuild",
-        "-ba",
+        "-bs" if options.source_only else "-ba",
         "--define",
         f"_topdir {top}",
         "--define",
@@ -76,7 +82,7 @@ subprocess.run(
 )
 output = project / "dist"
 output.mkdir(exist_ok=True)
-for directory in [top / "RPMS", top / "SRPMS"]:
+for directory in [top / "SRPMS"] if options.source_only else [top / "RPMS", top / "SRPMS"]:
     for rpm in sorted(directory.rglob(f"{name}-{version}-*.rpm")):
         target = output / rpm.name
         shutil.copy2(rpm, target)
