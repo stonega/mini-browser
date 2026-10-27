@@ -53,7 +53,7 @@ BuildRequires:  libxml2
 BuildRequires:  libxslt
 BuildRequires:  libwebp
 BuildRequires:  opus
-BuildRequires:  dav1d
+BuildRequires:  libdav1d
 BuildRequires:  flac-libs
 BuildRequires:  highway
 BuildRequires:  pulseaudio-libs

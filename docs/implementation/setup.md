@@ -58,7 +58,7 @@ or newer (Fedora 45+):
 
 ```sh
 sudo dnf install zstd at-spi2-atk brotli double-conversion fontconfig \
-  libxml2 libxslt libwebp opus dav1d flac-libs \
+  libxml2 libxslt libwebp opus libdav1d flac-libs \
   freetype harfbuzz highway libXcomposite libXdamage libXrandr pulseaudio-libs
 ./scripts/build-cef --codecs
 ./scripts/check
