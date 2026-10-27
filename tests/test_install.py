@@ -9,6 +9,42 @@ from unittest.mock import patch
 
 
 class InstallTests(unittest.TestCase):
+    def test_codec_or_resource_update_gets_a_new_immutable_runtime(self):
+        installer = Path(__file__).resolve().parents[1] / "scripts/install"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            runtime = root / "runtime"
+            runtime.mkdir()
+            for name in ("libmini_cef.so", "libcef.so", "cef-worker"):
+                (runtime / name).write_bytes(b"original synthetic engine")
+            resources = root / "resources"
+            resources.mkdir()
+            (resources / "en-US.pak").write_bytes(b"original resource")
+            (runtime / "locales").symlink_to(resources, target_is_directory=True)
+            data = root / "data"
+            with (
+                patch.object(Path, "home", return_value=root),
+                patch.dict(
+                    os.environ,
+                    {"XDG_DATA_HOME": str(data), "MINI_BROWSER_CEF_RUNTIME": str(runtime)},
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
+                runpy.run_path(str(installer), run_name="__main__")
+                original = (data / "mini-browser/app/cef").resolve()
+                # Changing only the upstream decoder must not reuse the bridge hash.
+                (runtime / "libcef.so").write_bytes(b"synthetic codec-enabled engine")
+                runpy.run_path(str(installer), run_name="__main__")
+                updated = (data / "mini-browser/app/cef").resolve()
+                self.assertNotEqual(original, updated)
+                self.assertEqual(
+                    (original / "libcef.so").read_bytes(), b"original synthetic engine"
+                )
+                (resources / "en-US.pak").write_bytes(b"updated resource")
+                runpy.run_path(str(installer), run_name="__main__")
+                self.assertNotEqual(updated, (data / "mini-browser/app/cef").resolve())
+                self.assertEqual((updated / "locales/en-US.pak").read_bytes(), b"original resource")
+
     def test_install_is_repeatable_and_preserves_browser_data(self):
         installer = Path(__file__).resolve().parents[1] / "scripts/install"
         with tempfile.TemporaryDirectory() as temp:

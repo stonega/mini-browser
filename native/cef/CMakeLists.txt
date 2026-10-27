@@ -25,6 +25,15 @@ add_subdirectory("${CEF_LIBCEF_DLL_WRAPPER_PATH}" libcef_dll_wrapper)
 
 set(CEF_RUNTIME "${CMAKE_BINARY_DIR}/runtime")
 file(MAKE_DIRECTORY "${CEF_RUNTIME}")
+# Switching SDK providers must also remove resources/libraries that disappear
+# from the new SDK, rather than silently loading an old provider's binary.
+file(GLOB OLD_RUNTIME "${CEF_RUNTIME}/*")
+foreach(OLD IN LISTS OLD_RUNTIME)
+  get_filename_component(NAME "${OLD}" NAME)
+  if(NOT NAME STREQUAL "libmini_cef.so" AND NOT NAME STREQUAL "cef-worker")
+    file(REMOVE_RECURSE "${OLD}")
+  endif()
+endforeach()
 file(GLOB SDK_RUNTIME "${CEF_ROOT}/Release/*" "${CEF_ROOT}/Resources/*")
 list(APPEND SDK_RUNTIME "${CEF_ROOT}/LICENSE.txt" "${CEF_ROOT}/CREDITS.html")
 foreach(SOURCE IN LISTS SDK_RUNTIME)
@@ -37,12 +46,16 @@ foreach(SOURCE IN LISTS SDK_RUNTIME)
 endforeach()
 
 add_library(mini_cef SHARED bridge.cc)
+# Let libcef resolve its private codec dependencies alongside the bridge, without
+# changing the GTK process's LD_LIBRARY_PATH or patching upstream binaries.
+target_link_options(mini_cef PRIVATE "LINKER:--disable-new-dtags")
 target_include_directories(mini_cef PRIVATE "${CEF_ROOT}")
 target_link_libraries(mini_cef PRIVATE libcef_dll_wrapper "${CEF_ROOT}/Release/libcef.so")
 set_target_properties(mini_cef PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
   LIBRARY_OUTPUT_DIRECTORY "${CEF_RUNTIME}" BUILD_WITH_INSTALL_RPATH YES INSTALL_RPATH "$ORIGIN")
 
 add_executable(cef-worker worker.cc)
+target_link_options(cef-worker PRIVATE "LINKER:--disable-new-dtags")
 target_include_directories(cef-worker PRIVATE "${CEF_ROOT}")
 # libcef must precede libc in the helper's dependency order: the Linux sandbox
 # resolves libc's close() with RTLD_NEXT. Do not load it through the Python shim.

@@ -24,7 +24,15 @@ shutil.copytree(
 )
 # Dereference development SDK symlinks so installation survives build cleanup.
 # Keep immutable runtimes so an upgrade cannot overwrite a mapped shared library.
-revision = hashlib.sha256((runtime / "libmini_cef.so").read_bytes()).hexdigest()[:20]
+identity = hashlib.sha256()
+for directory, directories, filenames in os.walk(runtime, followlinks=True):
+    directories.sort()
+    for filename in sorted(filenames):
+        source = Path(directory) / filename
+        identity.update(str(source.relative_to(runtime)).encode() + b"\0")
+        with source.open("rb") as stream:
+            identity.update(hashlib.file_digest(stream, "sha256").digest())
+revision = identity.hexdigest()[:20]
 runtimes = app_data / "cef-runtimes"
 runtimes.mkdir(exist_ok=True)
 installed_runtime = runtimes / revision

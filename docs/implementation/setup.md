@@ -48,6 +48,41 @@ and cookies/storage across a process restart. Clipboard checks use a real pointe
 click in the disposable desktop and synthetic text only. The default
 smoke suite also tests the Chromium-backed navigation, media and password flows.
 
+### H.264/AAC web video (x86_64)
+
+The standard official CEF SDK does not enable H.264/AAC. Some YouTube videos,
+especially livestreams, require these codecs and otherwise report that the
+browser cannot play the video. For a codec-enabled source/user installation:
+
+```sh
+sudo dnf install zstd at-spi2-atk brotli double-conversion fontconfig \
+  libjpeg-turbo openh264 libxml2 libxslt libwebp opus dav1d flac-libs \
+  freetype harfbuzz highway libXcomposite libXdamage libXrandr pulseaudio-libs
+./scripts/build-cef --codecs
+./scripts/check
+./scripts/smoke --test=codecs
+./scripts/install
+```
+
+Close all Mini Browser windows and reopen it after installing. This option
+replaces `build/cef/runtime` with a checksum-pinned Arch Linux CEF build using
+Chromium 156.0.8078.48, the same Chromium revision as the standard runtime.
+It builds the bridge against the exact matching official SDK and bundles only
+the required private libjpeg, simdutf and minizip libraries and their licenses.
+The script checks remaining system dependencies before linking. Downloads are
+build-time only; no system package or browser profile is replaced. The source
+RPM and ordinary `build-cef` command still use the stock official SDK on both
+architectures. The codec option currently supports x86_64 only and does not add
+Widevine/DRM support. Runtime package provenance and SHA-256 pins are recorded in
+`native/cef/codecs.json` and copied into the built runtime.
+
+The dedicated codec check requires FFmpeg with the `libopenh264`, `aac`,
+`libvpx-vp9` and `libopus` encoders (`ffmpeg-free` plus `openh264` on Fedora).
+It serves synthetic files from loopback and verifies decoded colored frames,
+playback progress and H.264/AAC MediaSource streaming in the disposable desktop.
+Run it explicitly for codec-enabled builds; the standard smoke suite remains
+usable with the stock CEF runtime.
+
 ## Phone mirroring dependencies
 
 Phone windows additionally use GStreamer's introspection bindings, H.264 parser

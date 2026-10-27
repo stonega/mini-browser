@@ -13,9 +13,14 @@ import tempfile
 import urllib.request
 from pathlib import Path
 
+from cef_codecs import codec_packages, prepare_codec_sdk
+
 project = Path(__file__).resolve().parent.parent
 release = json.loads((project / "native/cef/release.json").read_text())
 parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument(
+    "--codecs", action="store_true", help="Build the pinned H.264/AAC runtime (x86_64)"
+)
 parser.add_argument("--sdk", type=Path, help="Use an already extracted official SDK")
 parser.add_argument("--archive", type=Path, help="Use a local pinned SDK archive")
 parser.add_argument("--download-only", action="store_true")
@@ -26,6 +31,10 @@ parser.add_argument(
     help="SDK architecture (foreign SDKs can only be downloaded)",
 )
 options = parser.parse_args()
+if options.codecs:
+    if options.architecture != "x86_64":
+        parser.error("The codec-enabled runtime currently supports x86_64 only")
+    release = json.loads((project / "native/cef/codecs.json").read_text())
 architecture = release["architectures"].get(options.architecture)
 if architecture is None:
     parser.error("Chromium builds support x86_64 and aarch64 Linux")
@@ -35,7 +44,7 @@ name = f"cef_binary_{release['version']}_{architecture['platform']}_minimal.tar.
 build = project / "build"
 build.mkdir(exist_ok=True)
 archive = options.archive or build / name
-sdk = (options.sdk or build / "cef-sdk").resolve()
+sdk = (options.sdk or build / ("cef-sdk-codecs" if options.codecs else "cef-sdk")).resolve()
 if options.download_only or not sdk.is_dir():
     if not archive.is_file():
         print(f"Downloading official CEF SDK: {name}", flush=True)
@@ -56,6 +65,8 @@ if options.download_only or not sdk.is_dir():
             if actual != architecture[algorithm]:
                 raise SystemExit(f"CEF {algorithm} mismatch. Remove {archive} and download again.")
     if options.download_only:
+        if options.codecs:
+            codec_packages(build, release)
         print(archive)
         raise SystemExit(0)
     with tempfile.TemporaryDirectory(dir=build, prefix="cef-extract-") as temporary:
@@ -65,6 +76,8 @@ if options.download_only or not sdk.is_dir():
         extracted.replace(sdk)
 if f'#define CEF_VERSION "{release["version"]}"' not in (sdk / "include/cef_version.h").read_text():
     raise SystemExit("CEF SDK version differs from the pinned release. Select a matching --sdk.")
+if options.codecs:
+    prepare_codec_sdk(sdk, build, release)
 subprocess.run(
     [
         "cmake",

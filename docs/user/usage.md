@@ -286,5 +286,7 @@ The Chromium migration preserves bookmarks, history, and the encrypted password
 vault. Existing WebKit cookies and site data are left in place, but cannot be
 used by Chromium; sign in to websites again after upgrading. Earlier data remains
 in `webkit` and `cookies.sqlite3` until you remove it yourself. Network requests
-use the system proxy settings. DRM-protected video and proprietary codecs are
-not included in the bundled engine.
+use the system proxy settings. The stock engine lacks H.264/AAC, which some
+YouTube videos and livestreams require. A codec-enabled x86_64 user build is
+available in the [setup guide](../implementation/setup.md#h264aac-web-video-x86_64).
+DRM-protected video requires Widevine, which is not included.

@@ -12,6 +12,23 @@ PROJECT = Path(__file__).resolve().parent.parent
 
 
 class CefBuildTests(unittest.TestCase):
+    def test_codec_build_rejects_unsupported_architecture_before_download(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(PROJECT / "scripts/build-cef"),
+                "--codecs",
+                "--architecture",
+                "aarch64",
+                "--download-only",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("codec-enabled runtime currently supports x86_64 only", result.stderr)
+
     def test_cached_sdk_archive_is_verified_before_use(self):
         with tempfile.TemporaryDirectory() as directory:
             archive = Path(directory) / "synthetic-sdk.tar.bz2"

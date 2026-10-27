@@ -4,6 +4,6 @@ PROJECT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$PROJECT_DIR"
 export PYTHONPATH="$PROJECT_DIR/src${PYTHONPATH:+:$PYTHONPATH}"
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-ruff check src tests examples/cef scripts/install scripts/build-rpm scripts/build-cef packaging/mini-browser
-ruff format --check src tests examples/cef scripts/install scripts/build-rpm scripts/build-cef packaging/mini-browser
+ruff check src tests examples/cef scripts/install scripts/build-rpm scripts/build-cef scripts/cef_codecs.py packaging/mini-browser
+ruff format --check src tests examples/cef scripts/install scripts/build-rpm scripts/build-cef scripts/cef_codecs.py packaging/mini-browser
 python3 -m compileall -q src examples/cef

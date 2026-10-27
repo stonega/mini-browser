@@ -175,4 +175,8 @@ It never imports a real Chrome profile.
 GNOME Shell and `dbus-run-session` are required. Test windows run on a private
 headless Wayland display with silent audio, without opening on your desktop.
 
+Some YouTube videos and livestreams require H.264/AAC, which the stock CEF SDK
+does not enable. See the [codec-enabled x86_64 build](docs/implementation/setup.md#h264aac-web-video-x86_64)
+and its encoded-video smoke check (`./scripts/smoke --test=codecs`).
+
 See [architecture](docs/design/architecture.md) and [setup notes](docs/implementation/setup.md).

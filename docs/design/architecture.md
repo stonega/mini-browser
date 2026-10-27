@@ -322,8 +322,21 @@ a unique execution-context ID and typed protocol argument values, with both
 navigation generation and cancellation checked. Passwords never become script
 source. Console output and CEF logging are disabled; protocol results are capped
 at 8 MiB. Chromium's own credential-saving service is disabled. Camera, microphone
-and geolocation permission prompts are currently denied. DRM/Widevine and
-proprietary codecs are not bundled; HTML video support depends on CEF's codecs.
+and geolocation permission prompts are currently denied. DRM/Widevine is not
+bundled. The stock official CEF SDK lacks H.264/AAC. The optional x86_64
+`scripts/build-cef --codecs` build uses Arch Linux's codec-enabled CEF, matching
+the official SDK's exact CEF and Chromium versions. `native/cef/codecs.json`
+pins the SDK, runtime and private library packages by SHA-256. All packages are
+verified before extraction; the runtime's matching resources replace the SDK
+resources together. No foreign packages are installed into the operating system.
+The bridge and helper use an origin-relative transitive RPATH so private codec
+dependencies resolve without changing the GTK process's library environment.
+Chromium's namespace sandbox and certificate checks remain enabled.
+The encoded-media smoke test decodes generated H.264/AAC and VP9/Opus samples,
+including fragmented MP4 through MediaSource; canvas-generated video alone does
+not exercise a decoder. User installation fingerprints every runtime file,
+including resources reached through development symlinks, and retains immutable
+old runtime directories when replacing the active runtime symlink.
 
 `page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
 Windowless Chromium's clipboard does not provide that desktop integration.
