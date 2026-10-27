@@ -9,7 +9,8 @@
     },
     "aarch64": {
       "platform": "linuxarm64",
-      "sha1": "7907f1d0319a8d920be9b3ba54c0c60e2d22a7fb"
+      "sha1": "7907f1d0319a8d920be9b3ba54c0c60e2d22a7fb",
+      "sha256": "cdfcd5cafaa126bb7e103e3b6fbdef94a39bb791395eb21fe665ebecd008d995"
     }
   }
 }

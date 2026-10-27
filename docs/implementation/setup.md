@@ -150,7 +150,7 @@ sudo dnf install ./dist/mini-browser-0.3.0-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
-The source RPM includes the pinned official CEF SDK for the build architecture;
+The source RPM includes pinned official CEF SDKs for both x86_64 and aarch64;
 RPM builds run offline after source preparation. Binary RPMs are architecture-specific.
 The build uses `build/rpm` and writes the binary and source RPMs into `dist/`.
 The binary package installs `/usr/bin/mini-browser`, modules under

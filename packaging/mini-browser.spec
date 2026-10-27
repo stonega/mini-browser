@@ -6,12 +6,8 @@ License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause
 Source0:        %{name}-%{version}.tar.gz
 ExclusiveArch:  x86_64 aarch64
 %global cef_version 156.0.14+g4fa4ab5+chromium-156.0.8078.48
-%ifarch x86_64
-%global cef_platform linux64
-%else
-%global cef_platform linuxarm64
-%endif
-Source1:        https://cef-builds.spotifycdn.com/cef_binary_%{cef_version}_%{cef_platform}_minimal.tar.bz2
+Source1:        https://cef-builds.spotifycdn.com/cef_binary_%{cef_version}_linux64_minimal.tar.bz2
+Source2:        https://cef-builds.spotifycdn.com/cef_binary_%{cef_version}_linuxarm64_minimal.tar.bz2
 # CEF ships a prebuilt upstream runtime; retain it unmodified.
 %global debug_package %{nil}
 %global __strip /bin/true
@@ -55,7 +51,11 @@ vault with Chrome password CSV import and login filling.
 %autosetup
 
 %build
+%ifarch x86_64
 ./scripts/build-cef --archive %{SOURCE1}
+%else
+./scripts/build-cef --archive %{SOURCE2}
+%endif
 
 %install
 install -d %{buildroot}%{_datadir}/%{name}/mini_browser

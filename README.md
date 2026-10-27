@@ -18,7 +18,7 @@ A native GNOME web browser with a small footprint on your screen.
 See the [release notes](docs/user/releases.md) for the latest changes.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-The 0.3.0 development tree migrates the main app; published RPMs may still use WebKit.
+The 0.3.0 release migrates the main app while preserving the native GNOME interface.
 
 ## Fedora RPM
 

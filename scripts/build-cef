@@ -19,10 +19,18 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--sdk", type=Path, help="Use an already extracted official SDK")
 parser.add_argument("--archive", type=Path, help="Use a local pinned SDK archive")
 parser.add_argument("--download-only", action="store_true")
+parser.add_argument(
+    "--architecture",
+    choices=release["architectures"],
+    default=platform.machine(),
+    help="SDK architecture (foreign SDKs can only be downloaded)",
+)
 options = parser.parse_args()
-architecture = release["architectures"].get(platform.machine())
+architecture = release["architectures"].get(options.architecture)
 if architecture is None:
     parser.error("Chromium builds support x86_64 and aarch64 Linux")
+if options.architecture != platform.machine() and not options.download_only:
+    parser.error("Use --download-only for a foreign architecture; native builds are required")
 name = f"cef_binary_{release['version']}_{architecture['platform']}_minimal.tar.bz2"
 build = project / "build"
 build.mkdir(exist_ok=True)
@@ -55,6 +63,8 @@ if options.download_only or not sdk.is_dir():
             source.extractall(temporary, filter="data")
         extracted = Path(temporary) / name.removesuffix(".tar.bz2")
         extracted.replace(sdk)
+if f'#define CEF_VERSION "{release["version"]}"' not in (sdk / "include/cef_version.h").read_text():
+    raise SystemExit("CEF SDK version differs from the pinned release. Select a matching --sdk.")
 subprocess.run(
     [
         "cmake",

@@ -1,10 +1,13 @@
 # Release notes
 
-## 0.3.0 — development
+## 0.3.0 — October 27, 2026
 
 - Migrate the main app to sandboxed Chromium/CEF, retaining GTK and libadwaita.
 - Keep native navigation, downloads, password filling, and audio/video layouts.
 - Add Refresh Page and Reload Without Cache to the three-line menu.
+- Keep Home available in the header and distinguish pinned and unpinned windows.
+- Bundle the pinned native runtime in architecture-specific RPMs; include both
+  x86_64 and aarch64 SDKs in source RPMs for offline Fedora builds.
 - Preserve the library and encrypted vault. Website sign-ins need to be repeated;
   earlier WebKit data is retained. Chromium runtimes now ship with each build.
 
