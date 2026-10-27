@@ -137,7 +137,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 
 %files
 %license COPYING
-%license build/cef/runtime/LICENSE.txt
+%if %{cef_codecs}
+%license build/cef-sdk-codecs/LICENSE.txt
+%else
+%license build/cef-sdk/LICENSE.txt
+%endif
 %license src/mini_browser/vendor/scrcpy/LICENSE src/mini_browser/vendor/scrcpy/NOTICE
 %doc README.md docs
 %{_bindir}/mini-browser
