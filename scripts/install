@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Install for the current user, without root or changing browser defaults."""
 
+import hashlib
 import os
 import shlex
 import shutil
+import tempfile
 from pathlib import Path
 
 project = Path(__file__).resolve().parent.parent
 data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
 binary = Path.home() / ".local/bin/mini-browser"
 app_data = data / "mini-browser/app"
+runtime = Path(os.environ.get("MINI_BROWSER_CEF_RUNTIME", project / "build/cef/runtime"))
+if not all((runtime / name).is_file() for name in ("libmini_cef.so", "libcef.so", "cef-worker")):
+    raise SystemExit("Build Chromium first: ./scripts/build-cef")
 app_data.mkdir(parents=True, exist_ok=True)
 shutil.copytree(
     project / "src/mini_browser",
@@ -17,14 +22,39 @@ shutil.copytree(
     dirs_exist_ok=True,
     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
 )
+# Dereference development SDK symlinks so installation survives build cleanup.
+# Keep immutable runtimes so an upgrade cannot overwrite a mapped shared library.
+revision = hashlib.sha256((runtime / "libmini_cef.so").read_bytes()).hexdigest()[:20]
+runtimes = app_data / "cef-runtimes"
+runtimes.mkdir(exist_ok=True)
+installed_runtime = runtimes / revision
+if not installed_runtime.is_dir():
+    with tempfile.TemporaryDirectory(dir=runtimes, prefix="install-") as temporary:
+        stage = Path(temporary) / "runtime"
+        shutil.copytree(runtime, stage, symlinks=False)
+        stage.replace(installed_runtime)
+link = app_data / ".cef-new"
+link.unlink(missing_ok=True)
+link.symlink_to(Path("cef-runtimes") / revision, target_is_directory=True)
+current = app_data / "cef"
+if current.is_dir() and not current.is_symlink():
+    raise SystemExit("Move the old app/cef directory aside, then run scripts/install again.")
+link.replace(current)
 binary.parent.mkdir(parents=True, exist_ok=True)
-binary.write_text(
-    "#!/bin/sh\n"
-    f"export PYTHONPATH={shlex.quote(str(app_data))}\n"
-    'exec /usr/bin/python3 -m mini_browser "$@"\n',
-    encoding="utf-8",
-)
-binary.chmod(0o755)
+# Replace a user launcher atomically, without following a symlink to /usr/bin.
+with tempfile.NamedTemporaryFile(mode="w", dir=binary.parent, delete=False) as launcher:
+    temporary_launcher = Path(launcher.name)
+    try:
+        launcher.write(
+            "#!/bin/sh\n"
+            f"export PYTHONPATH={shlex.quote(str(app_data))}\n"
+            'exec /usr/bin/python3 -m mini_browser "$@"\n'
+        )
+        launcher.close()
+        temporary_launcher.chmod(0o755)
+        temporary_launcher.replace(binary)
+    finally:
+        temporary_launcher.unlink(missing_ok=True)
 desktop_path = data / "applications/io.github.stone.MiniBrowser.desktop"
 desktop_path.parent.mkdir(parents=True, exist_ok=True)
 desktop = (project / "data/io.github.stone.MiniBrowser.desktop").read_text(encoding="utf-8")

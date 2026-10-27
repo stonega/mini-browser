@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Build the pinned, sandboxed Chromium bridge (no runtime downloads)."""
+
+import argparse
+import hashlib
+import json
+import os
+import platform
+import shutil
+import subprocess
+import tarfile
+import tempfile
+import urllib.request
+from pathlib import Path
+
+project = Path(__file__).resolve().parent.parent
+release = json.loads((project / "native/cef/release.json").read_text())
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--sdk", type=Path, help="Use an already extracted official SDK")
+parser.add_argument("--archive", type=Path, help="Use a local pinned SDK archive")
+parser.add_argument("--download-only", action="store_true")
+options = parser.parse_args()
+architecture = release["architectures"].get(platform.machine())
+if architecture is None:
+    parser.error("Chromium builds support x86_64 and aarch64 Linux")
+name = f"cef_binary_{release['version']}_{architecture['platform']}_minimal.tar.bz2"
+build = project / "build"
+build.mkdir(exist_ok=True)
+archive = options.archive or build / name
+sdk = (options.sdk or build / "cef-sdk").resolve()
+if options.download_only or not sdk.is_dir():
+    if not archive.is_file():
+        print(f"Downloading official CEF SDK: {name}", flush=True)
+        with tempfile.NamedTemporaryFile(dir=build, delete=False) as output:
+            temporary = Path(output.name)
+            try:
+                with urllib.request.urlopen(release["base_url"] + name, timeout=120) as response:
+                    shutil.copyfileobj(response, output)
+                output.close()
+                temporary.replace(archive)
+            finally:
+                temporary.unlink(missing_ok=True)
+    # Verify pinned release metadata before extracting or executing anything.
+    for algorithm in ("sha1", "sha256"):
+        if algorithm in architecture:
+            with archive.open("rb") as source:
+                actual = hashlib.file_digest(source, algorithm).hexdigest()
+            if actual != architecture[algorithm]:
+                raise SystemExit(f"CEF {algorithm} mismatch. Remove {archive} and download again.")
+    if options.download_only:
+        print(archive)
+        raise SystemExit(0)
+    with tempfile.TemporaryDirectory(dir=build, prefix="cef-extract-") as temporary:
+        with tarfile.open(archive) as source:
+            source.extractall(temporary, filter="data")
+        extracted = Path(temporary) / name.removesuffix(".tar.bz2")
+        extracted.replace(sdk)
+subprocess.run(
+    [
+        "cmake",
+        "-S",
+        str(project / "native/cef"),
+        "-B",
+        str(build / "cef"),
+        "-G",
+        "Ninja",
+        "-DCMAKE_BUILD_TYPE=Release",
+        f"-DCEF_ROOT={sdk}",
+    ],
+    check=True,
+)
+subprocess.run(
+    ["cmake", "--build", str(build / "cef"), "-j", str(min(os.cpu_count() or 2, 8))], check=True
+)
+print(f"Chromium runtime ready: {build / 'cef/runtime'}")

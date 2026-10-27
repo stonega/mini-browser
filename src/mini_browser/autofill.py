@@ -1,4 +1,4 @@
-"""Static scripts run in WebKit's isolated main-frame world.
+"""Static scripts run in Chromium's isolated main-frame world.
 
 Credentials are passed as typed arguments, never interpolated into source code.
 The document token prevents a pending native selection filling a new document.

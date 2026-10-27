@@ -10,7 +10,7 @@ from pathlib import Path
 from . import APP_ID
 from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
-from .gtk import Adw, Gdk, Gio, GLib, Gtk, WebKit
+from .gtk import Adw, Gdk, Gio, GLib, Gtk, Web
 from .navigation import address_to_uri
 from .storage import Library
 from .vault import PasswordVault
@@ -19,12 +19,20 @@ from .window import BrowserWindow
 
 class BrowserApplication(Adw.Application):
     def __init__(
-        self, *, data_dir=None, cache_dir=None, application_id=APP_ID, discover_devices=True
+        self,
+        *,
+        data_dir=None,
+        cache_dir=None,
+        application_id=APP_ID,
+        discover_devices=True,
+        allow_autoplay=False,
+        silent=False,
     ):
         super().__init__(
             application_id=application_id,
             flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
         )
+        self.allow_autoplay, self.silent = allow_autoplay, silent
         self._discover_devices = discover_devices
         self._shutting_down = False
         self.discovery = None
@@ -75,14 +83,11 @@ class BrowserApplication(Adw.Application):
         self._lock_subscriptions = []
         self._watch_session_lock()
         self.connect("window-removed", lambda *_: self.get_windows() or self.lock_vault())
-        self.network_session = WebKit.NetworkSession.new(
-            str(self.data_dir / "webkit"),
-            str(self.cache_dir / "webkit"),
-        )
-        self.network_session.set_persistent_credential_storage_enabled(False)
-        self.network_session.get_cookie_manager().set_persistent_storage(
-            str(self.data_dir / "cookies.sqlite3"),
-            WebKit.CookiePersistentStorage.SQLITE,
+        self.network_session = Web.Session(
+            self.data_dir / "chromium",
+            self.cache_dir / "chromium",
+            allow_autoplay=self.allow_autoplay,
+            silent=self.silent,
         )
         self.network_session.connect("download-started", self._download_started)
         for name, callback in [("new-window", self.new_window), ("quit", self.quit)]:
@@ -98,6 +103,7 @@ class BrowserApplication(Adw.Application):
             "win.show-header": ["F10"],
             "win.close": ["<Primary>w"],
             "win.reload": ["<Primary>r", "F5"],
+            "win.reload-bypass-cache": ["<Primary><Shift>r", "<Primary>F5"],
             "win.back": ["<Alt>Left"],
             "win.forward": ["<Alt>Right"],
             "win.stop": ["Escape"],
@@ -204,6 +210,7 @@ class BrowserApplication(Adw.Application):
         GLib.source_remove(self._vault_timer)
         for connection, subscription in self._lock_subscriptions:
             connection.signal_unsubscribe(subscription)
+        self.network_session.close()
         Adw.Application.do_shutdown(self)
 
     def do_activate(self):

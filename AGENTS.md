@@ -1,6 +1,6 @@
 # Mini Browser
 
-Native GNOME browser: Python, GTK 4, libadwaita, and WebKitGTK 6.0. Keep the
+Native GNOME browser: Python, GTK 4, libadwaita, and Chromium/CEF. Keep the
 browsing surface limited to a native header bar (page title, Settings, layout
 menu, and close) and web content. Pages can switch to a compact audio player or
 video layout while retaining their WebView. The home body contains only the
@@ -11,7 +11,7 @@ window; the default size is 420 × 780 logical pixels.
 ## Layout and workflow
 
 - `src/mini_browser/`: application, native UI, storage, and Chrome importer.
-- `tests/`: deterministic unit tests and a local-page GTK/WebKit smoke test.
+- `tests/`: deterministic unit tests and a local-page GTK/Chromium smoke test.
 - `data/`: desktop integration and app icon.
 - `scripts/`: run, check, and local installation helpers.
 - `docs/design/`, `docs/implementation/`, `docs/user/`: architecture, setup,
@@ -32,14 +32,14 @@ Keep functions small, dependencies explicit, and errors actionable. Preserve
 Chrome source files. Import on a background thread; GTK work stays on the main
 thread. Support repeated imports without duplicate records. Never log browsing
 data, passwords, cookies, or profile contents. Keep TLS verification and the
-WebKit sandbox enabled. Document import limitations honestly.
+Chromium sandbox enabled. Document import limitations honestly.
 
 Passwords use an app-local six-digit PIN vault, not GNOME Keyring. Keep
 credential metadata and secrets encrypted at rest. Use the established PyCA
 Argon2id/AES-GCM format, atomic ciphertext writes and stale-write protection.
 Never log secrets or interpolate them into JavaScript. Filling requires a user
-action, exact origin and document checks, and an isolated WebKit world. Test
-tampering, failed writes, lock/unlock and real WebKit filling with synthetic data.
+action, exact origin and document checks, and an isolated Chromium world. Test
+tampering, failed writes, lock/unlock and real Chromium filling with synthetic data.
 Existing longer master passwords remain valid for unlocking old vaults; creation
 and credential changes require exactly six ASCII digits. Preserve leading zeroes.
 
@@ -58,5 +58,5 @@ exists, ask before running `codegraph init -i`. Do not delegate exploration.
 
 Use Context7 to resolve the library and query current documentation for GNOME
 APIs or other library/CLI questions. Prefer installed GI metadata and official
-GNOME/WebKit documentation as supporting references. Prefer `git` over `gh`.
+GNOME/CEF documentation as supporting references. Prefer `git` over `gh`.
 Run checks, inspect staged changes, and keep generated/private files out of Git.

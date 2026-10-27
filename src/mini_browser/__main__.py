@@ -16,11 +16,16 @@ if "--help" in sys.argv or "-h" in sys.argv:
 
 try:
     from .application import main
-except (ImportError, ValueError) as exc:
+    from .chromium import Bridge
+
+    Bridge()  # Fail before opening a window if the native runtime is missing.
+    result = main()
+except (ImportError, ValueError, RuntimeError) as exc:
     print(
-        "Mini Browser needs GTK 4, libadwaita, WebKitGTK 6.0 and cryptography 44+: " + str(exc),
+        "Mini Browser needs GTK 4, libadwaita, the bundled Chromium runtime and cryptography 44+: "
+        + str(exc),
         file=sys.stderr,
     )
     raise SystemExit(1) from None
 
-raise SystemExit(main())
+raise SystemExit(result)

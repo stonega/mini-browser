@@ -17,14 +17,33 @@ class InstallTests(unittest.TestCase):
             library = data / "mini-browser/library.sqlite3"
             library.parent.mkdir(parents=True)
             library.write_bytes(b"existing user data")
+            executable = root / ".local/bin/mini-browser"
+            executable.parent.mkdir(parents=True)
+            system_launcher = Path(temp) / "system-launcher"
+            system_launcher.write_bytes(b"system installation must stay intact")
+            executable.symlink_to(system_launcher)
+            runtime = Path(temp) / "cef-runtime"
+            runtime.mkdir()
+            for filename in ("libmini_cef.so", "libcef.so", "cef-worker", "LICENSE.txt"):
+                (runtime / filename).write_bytes(b"synthetic runtime fixture")
             with (
                 patch.object(Path, "home", return_value=root),
-                patch.dict(os.environ, {"XDG_DATA_HOME": str(data)}),
+                patch.dict(
+                    os.environ,
+                    {"XDG_DATA_HOME": str(data), "MINI_BROWSER_CEF_RUNTIME": str(runtime)},
+                ),
                 redirect_stdout(io.StringIO()),
             ):
                 runpy.run_path(str(installer), run_name="__main__")
                 runpy.run_path(str(installer), run_name="__main__")
             self.assertEqual(library.read_bytes(), b"existing user data")
+            self.assertEqual(system_launcher.read_bytes(), b"system installation must stay intact")
+            self.assertFalse(executable.is_symlink())
+            self.assertTrue((data / "mini-browser/app/cef").is_symlink())
+            self.assertEqual(len(list((data / "mini-browser/app/cef-runtimes").iterdir())), 1)
+            self.assertEqual(
+                (data / "mini-browser/app/cef/libcef.so").read_bytes(), b"synthetic runtime fixture"
+            )
             executable = root / ".local/bin/mini-browser"
             self.assertEqual(executable.stat().st_mode & 0o777, 0o755)
             desktop = (data / "applications/io.github.stone.MiniBrowser.desktop").read_text()

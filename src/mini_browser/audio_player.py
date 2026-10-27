@@ -4,7 +4,7 @@ import base64
 import json
 from urllib.parse import urlsplit
 
-from .gtk import Gdk, Gio, GLib, Gtk, Pango, WebKit
+from .gtk import Gdk, Gio, GLib, Gtk, Pango, Web
 
 WORLD = "mini-browser-audio"
 INITIALIZE = "globalThis.__miniBrowserAudio = [];"
@@ -46,7 +46,7 @@ ARTWORK = """
 const controller = new AbortController();
 const timeout = setTimeout(() => controller.abort(), 5000);
 try {
-    // Fetch inside WebKit, with the page's CORS, CSP and session protections.
+    // Fetch inside Chromium, with the page's CORS, CSP and session protections.
     const response = await fetch(url, {signal: controller.signal});
     if (!response.ok || !response.headers.get('Content-Type')?.startsWith('image/')) return '';
     const limit = 4 * 1024 * 1024;
@@ -107,10 +107,10 @@ class AudioPlayer(Gtk.Box):
         manager = webview.get_user_content_manager()
         if not getattr(manager, "_mini_audio_world", False):
             manager.add_script(
-                WebKit.UserScript.new_for_world(
+                Web.UserScript.new_for_world(
                     INITIALIZE,
-                    WebKit.UserContentInjectedFrames.TOP_FRAME,
-                    WebKit.UserScriptInjectionTime.START,
+                    Web.UserContentInjectedFrames.TOP_FRAME,
+                    Web.UserScriptInjectionTime.START,
                     WORLD,
                     None,
                     None,

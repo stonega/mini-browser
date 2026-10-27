@@ -115,7 +115,7 @@ def silent_audio_environment(address):
         if "Sink" in kinds and "Audio" in kinds:
             ranks.append(f"{factory.get_name()}:NONE")
     # autoaudiosink falls back to a clocked fakesink, retaining real playback
-    # timing and WebKit audio notifications without opening hardware outputs.
+    # timing and Chromium audio notifications without opening hardware outputs.
     return {
         **os.environ,
         "GST_PLUGIN_FEATURE_RANK": ",".join(ranks),
@@ -131,11 +131,15 @@ def run_tests(root, arguments):
         "media": "media_smoke.py",
         "passwords": "password_smoke.py",
     }
+    tests["cef"] = "cef_smoke.py"
+    tests["engine"] = "chromium_features_smoke.py"
     filenames = tuple(tests.values())
     if arguments and arguments[0].startswith("--test="):
         selected = arguments[0].split("=", 1)[1]
         if selected not in tests:
-            raise ValueError("Choose --test=devices, browser, pin, media, or passwords.")
+            raise ValueError(
+                "Choose --test=devices, browser, pin, media, passwords, cef, or engine."
+            )
         filenames, arguments = (tests[selected],), arguments[1:]
     log_path = root / "gnome-shell.log"
     command = [
@@ -212,8 +216,9 @@ def run_tests(root, arguments):
             for filename in filenames:
                 if shell.poll() is not None:
                     raise RuntimeError("Virtual GNOME exited during the UI tests")
+                command = [sys.executable, str(PROJECT / "tests" / filename), *arguments]
                 test = subprocess.Popen(
-                    [sys.executable, str(PROJECT / "tests" / filename), *arguments],
+                    command,
                     env=environment,
                     start_new_session=True,
                 )

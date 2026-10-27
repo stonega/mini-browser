@@ -1,51 +1,16 @@
-"""Focus an existing video in WebKit's top layer without moving its DOM node."""
+"""Focus an existing video in Chromium's top layer without moving its DOM node."""
 
 import json
 
-from .gtk import GLib, WebKit
+from .gtk import GLib, Web
 
 WORLD = "mini-browser-video"
 INITIALIZE = "globalThis.__miniBrowserVideo = null;"
-# User-origin !important rules outrank even the inline !important sizes that
-# site players rewrite on resize. Leave those inline styles owned by the site.
-STYLE = """
-video[data-mini-browser-video="active"]:popover-open {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    min-width: 0 !important;
-    min-height: 0 !important;
-    max-width: none !important;
-    max-height: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border-width: 0 !important;
-    background: black !important;
-    object-fit: contain !important;
-    box-sizing: border-box !important;
-    aspect-ratio: auto !important;
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    transform: none !important;
-    transition-property: none !important;
-    animation-name: none !important;
-    pointer-events: auto !important;
-    clip-path: none !important;
-    filter: none !important;
-}
-video[data-mini-browser-video="active"]:popover-open::backdrop {
-    background: black !important;
-}
-"""
 CONTROL = """
 let saved = globalThis.__miniBrowserVideo;
 const restore = () => {
     if (!saved) return;
     const video = saved.video;
-    if (video.matches(':popover-open')) video.hidePopover();
-    video.removeAttribute('popover');
     video.controls = saved.controls;
     if (saved.marker === null) video.removeAttribute('data-mini-browser-video');
     else video.setAttribute('data-mini-browser-video', saved.marker);
@@ -69,11 +34,11 @@ if (command === 'exit') {
         await document.exitFullscreen();
     restore(); return true;
 }
-if (!HTMLElement.prototype.showPopover) return false;
+if (!document.fullscreenEnabled) return false;
 const videos = [...document.querySelectorAll('video')].filter(video => {
     const rect = video.getBoundingClientRect();
     const style = getComputedStyle(video);
-    return rect.width > 0 && rect.height > 0 && !video.hasAttribute('popover') &&
+    return rect.width > 0 && rect.height > 0 && !video.hasAttribute('data-mini-browser-video') &&
         style.visibility === 'visible' && style.opacity !== '0';
 });
 if (command === 'probe') return !!(saved?.video.isConnected || videos.length);
@@ -90,9 +55,8 @@ globalThis.__miniBrowserVideo = saved;
 try {
     video.controls = true;
     video.setAttribute('data-mini-browser-video', 'active');
-    video.setAttribute('popover', 'manual');
-    video.showPopover();
-    if (!video.matches(':popover-open')) { restore(); return false; }
+    await video.requestFullscreen({navigationUI: 'hide'});
+    if (document.fullscreenElement !== video) { restore(); return false; }
     return await dimensions(video);
 } catch (error) { restore(); return false; }
 """
@@ -104,21 +68,11 @@ class VideoPlayer:
         self._probe_generation = 0
         manager = webview.get_user_content_manager()
         if not getattr(manager, "_mini_video_world", False):
-            manager.add_style_sheet(
-                WebKit.UserStyleSheet.new_for_world(
-                    STYLE,
-                    WebKit.UserContentInjectedFrames.TOP_FRAME,
-                    WebKit.UserStyleLevel.USER,
-                    WORLD,
-                    None,
-                    None,
-                )
-            )
             manager.add_script(
-                WebKit.UserScript.new_for_world(
+                Web.UserScript.new_for_world(
                     INITIALIZE,
-                    WebKit.UserContentInjectedFrames.TOP_FRAME,
-                    WebKit.UserScriptInjectionTime.START,
+                    Web.UserContentInjectedFrames.TOP_FRAME,
+                    Web.UserScriptInjectionTime.START,
                     WORLD,
                     None,
                     None,

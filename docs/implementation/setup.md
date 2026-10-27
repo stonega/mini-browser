@@ -1,7 +1,7 @@
 # Setup and verification
 
 Use `/usr/bin/python3` with distribution-provided PyGObject, GTK 4.12+,
-libadwaita 1.5+, WebKitGTK 6.0 (2.40+), and cryptography 44+ with Argon2id support.
+libadwaita 1.5+, the bundled CEF 156 runtime, and cryptography 44+ with Argon2id support.
 A pip-only virtual environment will
 not usually see native GI bindings. No Bun/npm dependencies are needed for this
 native desktop app.
@@ -9,7 +9,8 @@ native desktop app.
 On Fedora:
 
 ```sh
-sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0 python3-cryptography ruff
+sudo dnf install python3-gobject gtk4 libadwaita python3-cryptography ruff cmake ninja-build gcc-c++
+./scripts/build-cef
 ./scripts/run
 ```
 
@@ -22,6 +23,21 @@ ruff format src tests scripts/install
 ./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
 ./scripts/build-rpm
 ```
+
+The main app uses Chromium through CEF, while its UI remains native GTK.
+`./scripts/build-cef` downloads and verifies the pinned official Linux SDK, then
+builds the small C++ bridge and subprocess. It supports x86_64 and aarch64; the
+latter needs a native ARM build. Allow roughly 2 GiB for SDK and build files.
+Use `--sdk /absolute/path` for an extracted SDK, or `--archive path.tar.bz2`
+for an offline, checksum-verified build. Runtime output is `build/cef/runtime`.
+`MINI_BROWSER_CEF_RUNTIME` can select an alternate compatible runtime.
+Linux must permit unprivileged user namespaces. The app keeps Chromium's sandbox
+and TLS verification enabled; it has no insecure fallback.
+
+`./scripts/smoke --test=cef` checks the main application's rendered pixels,
+renderer sandbox, native input, resize, reload and live video frames. `./scripts/smoke --test=engine` verifies native upload/download, certificate
+rejection, both refresh actions, and cookies/storage across a process restart. The default
+smoke suite also tests the Chromium-backed navigation, media and password flows.
 
 ## Phone mirroring dependencies
 
@@ -73,7 +89,7 @@ virtual monitor, a private Wayland display and D-Bus session, and temporary XDG
 directories. It requires `gnome-shell`, `dbus-run-session` (`dbus-daemon` on
 Fedora), `at-spi2-core`, and the GStreamer GI typelib. No active graphical session
 is needed. The runner starts a separate accessibility bus and registry daemon
-before WebKit launches, avoiding private-bus systemd activation failures.
+before Chromium launches, avoiding private-bus systemd activation failures.
 Test windows stay off the user's desktop. Navigation checks cover same-window
 target links, script popups, native POST submissions, Back, and explicit new windows.
 The runner copies and enables the bundled pin extension only in the disposable
@@ -90,12 +106,12 @@ controls, the video control strip, normal page
 interaction, and Back restoring Full page without navigation. This helper is
 never installed with the application.
 Audio sinks are disabled only for the
-test processes, using GStreamer's clocked fake sink for silent playback checks.
+test processes, using a clocked fake GStreamer sink for phone tests and CEF's mute-audio switch for browser tests.
 The GNOME process and test process groups are stopped and temporary desktop data
 is removed after the run, including failed tests. Each test also uses a separate
 application ID, temporary browser data, and a loopback HTTP server.
 Pass an optional PNG filename to capture only the test application window.
-The media smoke test serves a generated WAV and canvas video. It verifies WebKit
+The media smoke test serves a generated WAV and canvas video. It verifies Chromium
 audio detection, square edge-to-edge artwork at default and resized dimensions,
 track metadata and cover updates, missing-cover and page-preview fallbacks,
 continued compact playback, mute, play/pause, size and window-state
@@ -107,7 +123,7 @@ and closing an active player while another window stays open. It saves
 additional `-audio.png` and `-video.png` captures when requested.
 The password smoke test also creates a temporary vault, imports a synthetic CSV
 through the native dialog, checks failed and successful unlocks, then fills a
-local WebKit login form. It checks isolated-world setters, exact-site account
+local Chromium login form. It checks isolated-world setters, exact-site account
 selection, origin/document/form guards, and manual locking. Neither test command
 imports private Chrome data or uses the system keyring.
 
@@ -128,23 +144,25 @@ after an upgrade to load the new code.
 To build a local package instead:
 
 ```sh
-sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff
+sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff cmake ninja-build gcc-c++
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.5-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.3.0-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
+The source RPM includes the pinned official CEF SDK for the build architecture;
+RPM builds run offline after source preparation. Binary RPMs are architecture-specific.
 The build uses `build/rpm` and writes the binary and source RPMs into `dist/`.
 The binary package installs `/usr/bin/mini-browser`, modules under
 `/usr/share/mini-browser`, the desktop entry, icon, license, and docs. DNF resolves
-the declared GTK, WebKitGTK, PyGObject, and cryptography runtime dependencies.
+the declared GTK, Chromium, PyGObject, and cryptography runtime dependencies.
 No personal bookmarks, history, cookies, or vault files are packaged or removed.
 
 Release maintainers submit the verified source RPM to COPR, then check that each
 enabled target succeeds before announcing repository availability:
 
 ```sh
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.2.5-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.3.0-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 
@@ -164,7 +182,8 @@ directory and `passwords.vault`. Restart Mini Browser to load the installed code
 `scripts/install` copies the Python package under
 `$XDG_DATA_HOME/mini-browser/app`, adds `~/.local/bin/mini-browser`, and writes
 the desktop file and scalable icon under the usual XDG data directories.
-It also copies the pin extension into the user's GNOME Shell extensions directory;
+It copies the built Chromium runtime under `app/cef-runtimes`, selected by the `app/cef` symlink (build it first), including
+its license and third-party credits. It also copies the pin extension into the user's GNOME Shell extensions directory;
 enable it with the command above after logging out and back in.
 Re-running the script updates the installed copy. The launcher uses an absolute
 executable path, so `~/.local/bin` need not be on the desktop session's PATH.
@@ -180,4 +199,4 @@ Reference APIs:
 
 - <https://api.pygobject.gnome.org/Gtk-4.0/>
 - <https://api.pygobject.gnome.org/Adw-1/>
-- <https://api.pygobject.gnome.org/WebKit-6.0/>
+- <https://cef-builds.spotifycdn.com/docs/stable/>

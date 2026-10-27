@@ -1,4 +1,4 @@
-.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.2.5" "User Commands"
+.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.3.0" "User Commands"
 .SH NAME
 mini-browser \- a small native GNOME web browser
 .SH SYNOPSIS
@@ -6,11 +6,12 @@ mini-browser \- a small native GNOME web browser
 .RI [ URL " or " "search terms" ]...
 .SH DESCRIPTION
 Mini Browser opens one page per resizable portrait window, with a native
-GNOME header bar. Each command-line argument opens a separate window.
+GNOME header bar and sandboxed Chromium web content. Each command-line argument opens a separate window.
 Quote search terms containing spaces. Without arguments, the start page opens.
 It contains an address/search field and tiles for recently opened sites.
 The header bar's main menu opens Settings, including Chrome data import.
-Its Back button returns to the previous page. Website links requesting another
+Its Home button is always available; Back returns to the previous page when available.
+Website links requesting another
 tab or window open in the current window.
 .PP
 Audio and video layouts hide the title bar; move to the top edge or press F10
@@ -18,6 +19,7 @@ to reveal it. Video windows initially match the video's aspect ratio.
 Choose Full page from the layout menu or press Escape to restore the page layout.
 .PP
 The pin button before the layout button keeps the window above other windows.
+An active pin uses the theme accent color; an inactive pin uses an outlined icon.
 Audio and video modes enable pinning by default; Full page restores the previous
 pin setting. Pinning requires the bundled Mini Browser Pin GNOME Shell extension.
 After installation, log out and back in, then run
@@ -44,6 +46,12 @@ Open Settings.
 .TP
 .B Ctrl+N / Ctrl+W
 Open a new window / close the current window.
+.TP
+.B Ctrl+R / F5
+Refresh the current page.
+.TP
+.B Ctrl+Shift+R / Ctrl+F5
+Reload without cached resources, keeping cookies and website storage.
 .TP
 .B Alt+Left / Alt+Right
 Navigate back / forward.

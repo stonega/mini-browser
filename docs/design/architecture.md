@@ -1,15 +1,16 @@
 # Architecture
 
 Mini Browser is one native desktop application. Python and PyGObject bind GTK 4,
-libadwaita (1.5+), and WebKitGTK 6.0 (2.40+). These are system packages, with no
+libadwaita (1.5+), and Chromium through CEF 156. GTK bindings are system packages;
+the pinned CEF runtime is bundled. There is no
 web UI or JavaScript build toolchain. GTK 4.12+ is required by the CSS API.
 
 `BrowserApplication` owns the application actions, private data paths, SQLite
-library, and a shared persistent `WebKit.NetworkSession`. `BrowserWindow` owns
+library, and a shared persistent `chromium.Session`. `BrowserWindow` owns
 one WebView and defaults to 420 × 780 logical pixels. Links requesting another
 tab/window navigate that same WebView. A document-start script in an isolated
 world retargets links and submitted forms while preserving native navigation and
-POST bodies; WebKit policy/create handlers redirect other HTTP(S) GET popup
+POST bodies; CEF lifespan/request handlers redirect other HTTP(S) GET popup
 requests and refuse new WebViews. `window.open()` returns no popup handle;
 blank popups and programmatic POST popups that bypass submission events are
 unsupported. Explicit application new-window actions still create windows, all
@@ -18,32 +19,38 @@ sharing the storage session.
 An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
-`Adw.HeaderBar` with Back, the page title, pin toggle, layout menu, main menu, and close
+`Adw.HeaderBar` with Home, Back, the page title, pin toggle, layout menu, main menu, and close
 control above the content. The home body contains
 only a search/address entry, a Devices group for detected and saved phones, and
 an Apps group with up to six recent-site tiles. Empty device groups are hidden.
 Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 The three-line main menu follows the layout button and offers New Window,
-Settings, and an `Adw.AboutDialog` displaying the app's name, version, and license.
+Refresh Page (using the existing reload action), Reload Without Cache, Settings,
+and an `Adw.AboutDialog` displaying the app's name, version, and license.
+Reload Without Cache uses CEF's `ReloadIgnoreCache()` to retry incomplete
+pages without clearing cookies or website storage. It is disabled on Home.
 Full page uses the native `view-paged-symbolic` icon.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
-locked aspect ratio. Back/Forward actions track WebKit's back-forward list and
-are disabled on the home page, where the Back button is hidden. On a page without
-back history, the button becomes Home and returns to the start page. Media layouts
-keep Back to restore Full page. URI notifications and load events also refresh
+locked aspect ratio. Back/Forward actions track Chromium's back-forward list and
+are disabled on the home page, where the Back button is hidden. Home has its own
+button in every header. Back is hidden on pages without back history. Media layouts
+keep both Home and Back, with Back restoring Full page. URI notifications and load events also refresh
 their state. Same-document URL changes (History API or fragments) leave media
 mode and restore the browsing header, just like full-page navigation.
-WebKit's user agent is unchanged.
+Chromium's user agent is unchanged.
 
-Long-pressing Back opens a native popover with up to 20 previous WebKit navigation
+The [disposable-profile example](../../examples/cef/README.md) runs this same
+Chromium-backed main app without retaining website data.
+
+Long-pressing Back opens a native popover with up to 20 previous Chromium navigation
 entries, nearest first. Selection jumps to the existing back-forward-list item;
 it does not create a new navigation entry. Navigation dismisses stale lists, and
 an open history popover keeps the immersive header visible. Normal Back clicks
 retain their page-history or media-layout behavior.
 
-WebKit's `is-playing-audio` notification enables Audio player for a loaded page.
+Chromium's `is-playing-audio` notification enables Audio player for a loaded page.
 Audio mode keeps that WebView alive but unmapped and requests a
 420 × 200 window; the stack measures only its visible child. Restoring preserves
 the browsing size and maximized/fullscreen state. The restore action stays
@@ -72,7 +79,9 @@ session D-Bus interface matches both the caller's unique bus name and GTK window
 and only handles Mini Browser application IDs. It never matches page titles.
 Replies and unicast change signals report pinned only when both compositor
 settings are active. Changes to either setting through GNOME's window menu update
-the toggle. Calls are asynchronous, stale replies are ignored, and mapping races receive a
+the toggle. The active toggle uses the native `suggested-action` accent styling
+and filled pin; inactive toggles use the bundled symbolic outline icon.
+Calls are asynchronous, stale replies are ignored, and mapping races receive a
 bounded retry. Unavailable pinning keeps the button clickable and opens a native
 setup dialog. Enable Pinning activates the installed GNOME extension; newly
 installed extensions require signing out and back in before GNOME can load them.
@@ -81,13 +90,13 @@ previous requested setting. Manual unpinning remains available during playback.
 Disabling the extension restores each original flag independently for windows it
 controlled.
 
-`audio_player.py` implements native controls. Mute uses WebKit's page-wide API.
+`audio_player.py` implements native controls. Mute uses Chromium's page-wide API.
 The left cover fills the player's height with no margins; a width-for-height
 layout keeps it square on resize, and `Gtk.Picture` crops artwork without
 stretching it. Track title, artist (or album), website, status, and controls sit
 to its right. While mapped, the player probes once a second for track changes.
 Artwork comes from Media Session metadata, then video posters or page preview
-metadata. A separate static script fetches images inside WebKit, retaining the
+metadata. A separate static script fetches images inside Chromium, retaining the
 page's session, CORS, CSP, TLS, and sandbox protections. Fetches time out after
 five seconds and read at most 4 MiB. The player saves no separate artwork files;
 missing, invalid, or blocked covers show a native audio placeholder. Navigation
@@ -104,20 +113,15 @@ video in a window sized to its intrinsic aspect ratio, normally 640 pixels wide
 and bounded by 90% of monitor width and 80% of monitor height. The header overlay
 does not add height or shrink the video viewport. Metadata is awaited for up to
 1.5 seconds; unavailable dimensions fall back to 640 × 360. Subsequent manual
-resizing is unrestricted. A static script in its own isolated world uses the
-Popover API to put the existing video in the top layer without moving its DOM
-node or requesting desktop fullscreen. A user-origin stylesheet scoped to the
-selected open popover makes it fill the WebView and gives it an opaque black
-backdrop, while the script exposes native media controls. Its important rules
-take precedence over inline sizing, including important declarations rewritten
-by responsive players such as YouTube on resize. The site's inline styles are
-never modified. Exit removes the temporary marker and restores the controls,
-leaving the site's latest layout intact. The layout menu
-probes for supported videos when opened and after page loads; stale results are
-discarded. Embedded frames, shadow DOM, and existing website popovers are excluded.
-The option stays disabled when WebKit lacks the Popover API.
+resizing is unrestricted. A static script in its own isolated world requests DOM fullscreen on the
+existing video. CEF keeps that fullscreen inside the GTK content surface;
+the desktop window remains resizable. Chromium's fullscreen rules override
+responsive author styles, including inline important sizes, without rewriting
+the site's inline style. Exit restores the previous controls and removes the
+temporary marker. The layout menu probes after page loads and when opened;
+stale results are discarded. Embedded frames and shadow DOM are excluded.
 
-Closing a window mutes and unloads its WebView so retained Python references
+Closing a window mutes and destroys its CEF browser so retained Python references
 cannot leave its audio playing in another window's application process.
 
 `chrome.py` discovers profiles and reads Chrome's bookmark JSON and read-only
@@ -142,7 +146,7 @@ native initial avatars and make no background requests to the saved websites.
 Card buttons draw their own rounded hover and pressed states; the surrounding
 FlowBox children remain transparent to avoid a second outline around each tile.
 
-Website content stays in WebKit's sandbox. TLS errors show an error page without
+Website content stays in Chromium's sandbox. TLS errors show an error page without
 an override. Unsupported external URI schemes are not launched. Browser data is
 local to the account, with private app directories and a mode-0600 library
 database. Password CSV import and filling use the separate encrypted vault;
@@ -232,10 +236,10 @@ Native password dialogs perform derivation/import/writes on a worker thread.
 The app drops key and record references after five minutes without vault use,
 on manual lock, last-window closure, shutdown, and available screen-lock/sleep
 notifications. Pending fill requests are cancelled and password dialogs close.
-The derived key bytearray is overwritten on lock, but Python and WebKit do not
+The derived key bytearray is overwritten on lock, but Python and Chromium do not
 guarantee that all temporary plaintext copies are erased. Protection is at rest.
 
-`autofill.py` provides static main-frame scripts executed in an isolated WebKit
+`autofill.py` provides static main-frame scripts executed in an isolated Chromium
 world, retained by a document-start UserScript registered on each content
 manager. Credentials arrive as typed GVariant arguments, never script source.
 The UI requires an explicit action and account selection. Python navigation
@@ -253,7 +257,43 @@ and <https://cryptography.io/en/latest/hazmat/primitives/aead/>.
 
 `scripts/build-rpm` archives the source tree and invokes the spec in `packaging/`.
 It excludes generated bytecode, build outputs, screenshots, and all personal
-browser data. The noarch RPM installs a private package in `/usr/share/mini-browser`
-and an isolated Python launcher in `/usr/bin/mini-browser`, plus the desktop entry,
+browser data. The architecture-specific RPM installs a private Python package in `/usr/share/mini-browser`
+and CEF under `/usr/lib64/mini-browser/cef` (the target library directory),
+with an isolated Python launcher in `/usr/bin/mini-browser`, plus the desktop entry,
 icon, license, and documentation. Runtime dependencies are declared in the spec.
 Package checks run the deterministic tests and validate the desktop entry.
+
+## Chromium boundary
+
+`chromium.py` is the GTK engine adapter; `native/cef/bridge.cc` implements ABI 3.
+One application-wide CEF context provides persistent cookies and storage under
+`chromium/default` in the data directory. HTTP cache is under `chromium` in the
+cache directory. Earlier WebKit data is left intact; website sessions are not
+converted, so upgrades require signing in again. Library and vault formats are
+unchanged. Chromium uses its system proxy mode, including GNOME proxy and PAC
+settings. Authentication prompts are native dialogs and are not persisted.
+
+CEF runs windowless on its headless platform, while GTK owns Wayland windows,
+headers, dialogs, input methods and clipboard integration. Paint callbacks retain
+at most one pending BGRA frame per view. A GLib timer pumps CEF on the GTK main
+thread; callbacks are dispatched outside the native callback stack. The subprocess
+links directly to libcef before libc, required by Chromium's Linux sandbox.
+Unprivileged user namespaces, seccomp and no-new-privileges are required. The
+setuid helper is unused; neither `--no-sandbox` nor TLS bypass flags are used.
+
+The adapter uses CEF's in-process DevTools API; it opens no debugging port.
+Document-start scripts run in named isolated worlds. Typed function calls use
+a unique execution-context ID and typed protocol argument values, with both
+navigation generation and cancellation checked. Passwords never become script
+source. Console output and CEF logging are disabled; protocol results are capped
+at 8 MiB. Chromium's own credential-saving service is disabled. Camera, microphone
+and geolocation permission prompts are currently denied. DRM/Widevine and
+proprietary codecs are not bundled; HTML video support depends on CEF's codecs.
+
+`native/cef/release.json` pins official SDK release metadata. `scripts/build-cef`
+verifies the archive before extraction and builds with CMake/Ninja. There are no
+runtime downloads. Shipping a Chromium update requires rebuilding and distributing
+a new runtime; Mini Browser does not inherit Chrome's automatic updater.
+
+The native header and dialogs retain GTK accessibility. The windowless web
+surface does not yet export Chromium's accessibility tree to AT-SPI.

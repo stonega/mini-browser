@@ -1,4 +1,4 @@
-"""Real WebKit media layouts, using a generated loopback WAV and canvas stream."""
+"""Real Chromium media layouts, using a generated loopback WAV and canvas stream."""
 
 import io
 import json
@@ -129,6 +129,8 @@ def run():
         origin = f"http://127.0.0.1:{server.server_port}"
         app = BrowserApplication(
             discover_devices=False,
+            allow_autoplay=True,
+            silent=True,
             data_dir=root / "data",
             cache_dir=root / "cache",
             application_id=f"io.github.stone.MiniBrowser.MediaSmoke.Run{os.getpid()}",
@@ -267,9 +269,6 @@ def run():
             assert not window.lookup_action("audio-player").get_enabled()
             window.activate_action("win.audio-player", None)
             assert not window.audio_mode
-            window.webview.get_settings().set_property(
-                "media-playback-requires-user-gesture", False
-            )
             window.load_uri(origin)
             yield from wait("audio page load", lambda: not window.webview.is_loading())
             assert not window.lookup_action("audio-player").get_enabled()
@@ -279,7 +278,6 @@ def run():
             yield from wait(
                 "audio detected", lambda: window.lookup_action("audio-player").get_enabled()
             )
-            window.webview.get_settings().set_property("media-playback-requires-user-gesture", True)
             window.set_default_size(480, 700)
             yield from wait("custom page size", lambda: window.get_height() == 700)
             original_view = window.webview
@@ -360,6 +358,7 @@ def run():
             assert frame(window) == moved_frame
             window.player.mute_button.emit("clicked")
             assert not window.webview.can_go_back()
+            assert window.home_button.get_visible()
             assert window.back_button.get_sensitive()
             audio_uri = window.webview.get_uri()
             window.back_button.emit("clicked")
@@ -633,15 +632,12 @@ def run():
             window.player.mute_button.emit("clicked")
             assert window.webview.get_is_muted()
             window.player.mute_button.emit("clicked")
-            window.activate_action("win.home", None)
+            window.home_button.emit("clicked")
             assert not window.audio_mode
             assert window.stack.get_visible_child_name() == "home"
             assert not window.lookup_action("audio-player").get_enabled()
             yield from javascript(window, "await context.close(); return true;")
 
-            window.webview.get_settings().set_property(
-                "media-playback-requires-user-gesture", False
-            )
             window.load_uri(origin + "/video")
             yield from wait(
                 "video detected",
@@ -659,7 +655,6 @@ def run():
             yield from javascript(
                 window, "await document.querySelector('audio').play(); return true;"
             )
-            window.webview.get_settings().set_property("media-playback-requires-user-gesture", True)
             video_generation = window.document_generation
             window.activate_action("win.video-player", None)
             yield from wait(
@@ -687,6 +682,7 @@ def run():
             yield from pointer(window, 240, window.get_height() - 24, 30, 0)
             assert frame(window) == click_frame
             video_uri = window.webview.get_uri()
+            assert window.home_button.get_visible()
             assert window.back_button.get_sensitive()
             window.back_button.emit("clicked")
             yield from wait("video Back restores full page", lambda: window.get_height() == 700)
@@ -714,7 +710,7 @@ def run():
                 "const video = document.querySelector('video'); "
                 "const rect = video.getBoundingClientRect(); "
                 "return {width:rect.width,height:rect.height,viewportWidth:innerWidth,"
-                "viewportHeight:innerHeight,open:video.matches(':popover-open'),"
+                "viewportHeight:innerHeight,open:document.fullscreenElement===video,"
                 "controls:video.controls,parent:video.parentElement.id};",
             )
             assert dimensions["open"] and dimensions["controls"]
@@ -757,7 +753,7 @@ def run():
             assert window.audio_mode and not window.video_mode
             assert not (
                 yield from javascript(
-                    window, "return document.querySelector('video').matches(':popover-open');"
+                    window, "return document.fullscreenElement===document.querySelector('video');"
                 )
             )
             window.activate_action("win.video-player", None)
@@ -860,9 +856,6 @@ def run():
             assert not window.lookup_action("video-player").get_enabled()
 
             # These synthetic play() calls do not carry a real user gesture.
-            window.webview.get_settings().set_property(
-                "media-playback-requires-user-gesture", False
-            )
             window.load_uri(origin + "/portrait-video")
             yield from wait(
                 "portrait video detected",
@@ -922,7 +915,7 @@ def run():
             window.activate_action("win.page-layout", None)
             yield from wait("fallback restored", lambda: window.get_height() == 700)
 
-            # A hold opens real WebKit history and must not also click Back.
+            # A hold opens real Chromium history and must not also click Back.
             for path in ("/history-one", "/history-two", "/history-three"):
                 window.load_uri(origin + path)
                 yield from wait(
@@ -1000,9 +993,6 @@ def run():
             )
 
             # The application remains open in another window when a player closes.
-            window.webview.get_settings().set_property(
-                "media-playback-requires-user-gesture", False
-            )
             window.load_uri(origin)
             yield from wait("closing fixture load", lambda: not window.webview.is_loading())
             assert not window.back_history.get_visible()
@@ -1014,6 +1004,10 @@ def run():
             other = app.new_window()
             window.close()
             yield from wait("closed player unloads", lambda: not original_view.is_playing_audio())
+            yield from wait(
+                "CEF page destroyed",
+                lambda: original_view.identifier not in app.network_session.views,
+            )
             assert original_view.get_is_muted()
             assert app.get_windows() == [other]
             assert other.stack.get_visible_child_name() == "home"

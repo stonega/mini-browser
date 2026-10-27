@@ -79,8 +79,15 @@ def run():
             other = app.new_window()
             yield lambda: ready(other)
             assert not window.pin.pinned and not other.pin.pinned
+            assert window.pin_button.get_icon_name() == "mini-browser-pin-outline-symbolic"
+            assert not window.pin_button.has_css_class("suggested-action")
+            assert Gtk.IconTheme.get_for_display(window.get_display()).has_icon(
+                window.pin_button.get_icon_name()
+            )
             window.pin_button.emit("clicked")
             yield lambda: ready(window) and window.pin.pinned
+            assert window.pin_button.get_icon_name() == "view-pin-symbolic"
+            assert window.pin_button.has_css_class("suggested-action")
             assert not other.pin.pinned
             assert window_flags(window) == (True, True)
             assert window_flags(other) == (False, False)
@@ -88,6 +95,8 @@ def run():
             # GNOME's window menu can change either setting independently.
             window_flags(window, (True, False))
             yield lambda: not window.pin.pinned and not window.pin_button.get_active()
+            assert window.pin_button.get_icon_name() == "mini-browser-pin-outline-symbolic"
+            assert not window.pin_button.has_css_class("suggested-action")
             window_flags(window, (True, True))
             yield lambda: window.pin.pinned and window.pin_button.get_active()
             window_flags(window, (False, True))

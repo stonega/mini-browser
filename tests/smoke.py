@@ -1,4 +1,4 @@
-"""Exercise real GTK/WebKit using only generated data and a local HTTP server."""
+"""Exercise real GTK/Chromium using only generated data and a local HTTP server."""
 
 import json
 import os
@@ -67,6 +67,8 @@ def run():
         base = f"http://127.0.0.1:{server.server_port}"
         app = BrowserApplication(
             discover_devices=False,
+            allow_autoplay=True,
+            silent=True,
             data_dir=root / "data",
             cache_dir=root / "cache",
             application_id=f"io.github.stone.MiniBrowser.Smoke.Run{os.getpid()}",
@@ -94,6 +96,7 @@ def run():
                 if not windows:
                     return GLib.SOURCE_CONTINUE
                 window = windows[-1]
+                assert window.home_button.get_visible() and window.home_button.get_sensitive()
                 if state["phase"] == 0:
                     assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     assert window.stack.get_visible_child_name() == "home"
@@ -163,10 +166,6 @@ def run():
                             )
                             assert 300 <= dimensions["width"] <= 500, dimensions
                             state["viewport"] = dimensions
-                            view.get_settings().set_property(
-                                "javascript-can-open-windows-automatically",
-                                True,
-                            )
                             state["initial_uri"] = view.get_uri()
                             view.evaluate_javascript("history.pushState({}, '', '/spa')", -1)
                             state["phase"] = 11
@@ -190,8 +189,8 @@ def run():
                     window.back_button.emit("clicked")
                     state["phase"] = 12
                 elif state["phase"] == 12 and window.webview.get_uri() == state["initial_uri"]:
-                    assert window.back_button.get_sensitive()
-                    assert window.back_button.get_icon_name() == "go-home-symbolic"
+                    assert not window.back_button.get_visible()
+                    assert not window.back_button.get_sensitive()
                     window.webview.evaluate_javascript("location.hash = 'section'", -1)
                     state["phase"] = 13
                 elif (
@@ -223,9 +222,6 @@ def run():
                     and window.webview.get_uri() == state["initial_uri"]
                     and not window.webview.is_loading()
                 ):
-                    window.webview.get_settings().set_property(
-                        "media-playback-requires-user-gesture", False
-                    )
                     window.webview.evaluate_javascript(
                         "globalThis.testAudio = new AudioContext(); "
                         "const oscillator = testAudio.createOscillator(); "
@@ -247,9 +243,6 @@ def run():
                     assert window.toolbar.get_reveal_top_bars()
                     assert window.back_button.get_sensitive()
                     window.webview.evaluate_javascript("testAudio.close()", -1)
-                    window.webview.get_settings().set_property(
-                        "media-playback-requires-user-gesture", True
-                    )
                     window.back_button.emit("clicked")
                     state["phase"] = 19
                 elif state["phase"] == 19 and window.webview.get_uri() == state["initial_uri"]:
@@ -266,10 +259,10 @@ def run():
                 elif state["phase"] == 21:
                     if window.webview.get_title() != "Mini smoke" or window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
-                    assert window.back_button.get_sensitive()
-                    assert window.back_button.get_icon_name() == "go-home-symbolic"
+                    assert not window.back_button.get_visible()
+                    assert not window.back_button.get_sensitive()
                     assert window.lookup_action("forward").get_enabled()
-                    window.back_button.emit("clicked")
+                    window.home_button.emit("clicked")
                     assert window.stack.get_visible_child_name() == "home"
                     assert not window.back_button.get_visible()
                     window.home_entry.set_text(base)
@@ -291,7 +284,7 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     if not state.get("policy_link_checked"):
                         # A site can change the target after our capture listener.
-                        # Exercise WebKit's new-window policy fallback as well.
+                        # Exercise Chromium's new-window policy fallback as well.
                         window.webview.evaluate_javascript(
                             "const link = document.querySelector('a'); "
                             "link.addEventListener('click', () => link.target = '_blank', "
@@ -342,7 +335,7 @@ def run():
                     for name in ["Notes", "Calendar", "Mail", "Projects", "Music"]:
                         app.library.record_visit(f"https://{name.lower()}.example", name)
                     app.library.record_visit(base + "/second", "Local app")
-                    window.activate_action("win.home", None)
+                    window.home_button.emit("clicked")
                     assert window.stack.get_visible_child_name() == "home"
                     assert window.get_title() == "Mini Browser"
                     assert not window.back_button.get_visible()
@@ -374,7 +367,7 @@ def run():
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "history, bookmark, settings imports, home entry, recent apps, "
                         "same-window links/popups/POST, Back for links/typed URLs/History API/"
-                        "fragments, Home fallback, hidden home button, header restored on media "
+                        "fragments, persistent Home button, header restored on media "
                         "URL change, explicit new window, close"
                     )
                     window.close()

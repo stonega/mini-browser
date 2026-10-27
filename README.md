@@ -2,7 +2,7 @@
 
 A native GNOME web browser with a small footprint on your screen.
 
-- A native GNOME header bar with Back, the page title, and close button, plus web content.
+- A native GNOME header bar with Home, Back, the page title, and close button, plus web content.
 - Links requesting a new tab or window open in the current window; Ctrl+N opens another.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
@@ -15,9 +15,10 @@ A native GNOME web browser with a small footprint on your screen.
 - Shared, persistent website sessions across Mini Browser windows.
 - Native dialogs for addresses, the searchable library, import, and downloads.
 
-See the [0.2.5 release notes](docs/user/releases.md) for the latest changes.
+See the [release notes](docs/user/releases.md) for the latest changes.
 
-Built with Python, GTK 4, libadwaita, and WebKitGTK 6.0.
+Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
+The 0.3.0 development tree migrates the main app; published RPMs may still use WebKit.
 
 ## Fedora RPM
 
@@ -35,12 +36,12 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.2.5-1.fc45.noarch.rpm
+sudo dnf install ./dist/mini-browser-0.3.0-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
 Build tools: `rpm-build`, `desktop-file-utils`, `python3-cryptography` (44+),
-and `ruff`. The binary and source RPMs are written to `dist/`. Installing the
+`cmake`, `ninja-build`, `gcc-c++`, and `ruff`. The binary and source RPMs are written to `dist/`. Installing the
 package adds Mini Browser to GNOME's launcher and leaves personal browser data
 in your account. Restart existing browser windows after an upgrade.
 
@@ -49,12 +50,13 @@ in your account. Restart existing browser windows after an upgrade.
 On Fedora, install the native runtime packages if needed:
 
 ```sh
-sudo dnf install python3-gobject gtk4 libadwaita webkitgtk6.0 python3-cryptography
+sudo dnf install python3-gobject gtk4 libadwaita python3-cryptography cmake ninja-build gcc-c++
 ```
 
 From this directory:
 
 ```sh
+./scripts/build-cef
 ./scripts/run
 ./scripts/run https://www.gnome.org
 ./scripts/run 'weather in Taipei'
@@ -65,7 +67,7 @@ and tiles for recently opened sites. The header bar's three-line menu, after the
 layout button, contains Settings for devices, imports, passwords, and your library, plus
 About Mini Browser with the app version and license. While browsing, the header
 bar sits above the page. The narrow window lets responsive websites use their compact
-layout; the browser keeps WebKit's normal user agent.
+layout; the browser keeps Chromium's normal desktop user agent.
 
 Pinning uses the bundled Mini Browser Pin GNOME Shell extension. After installing
 the RPM or running `scripts/install`, log out and back in, then run
@@ -164,7 +166,7 @@ Install Ruff (`sudo dnf install ruff`), then run:
 ```
 
 The smoke test uses a local HTTP server and a temporary data directory. It checks
-the actual WebKit renderer, portrait viewport, popup windows, shortcuts, history,
+the actual Chromium renderer, portrait viewport, popup windows, shortcuts, history,
 bookmarks, native dialogs, and media layouts with a generated WAV and canvas video.
 It never imports a real Chrome profile.
 GNOME Shell and `dbus-run-session` are required. Test windows run on a private

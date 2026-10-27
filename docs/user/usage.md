@@ -4,10 +4,10 @@ Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 Home has a **Devices** group for detected and saved phones and an **Apps** group
 for up to six recently opened sites. A native GNOME header
-bar shows Back, the page title, pin, layout icon, three-line main menu, and close button.
-Back is hidden on the home page. On other pages, it returns to the previous page.
-When there is no previous page, it becomes a Home button that returns to the home
-page.
+bar always includes a Home button, followed by Back when available, the page
+title, pin, layout icon, three-line main menu, and close button.
+Home returns to the home page even when browsing history is available.
+Back returns to the previous page and is hidden when there is no previous page.
 Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
@@ -21,6 +21,10 @@ Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
 saved passwords, Devices, and shortcuts.
 Choose **New Window** in the same menu (or press Ctrl+N) to open another portrait window.
+Choose **Refresh Page** (or press Ctrl+R or F5) to reload the current page.
+If a page stays partly loaded, choose **Reload Without Cache** (Ctrl+Shift+R or
+Ctrl+F5) to fetch its resources again. This keeps cookies and saved sign-ins;
+it does not reset the website's stored data.
 Choose **About Mini Browser** in the same menu to see the app version and license.
 
 Website links that request a new tab or window open in the current window, as do
@@ -101,6 +105,8 @@ other windows and visible as you switch workspaces. Unpinning turns both off.
 Audio and video modes turn pinning on automatically; click it to unpin the
 player. Returning to Full page restores the pin setting from before media mode.
 Each window has its own pin setting.
+The active pin uses the theme's accent color and a filled icon; an inactive pin
+uses an outlined icon.
 
 Pinning requires the bundled **Mini Browser Pin** GNOME Shell extension on GNOME
 45–51. The RPM and `scripts/install` install it. After installation, log out and
@@ -116,7 +122,7 @@ Browsing and media playback remain available. The extension only accepts request
 window owned by the calling application; it does not read page content.
 
 Audio and video modes hide the title bar for an immersive view. Move the pointer
-to the top edge to reveal Back, pin, layout, main menu, and Close, or press F10 to reveal
+to the top edge to reveal Home, Back, pin, layout, main menu, and Close, or press F10 to reveal
 and focus the layout button. The bar overlays the player and hides after you
 move away; it stays visible while its controls have keyboard focus or either menu
 is open. Full page restores the usual title bar.
@@ -148,7 +154,7 @@ inside shadow DOM require the website's own play/pause controls. Mute works for
 the whole page, including those players. Websites can also restrict background
 playback or reject playback requests.
 
-Choose **Video player** to focus a main-page video with WebKit's playback controls.
+Choose **Video player** to focus a main-page video with Chromium's playback controls.
 Its initial window proportions match the video's own aspect ratio, usually at
 640 pixels wide; tall videos shrink to fit the monitor. You can still resize it
 freely. When video dimensions are unavailable, the default is 640 × 360 (16:9).
@@ -158,7 +164,7 @@ original styling and controls restored when you leave video mode.
 Responsive players such as YouTube stay fitted to the video window as it resizes,
 with the surrounding page and its controls hidden behind a black backdrop.
 Videos in embedded frames, shadow DOM, or existing website popovers are not supported.
-Video mode requires WebKit's Popover API; older versions leave this option disabled.
+Video mode uses DOM fullscreen inside the app's content area; the GTK window stays resizable.
 
 Choose **Full page** or press Escape to return to the previous size and
 maximized/fullscreen state. This remains available after media pauses or ends.
@@ -224,7 +230,7 @@ PIN or master password. Changing the PIN does not change existing backup copies.
 
 ## Local data
 
-Mini Browser keeps the library, its own cookies, and WebKit site data under
+Mini Browser keeps the library, its own cookies, and Chromium site data under
 `~/.local/share/mini-browser`. Caches are under `~/.cache/mini-browser`.
 `XDG_DATA_HOME` and `XDG_CACHE_HOME` are respected when set. Chrome source
 profiles are never rewritten by the importer.
@@ -238,6 +244,14 @@ master password is never saved to disk.
 
 To reset browser data, first close every Mini Browser window and wait for any
 import or download to finish. Remove `library.sqlite3` to clear bookmarks and
-history. Remove `cookies.sqlite3` and the `webkit` data directory to reset
+history. Remove the `chromium` data directory to reset
 website sessions and site storage. Keep the `app` subdirectory if you installed
 the application with `scripts/install`.
+
+
+The Chromium migration preserves bookmarks, history, and the encrypted password
+vault. Existing WebKit cookies and site data are left in place, but cannot be
+used by Chromium; sign in to websites again after upgrading. Earlier data remains
+in `webkit` and `cookies.sqlite3` until you remove it yourself. Network requests
+use the system proxy settings. DRM-protected video and proprietary codecs are
+not included in the bundled engine.

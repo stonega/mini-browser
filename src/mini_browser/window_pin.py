@@ -1,6 +1,8 @@
 """Always-on-top control through the scoped GNOME Shell companion extension."""
 
-from .gtk import Adw, Gio, GLib
+from pathlib import Path
+
+from .gtk import Adw, Gio, GLib, Gtk
 
 BUS_NAME = "io.github.stone.MiniBrowser.WindowPin"
 OBJECT_PATH = "/io/github/stone/MiniBrowser/WindowPin"
@@ -12,6 +14,10 @@ class WindowPin:
     def __init__(self, window, button):
         self.window = window
         self.button = button
+        theme = Gtk.IconTheme.get_for_display(window.get_display())
+        icon_path = str(Path(__file__).with_name("icons"))
+        if icon_path not in theme.get_search_path():
+            theme.add_search_path(icon_path)
         self.available = False
         self.pinned = False
         self.requested = None
@@ -46,6 +52,13 @@ class WindowPin:
 
     def _render(self):
         self.button.set_active(self.pinned)
+        self.button.set_icon_name(
+            "view-pin-symbolic" if self.pinned else "mini-browser-pin-outline-symbolic"
+        )
+        if self.pinned:
+            self.button.add_css_class("suggested-action")
+        else:
+            self.button.remove_css_class("suggested-action")
         self.button.set_sensitive(not self.pending and not self._enabling)
         self.button.set_tooltip_text(
             "Unpin window"

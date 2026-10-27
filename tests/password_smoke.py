@@ -1,4 +1,4 @@
-"""Real vault dialogs, CSV import and isolated-world WebKit login filling."""
+"""Real vault dialogs, CSV import and isolated-world Chromium login filling."""
 
 import csv
 import json

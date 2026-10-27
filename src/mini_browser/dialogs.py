@@ -395,6 +395,7 @@ def shortcuts_dialog(window):
         ("New window", "<Primary>n"),
         ("Close window", "<Primary>w"),
         ("Reload", "<Primary>r"),
+        ("Reload without cache", "<Primary><Shift>r"),
         ("Go back", "<Alt>Left"),
         ("Go forward", "<Alt>Right"),
         ("Bookmarks and history", "<Primary>b"),

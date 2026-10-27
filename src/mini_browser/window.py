@@ -10,7 +10,7 @@ from .dialogs import (
     settings_dialog,
     shortcuts_dialog,
 )
-from .gtk import Adw, Gio, GLib, Gtk, Pango, WebKit
+from .gtk import Adw, Gio, GLib, Gtk, Pango, Web
 from .media import video_window_size
 from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
@@ -44,13 +44,13 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._media_generation = 0
         self._media_drag_origin = None
         self.document_generation = 0
-        self.webview = WebKit.WebView(network_session=app.network_session)
+        self.webview = Web.View(network_session=app.network_session)
         self._user_content_manager = self.webview.get_user_content_manager()
         self._user_content_manager.add_script(
-            WebKit.UserScript.new_for_world(
+            Web.UserScript.new_for_world(
                 RETARGET,
-                WebKit.UserContentInjectedFrames.ALL_FRAMES,
-                WebKit.UserScriptInjectionTime.START,
+                Web.UserContentInjectedFrames.ALL_FRAMES,
+                Web.UserScriptInjectionTime.START,
                 "mini-browser-navigation",
                 None,
                 None,
@@ -58,28 +58,26 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
         if not getattr(self._user_content_manager, "_mini_vault_world", False):
             # Register and retain the isolated world across asynchronous API calls.
-            script = WebKit.UserScript.new_for_world(
+            script = Web.UserScript.new_for_world(
                 autofill.INITIALIZE,
-                WebKit.UserContentInjectedFrames.TOP_FRAME,
-                WebKit.UserScriptInjectionTime.START,
+                Web.UserContentInjectedFrames.TOP_FRAME,
+                Web.UserScriptInjectionTime.START,
                 autofill.WORLD,
                 None,
                 None,
             )
             self._user_content_manager.add_script(script)
             self._user_content_manager._mini_vault_world = True
-        settings = self.webview.get_settings()
-        settings.set_property("enable-developer-extras", False)
-        settings.set_property("media-playback-requires-user-gesture", True)
-        self.webview.connect("create", self._create_webview)
         self.webview.connect("close", lambda *_: self.close())
         self.webview.connect("load-changed", self._load_changed)
         self.webview.connect("load-failed", self._load_failed)
         self.webview.connect("load-failed-with-tls-errors", self._tls_failed)
         self.webview.connect("notify::title", self._title_changed)
-        self.webview.connect("decide-policy", self._decide_policy)
+        self.webview.connect(
+            "unsupported-uri", lambda *_: self.toast("This link uses an unsupported address type.")
+        )
         self.webview.connect("web-process-terminated", self._web_process_terminated)
-        self.webview.connect("notify::is-playing-audio", self._audio_changed)
+        self.webview.connect("notify::playing-audio", self._audio_changed)
         self.webview.connect("notify::is-muted", self._audio_changed)
 
         self.stack = Gtk.Stack(hhomogeneous=False, vhomogeneous=False)
@@ -105,6 +103,12 @@ class BrowserWindow(Adw.ApplicationWindow):
 
         self.toasts = Adw.ToastOverlay(child=self.stack)
         self.headerbar = Adw.HeaderBar(decoration_layout=":close")
+        self.home_button = Gtk.Button(
+            icon_name="go-home-symbolic",
+            tooltip_text="Home (Alt+Home)",
+            action_name="win.home",
+        )
+        self.headerbar.pack_start(self.home_button)
         self.back_button = Gtk.Button(
             icon_name="go-previous-symbolic",
             tooltip_text="Back (Alt+Left)",
@@ -134,6 +138,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         header_actions.append(self.layout_button)
         menu = Gio.Menu()
         menu.append("New Window", "app.new-window")
+        menu.append("Refresh Page", "win.reload")
+        menu.append("Reload Without Cache", "win.reload-bypass-cache")
         menu.append("Settings", "win.settings")
         menu.append(f"About {APP_NAME}", "win.about")
         self.menu_button = Gtk.MenuButton(
@@ -377,21 +383,13 @@ class BrowserWindow(Adw.ApplicationWindow):
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
         media = self.audio_mode or self.video_mode
         can_go_back = media or self.webview.can_go_back()
-        home_button = browsing and not can_go_back
-        self.back_button.set_visible(browsing)
+        self.back_button.set_visible(browsing and can_go_back)
         self.lookup_action("back").set_enabled(browsing and can_go_back)
-        self.back_button.set_action_name("win.home" if home_button else "win.back")
-        self.back_button.set_icon_name(
-            "go-home-symbolic" if home_button else "go-previous-symbolic"
-        )
-        self.back_button.set_tooltip_text(
-            "Home (Alt+Home)"
-            if home_button
-            else "Return to Full page"
-            if media
-            else "Back (Alt+Left)"
-        )
+        self.back_button.set_tooltip_text("Return to Full page" if media else "Back (Alt+Left)")
         self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
+        self.lookup_action("reload-bypass-cache").set_enabled(
+            browsing and bool(self.webview.get_uri())
+        )
 
     def _back(self):
         if self.audio_mode or self.video_mode:
@@ -528,7 +526,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             gesture.set_state(Gtk.EventSequenceState.DENIED)
             return
         self._media_drag_origin = (surface_x, surface_y, event.get_time())
-        # WebKit claims presses immediately. Hold this sequence until it is
+        # The web surface claims presses immediately. Hold this sequence until it is
         # either a window drag or a click replayed by GTK on denial below.
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
 
@@ -739,6 +737,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "video-player": self._show_video_player,
             "close": self.close,
             "reload": self._retry,
+            "reload-bypass-cache": self.webview.reload_bypass_cache,
             "back": self._back,
             "forward": self.webview.go_forward,
             "stop": self._stop,
@@ -773,52 +772,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.webview.load_uri(uri)
         self.webview.grab_focus()
 
-    def _create_webview(self, _view, navigation):
-        self._open_in_current_view(navigation.get_request())
-        return None
-
-    def _open_in_current_view(self, request):
-        if self._closing:
-            return
-        uri = request.get_uri()
-        if uri == "about:blank":
-            return
-        if not is_web_url(uri):
-            self.toast("This link uses an unsupported address type.")
-            return
-        if request.get_http_method() != "GET":
-            self.toast("This form could not be opened in the current window.")
-            return
-        self._restore_page()
-        self.stack.set_visible_child_name("web")
-        self.webview.load_request(request)
-        self.webview.grab_focus()
-
-    def _decide_policy(self, _view, decision, kind):
-        if kind in (
-            WebKit.PolicyDecisionType.NAVIGATION_ACTION,
-            WebKit.PolicyDecisionType.NEW_WINDOW_ACTION,
-        ):
-            uri = decision.get_navigation_action().get_request().get_uri()
-            if uri != "about:blank" and not is_web_url(uri):
-                decision.ignore()
-                self.toast("This link uses an unsupported address type.")
-                return True
-            if kind == WebKit.PolicyDecisionType.NEW_WINDOW_ACTION:
-                request = decision.get_navigation_action().get_request()
-                decision.ignore()
-                self._open_in_current_view(request)
-                return True
-        elif kind == WebKit.PolicyDecisionType.RESPONSE:
-            if not decision.is_mime_type_supported():
-                decision.download()
-                return True
-        return False
-
     def _load_changed(self, view, event):
         if self._closing:
             return
-        if event == WebKit.LoadEvent.STARTED:
+        if event == Web.LoadEvent.STARTED:
             self.player.reset()
             self.video_player.reset()
             self._video_available = False
@@ -826,7 +783,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.document_generation += 1
             self.failed = False
             self.stack.set_visible_child_name("web")
-        elif event == WebKit.LoadEvent.FINISHED and not self.failed:
+        elif event == Web.LoadEvent.FINISHED and not self.failed:
             self._probe_video()
             uri = view.get_uri() or ""
             if is_web_url(uri):
@@ -857,9 +814,6 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._audio_changed()
 
     def _load_failed(self, _view, _event, uri, error):
-        if error.matches(WebKit.NetworkError.quark(), WebKit.NetworkError.CANCELLED):
-            self.failed = True
-            return True
         if self.failed:  # Keep the specific TLS message when both signals fire.
             return True
         self._show_error(uri, "Check the address and your internet connection, then try again.")
@@ -915,5 +869,5 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.video_player.reset()
         self.webview.stop_loading()
         self.webview.set_is_muted(True)
-        self.webview.load_uri("about:blank")
+        self.webview.close()
         return False
