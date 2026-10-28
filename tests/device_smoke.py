@@ -165,7 +165,9 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     window = state["android_window"]
                     assert window.get_default_size() == (550, 740)
-                    window.close()
+                    window.home_button.emit("clicked")
+                    assert window._closing and window not in app.get_windows()
+                    assert app.get_windows() == [state["home"]]
                     window = state["android_window"] = app.open_device(state["android"].id)
                     window._test_paintable = Gtk.WidgetPaintable.new(window)
                     assert window.get_default_size() == (550, 740)

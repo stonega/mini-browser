@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hide the page layout button in Home windows, including the History tab.
+- Make Home close the app window and focus an existing Home window, creating a clean one when needed; add Home to phone windows.
 - Simplify script-app loading to a centered monospace log with typing animation and a blinking cursor.
 - Combine devices, script apps, and bookmarked apps into one Home Apps grid without group titles.
 - Show a selectable, monospace agent prompt with a Copy prompt button at the bottom of Home's Apps tab.

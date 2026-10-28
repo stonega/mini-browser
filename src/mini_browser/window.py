@@ -630,6 +630,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         if self.back_history.get_visible():
             self.back_history.popdown()
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
+        self.layout_button.set_visible(browsing)
         media = self.audio_mode or self.video_mode
         can_go_back = media or self.webview.can_go_back()
         self.back_button.set_visible(browsing and can_go_back)
@@ -992,7 +993,7 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _add_actions(self):
         for name, callback in {
             "address": lambda: address_dialog(self),
-            "home": self.show_home,
+            "home": lambda: self.get_application().return_home(self),
             "settings": lambda: settings_dialog(self),
             "devices": self._devices_dialog,
             "about": lambda: about_dialog(self),

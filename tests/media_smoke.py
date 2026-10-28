@@ -634,10 +634,19 @@ def run():
             assert window.webview.get_is_muted()
             window.player.mute_button.emit("clicked")
             window.home_button.emit("clicked")
+            assert window._closing
+            assert original_view.get_is_muted()
+            yield from wait(
+                "Home destroys the playing app",
+                lambda: original_view.identifier not in app.network_session.views,
+            )
+            assert not original_view.is_playing_audio()
+            window = app.get_windows()[0]
+            state["paintable"] = Gtk.WidgetPaintable.new(window)
+            original_view = window.webview
             assert not window.audio_mode
             assert window.stack.get_visible_child_name() == "home"
             assert not window.lookup_action("audio-player").get_enabled()
-            yield from javascript(window, "await context.close(); return true;")
 
             window.load_uri(origin + "/video")
             yield from wait(

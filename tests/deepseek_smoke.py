@@ -165,18 +165,19 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     assert running(state["pid"])
                     second.home_button.emit("clicked")
+                    assert second._closing and app.get_windows() == [state["home"]]
                     state["phase"] = 3
                 elif phase == 3 and not running(state["pid"]):
                     # Cancel a slow startup through Home, then immediately reopen.
                     fake_harness(helpers, delay=0.4, child=True)
-                    second = state["second"]
-                    second._start_deepseek()
+                    state["second"] = state["home"]._open_deepseek()
                     state["phase"] = 4
                 elif phase == 4 and len(runs(helpers)) >= 2:
                     second = state["second"]
                     second.home_button.emit("clicked")
                     assert second._deepseek_owner is None
-                    second._start_deepseek()
+                    assert second._closing and app.get_windows() == [state["home"]]
+                    state["second"] = state["home"]._open_deepseek()
                     state["phase"] = 5
                 elif phase == 5 and loaded(state["second"]):
                     assert state["second"].get_default_size() == (850, 650)

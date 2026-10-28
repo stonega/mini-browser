@@ -270,6 +270,31 @@ class BrowserApplication(Adw.Application):
         window.present()
         return window
 
+    def return_home(self, source):
+        if source._closing:
+            return None
+        if isinstance(source, BrowserWindow) and source.stack.get_visible_child_name() == "home":
+            source.present()
+            return source
+        home = next(
+            (
+                window
+                for window in self.get_windows()
+                if isinstance(window, BrowserWindow)
+                and not window._closing
+                and window.stack.get_visible_child_name() == "home"
+            ),
+            None,
+        )
+        # Keep a Home window alive before closing the application's last app.
+        if home is None:
+            home = self.new_window()
+        else:
+            home.present()
+        if source is not home:
+            source.close()
+        return home
+
     def open_device(self, device_id):
         from .device_window import DeviceWindow
 

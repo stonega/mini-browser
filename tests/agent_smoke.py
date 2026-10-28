@@ -98,6 +98,10 @@ def run():
                 wait_title(initial, "Agent fixture")
                 assert cli("apps")["apps"][0]["title"] == saved_title
                 cli("action", initial, "home")
+                homes = cli("list")["pages"]
+                assert len(homes) == 1 and homes[0]["layout"] == "home"
+                assert homes[0]["pageId"] != initial
+                initial = homes[0]["pageId"]
                 cli("add-app", "javascript:alert(1)", success=False)
                 page = cli("open", base)["pageId"]
                 wait_title(page, "Agent fixture")
@@ -153,9 +157,12 @@ def run():
                 cli("native-click", page, close)
                 time.sleep(0.2)
                 cli("action", page, "home")
-                assert (
-                    next(p for p in cli("list")["pages"] if p["pageId"] == page)["layout"] == "home"
-                )
+                homes = cli("list")["pages"]
+                assert len(homes) == 1
+                assert homes[0]["pageId"] == initial and homes[0]["layout"] == "home"
+                page = initial
+                # Keep another Home open while this reused window opens an app.
+                initial = cli("open")["pageId"]
                 native = cli("inspect", page)
                 assert any(
                     n.get("tooltip") == f"{saved_title}\n{saved_url}" for n in native["widgets"]

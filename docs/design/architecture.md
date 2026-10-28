@@ -55,8 +55,15 @@ Full page uses the native `view-paged-symbolic` icon.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track Chromium's back-forward list and
-are disabled on the home page, where the Back button is hidden. Home has its own
-button in every header. Back is hidden on pages without back history. Media layouts
+are disabled on the home page, where the Back and page layout buttons are hidden.
+The layout button appears when an app is opened. Home has its own
+button in every header. The `win.home` action calls `BrowserApplication.return_home`
+to present an existing Home window or create a clean one before closing the source
+app window. A source already on Home stays open. Closing uses the normal cleanup
+for Chromium, script leases, media playback and phone transports; new Home windows
+start on Apps with an empty entry and fresh WebView. Internal script-error recovery
+can still show Home in place to retain its retry dialog.
+Back is hidden on pages without back history. Media layouts
 keep both Home and Back, with Back restoring Full page. URI notifications and load events also refresh
 their state. Same-document URL changes (History API or fragments) leave media
 mode and restore the browsing header, just like full-page navigation.

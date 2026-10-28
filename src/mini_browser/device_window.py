@@ -59,6 +59,10 @@ class DeviceWindow(Adw.ApplicationWindow):
         self.toasts = Adw.ToastOverlay(child=self.stack)
         self.title_widget = Adw.WindowTitle(title=device.name, subtitle=KINDS[device.kind])
         header = Adw.HeaderBar(title_widget=self.title_widget, decoration_layout=":close")
+        self.home_button = Gtk.Button(
+            icon_name="go-home-symbolic", tooltip_text="Home (Alt+Home)", action_name="win.home"
+        )
+        header.pack_start(self.home_button)
         self.pin_button = Gtk.ToggleButton(icon_name="view-pin-symbolic", tooltip_text="Pin on top")
         header.pack_end(self.pin_button)
         self.pin = WindowPin(self, self.pin_button)
@@ -81,6 +85,7 @@ class DeviceWindow(Adw.ApplicationWindow):
         toolbar.add_top_bar(header)
         self.set_content(toolbar)
         for name, callback in {
+            "home": lambda: app.return_home(self),
             "close": self.close,
             "reload": self.start,
             "stop": self.disconnect,

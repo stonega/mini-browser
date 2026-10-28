@@ -100,8 +100,11 @@ def run():
                 if state["phase"] == 0:
                     assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     assert window.stack.get_visible_child_name() == "home"
+                    assert not window.layout_button.get_visible()
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.home_sections.get_visible_child_name() == "apps"
+                    window.home_button.emit("clicked")
+                    assert app.get_windows() == [window]
                     pages = window.home_sections.get_pages()
                     assert [pages[i].get_title() for i in range(2)] == ["Apps", "History"]
                     assert (
@@ -116,6 +119,7 @@ def run():
                     )
                     assert not window.lookup_action("bookmark").get_enabled()
                     window.home_sections.set_visible_child_name("history")
+                    assert not window.layout_button.get_visible()
                     assert window.history_stack.get_visible_child_name() == "empty"
                     window.home_sections.set_visible_child_name("apps")
                     assert not window.back_button.get_visible()
@@ -154,6 +158,7 @@ def run():
                     if window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
                     assert window.stack.get_visible_child_name() == "web"
+                    assert window.layout_button.get_visible()
                     assert len(app.library.search("history")) == 1
                     assert len(app.library.recent_apps()) == 1
                     if len(sys.argv) > 1:
@@ -312,8 +317,18 @@ def run():
                     assert not window.back_button.get_sensitive()
                     assert window.lookup_action("forward").get_enabled()
                     window.home_button.emit("clicked")
+                    assert window._closing and window not in app.get_windows()
+                    previous = window
+                    window = app.get_windows()[0]
+                    assert window is not previous
+                    assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                    assert window.home_entry.get_text() == ""
+                    assert window.home_sections.get_visible_child_name() == "apps"
+                    assert window.webview.get_back_forward_list().get_length() == 0
+                    assert not window.layout_button.get_visible()
                     assert window.stack.get_visible_child_name() == "home"
                     assert not window.back_button.get_visible()
+                    state["paintable"] = Gtk.WidgetPaintable.new(window)
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
                     state["phase"] = 211
@@ -377,9 +392,12 @@ def run():
                     assert len(windows) == 2
                     other = next(w for w in windows if w.stack.get_visible_child_name() == "home")
                     assert other.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
-                    other.close()
+                    other.home_entry.set_text("Keep this Home search")
+                    other.home_sections.set_visible_child_name("history")
+                    state["existing_home"] = other
                     state["phase"] = 3
-                elif state["phase"] == 3 and len(windows) == 1:
+                elif state["phase"] == 3:
+                    window = next(w for w in windows if w is not state["existing_home"])
                     # Imported addresses and separate paths must all appear in History.
                     app.library.import_records(
                         [],
@@ -389,6 +407,15 @@ def run():
                         app.library.record_visit(f"https://{name.lower()}.example", name)
                     app.library.record_visit(base + "/second", "Local app")
                     window.home_button.emit("clicked")
+                    assert window._closing and window not in app.get_windows()
+                    window = state["existing_home"]
+                    assert app.get_windows() == [window]
+                    assert not window.layout_button.get_visible()
+                    assert window.home_entry.get_text() == "Keep this Home search"
+                    assert window.home_sections.get_visible_child_name() == "history"
+                    window.home_entry.set_text("")
+                    window.home_sections.set_visible_child_name("apps")
+                    state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.stack.get_visible_child_name() == "home"
                     assert window.get_title() == "Mini Browser"
                     assert not window.back_button.get_visible()
@@ -398,6 +425,7 @@ def run():
                     state["ready"] = time.monotonic() + 0.2
                     state["phase"] = 31
                 elif state["phase"] == 31 and time.monotonic() >= state["ready"]:
+                    assert app.get_active_window() is window
                     if len(sys.argv) > 1:
                         path = Path(sys.argv[1])
                         snapshot(window, str(path.with_name(path.stem + "-home.png")))
@@ -491,7 +519,8 @@ def run():
                         "complete history list, URL app bookmarks, Apps/History tabs, "
                         "settings imports, home entry, "
                         "same-window links/popups/POST, Back for links/typed URLs/History API/"
-                        "fragments, persistent Home button, header restored on media "
+                        "fragments, Home closes apps and creates or focuses Home, "
+                        "header restored on media "
                         "URL change, explicit new window, remembered per-host sizes, close"
                     )
                     window.close()
