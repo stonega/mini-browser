@@ -96,14 +96,17 @@ def run():
                 if not windows:
                     return GLib.SOURCE_CONTINUE
                 window = windows[-1]
-                assert window.home_button.get_visible() and window.home_button.get_sensitive()
+                assert window.home_button.get_visible() == (
+                    window.stack.get_visible_child_name() != "home"
+                )
+                assert window.home_button.get_sensitive()
                 if state["phase"] == 0:
                     assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     assert window.stack.get_visible_child_name() == "home"
                     assert not window.layout_button.get_visible()
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.home_sections.get_visible_child_name() == "apps"
-                    window.home_button.emit("clicked")
+                    window.activate_action("win.home", None)
                     assert app.get_windows() == [window]
                     pages = window.home_sections.get_pages()
                     assert [pages[i].get_title() for i in range(2)] == ["Apps", "History"]
@@ -119,6 +122,7 @@ def run():
                     )
                     assert not window.lookup_action("bookmark").get_enabled()
                     window.home_sections.set_visible_child_name("history")
+                    assert not window.home_button.get_visible()
                     assert not window.layout_button.get_visible()
                     assert window.history_stack.get_visible_child_name() == "empty"
                     window.home_sections.set_visible_child_name("apps")

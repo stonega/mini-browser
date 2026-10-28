@@ -10,9 +10,9 @@ row spans the window and shows the page title, full URL, and last visit time;
 long text is shortened to fit, with details available on hover. Select a row to
 reopen that exact page. Repeat visits update the address's time and visit count.
 A native GNOME header
-bar always includes a Home button, followed by Back when available, the page
-title, pin, three-line main menu, and close button. The page layout button appears
-in opened apps and stays hidden on Home, including its History tab.
+bar includes a Home button in opened apps, followed by Back when available, the page
+title, pin, three-line main menu, and close button. The Home and page layout buttons
+stay hidden on Home, including its History tab.
 Home (or Alt+Home) closes the current app window and activates an existing Home
 window. If none is open, it creates a fresh Home window with an empty search bar
 and the Apps tab selected. Using Home while already on Home keeps that window.

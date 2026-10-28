@@ -630,6 +630,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         if self.back_history.get_visible():
             self.back_history.popdown()
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
+        self.home_button.set_visible(browsing)
         self.layout_button.set_visible(browsing)
         media = self.audio_mode or self.video_mode
         can_go_back = media or self.webview.can_go_back()
