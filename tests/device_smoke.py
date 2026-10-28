@@ -79,14 +79,10 @@ def run():
                     assert app.devices.all() == []
                     detected, status = app.device_tiles()[0]
                     assert status == "Connected"
-                    assert home.devices_group.get_visible()
-                    assert (
-                        home.script_tiles.get_child_at_index(0).get_child() == home.deepseek_button
-                    )
-                    assert home.script_tiles.get_child_at_index(1) is None
-                    assert not home.devices_empty.get_visible()
-                    assert home.app_tiles.get_child_at_index(1) is not None
-                    home.device_tiles.get_child_at_index(0).get_child().emit("clicked")
+                    assert home.app_tiles.get_child_at_index(1).get_child() == home.deepseek_button
+                    assert home.app_tiles.get_child_at_index(3) is not None
+                    assert home.app_tiles.get_child_at_index(4) is None
+                    home.app_tiles.get_child_at_index(0).get_child().emit("clicked")
                     state["detected_window"] = app.device_windows[detected.id]
                     state["detected_window"]._test_paintable = Gtk.WidgetPaintable.new(
                         state["detected_window"]
@@ -114,7 +110,7 @@ def run():
                     rename.save_button.emit("clicked")
                     assert app.devices.all()[0].id == android.id
                     state["manager"].force_close()
-                    tile = state["home"].device_tiles.get_child_at_index(0).get_child()
+                    tile = state["home"].app_tiles.get_child_at_index(0).get_child()
                     tile.emit("clicked")
                     window = state["android_window"] = app.device_windows[android.id]
                     assert window is state["detected_window"]

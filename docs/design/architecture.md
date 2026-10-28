@@ -33,13 +33,17 @@ compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
 `Adw.HeaderBar` with Home, Back, the page title, pin toggle, layout menu, main menu, and close
 control above the content. The home body contains a native `Gtk.StackSwitcher`
-with Apps and History tabs above a shared search/address entry. Apps groups
-Devices, Script apps (including DeepSeek Harness), and Bookmarked apps. Empty
-device groups show a hint; bookmarked apps include YouTube and Bilibili presets,
-saved Home launchers, and bookmark origins. History uses a `Gtk.ListView` directly
+with Apps and History tabs above a shared search/address entry. Apps uses one
+`Gtk.FlowBox` for devices, script apps (including DeepSeek Harness), saved Home
+launchers, and bookmark origins, including YouTube and Bilibili presets. Tiles
+share continuous rows without group headings or an empty-device placeholder.
+History uses a `Gtk.ListView` directly
 inside a scroller, backed by `Gio.ListStore` and a list-item factory so only
 visible rows need widgets. It shows all stored history addresses, including
 imports, in compact full-width rows with title, URL and last visit time.
+The Apps scroller ends with a wrapped, selectable monospace agent prompt and native Copy
+prompt button. It copies static usage instructions to the GTK clipboard and
+confirms with a toast; it does not expose page data or enable control.
 Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 The three-line main menu follows the layout button and offers New Window,
@@ -187,8 +191,10 @@ lease one shared server. Its worker invokes `npx --yes @deepseek-ai/dsh web
 --no-open --host 127.0.0.1 --port 0` from the user's home directory. The official
 `dsh web:` announcement provides the authenticated startup URL; only loopback
 root URLs are accepted. Output is continuously drained. Each tile click opens
-a separate browser window immediately, displaying a native spinner and startup
-log until the server announces readiness. The worker retains at most 80 sanitized
+a separate browser window immediately, displaying only a centered monospace startup
+log with a typing animation and blinking end cursor until the server announces
+readiness. The borderless log scrolls as it grows; animation catches up with bursts
+and stops and clears on every exit from loading. The worker retains at most 80 sanitized
 lines of 1,000 characters; GTK polls snapshots every 100 ms so verbose output
 cannot flood the main loop. Terminal escape sequences, common credential fields
 and URL query parameters are removed or redacted before display. The log is

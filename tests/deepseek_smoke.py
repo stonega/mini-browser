@@ -46,7 +46,7 @@ def run():
         environment = fake_harness(
             helpers,
             child=True,
-            delay=0.8,
+            delay=2,
             messages=["Installing synthetic package", "token=private-fixture-token"],
         )
         app = BrowserApplication(
@@ -71,8 +71,11 @@ def run():
                     icon = first.deepseek_button.get_child().get_first_child()
                     assert isinstance(icon, Gtk.Image)
                     assert icon.get_paintable().get_intrinsic_width() > 0
-                    assert first.script_tiles.get_child_at_index(1) is None
-                    assert first.app_tiles.get_child_at_index(1) is not None
+                    assert (
+                        first.app_tiles.get_child_at_index(0).get_child() == first.deepseek_button
+                    )
+                    assert first.app_tiles.get_child_at_index(2) is not None
+                    assert first.app_tiles.get_child_at_index(3) is None
                     state["phase"] = 1
                 elif phase == 1:
                     first = state["home"]
@@ -92,7 +95,15 @@ def run():
                     launched = state["first"] = (set(app.get_windows()) - before).pop()
                     assert launched.stack.get_visible_child_name() == "script-loading"
                     assert launched._deepseek_pending
-                    assert launched.script_loading.spinner.get_visible()
+                    loading = launched.script_loading
+                    assert loading.output.get_text() == "▌"
+                    assert loading.output.has_css_class("monospace")
+                    assert not any(
+                        isinstance(widget, (Gtk.Spinner, Gtk.Frame)) for widget in widgets(loading)
+                    )
+                    assert [
+                        widget for widget in widgets(loading) if isinstance(widget, Gtk.Label)
+                    ] == [loading.output]
                     assert launched.get_title() == "DeepSeek Harness"
                     assert first.stack.get_visible_child_name() == "home"
                     launched._test_paintable = Gtk.WidgetPaintable.new(launched)
@@ -102,24 +113,43 @@ def run():
                     state["phase"] = 12
                 elif phase == 12:
                     launched = state["first"]
-                    buffer = launched.script_loading.buffer
-                    output = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
-                    if "Installing synthetic package" not in output:
-                        return GLib.SOURCE_CONTINUE
+                    loading = launched.script_loading
+                    output = loading.output.get_text()
                     assert "private-fixture-token" not in output
+                    if 1 < len(output) < len(loading._target):
+                        state["typed"] = True
+                        assert output.endswith("▌")
+                    if "[redacted]" not in output:
+                        return GLib.SOURCE_CONTINUE
+                    assert state.get("typed"), "Startup output must appear incrementally"
+                    assert "Installing synthetic package" in output
                     assert "[redacted]" in output
-                    # Allow the changed buffer and spinner to reach the rendered frame.
-                    state["ready"] = time.monotonic() + 0.2
+                    assert output[-1] in {"▌", "\u00a0"}
+                    valid, bounds = loading.scroll.compute_bounds(loading)
+                    assert valid
+                    assert (
+                        abs(bounds.get_y() + bounds.get_height() / 2 - loading.get_height() / 2) < 2
+                    )
+                    valid, bounds = loading.output.compute_bounds(loading)
+                    assert valid
+                    assert (
+                        abs(bounds.get_x() + bounds.get_width() / 2 - loading.get_width() / 2) < 2
+                    )
+                    # Leave the completed log idle long enough for its cursor to blink.
+                    state["cursor"] = output[-1]
+                    state["ready"] = time.monotonic() + 0.6
                     state["phase"] = 13
                 elif phase == 13 and time.monotonic() >= state["ready"]:
+                    output = state["first"].script_loading.output.get_text()
+                    assert output[-1] != state["cursor"], "The end cursor must blink while idle"
                     if len(sys.argv) > 1:
                         target = Path(sys.argv[1])
                         snapshot(state["first"], target.with_name(target.stem + "-loading.png"))
                     state["phase"] = 2
                 elif phase == 2 and loaded(state["first"]) and loaded(state["second"]):
                     for window in (state["first"], state["second"]):
-                        assert not window.script_loading.spinner.get_visible()
-                        assert window.script_loading.buffer.get_char_count() == 0
+                        assert window.script_loading._animation_source == 0
+                        assert window.script_loading.output.get_text() == ""
                         assert window._deepseek_log_source == 0
                     assert len(runs(helpers)) == 1, "DeepSeek windows must share one server"
                     assert app.library.search("history") == []
@@ -185,8 +215,8 @@ def run():
                     cancelled.close()
                     assert cancelled._deepseek_owner is None
                     assert cancelled._deepseek_log_source == 0
-                    assert cancelled.script_loading.buffer.get_char_count() == 0
-                    assert not cancelled.script_loading.spinner.get_visible()
+                    assert cancelled.script_loading.output.get_text() == ""
+                    assert cancelled.script_loading._animation_source == 0
                     state["phase"] = 9
                 elif phase == 9 and not any(running(item["pid"]) for item in runs(helpers)):
                     state["completed"] = True
@@ -219,8 +249,8 @@ def run():
         if errors or not state["completed"]:
             raise SystemExit("; ".join(errors) or "Harness smoke exited early")
         print(
-            "PASS: DeepSeek launch window, spinner, live redacted startup log, icon, "
-            "shared server, token exchange, Home/close cleanup, "
+            "PASS: DeepSeek launch window, centered monospace log, typing and cursor, "
+            "redaction, icon, shared server, token exchange, Home/close cleanup, "
             "startup cancellation, rapid reopen, crash, retry and shutdown"
         )
 

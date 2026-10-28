@@ -27,6 +27,20 @@ DEFAULT_WIDTH, DEFAULT_HEIGHT = DEFAULT_SIZE
 AUDIO_WIDTH = 420
 AUDIO_HEIGHT = 200
 
+AGENT_PROMPT = (
+    "Use Mini Browser to open, manage and test the app I request. "
+    "Discover commands with `mini-browser agent --help` and `mini-browser agent tools`. "
+    "Enable control with `mini-browser --agent` if needed, then run "
+    "`mini-browser agent list` to get page IDs. "
+    "Use `mini-browser agent snapshot PAGE` for web elements and "
+    "`mini-browser agent inspect PAGE` for native controls. "
+    "Take a fresh snapshot before using element IDs. "
+    "Save the app on Home with `mini-browser agent add-app URL --title 'App name'`. "
+    "Verify the result with `mini-browser agent screenshot PAGE new.png --native`. "
+    "You can also use Mini Browser's native MCP tools. "
+    "From a source checkout, replace `mini-browser` with `./scripts/run`."
+)
+
 
 class HistoryItem(GObject.Object):
     def __init__(self, record):
@@ -247,30 +261,9 @@ class BrowserWindow(Adw.ApplicationWindow):
                 open_address() if position == Gtk.EntryIconPosition.SECONDARY else None
             ),
         )
-        self.devices_group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        self.devices_group.append(Gtk.Label(label="Devices", xalign=0, css_classes=["heading"]))
-        self.device_tiles = self._tile_grid()
-        self.devices_group.append(self.device_tiles)
-        self.devices_empty = Gtk.Label(
-            label="No devices connected. Add a phone in Settings.",
-            xalign=0,
-            wrap=True,
-            css_classes=["dim-label"],
-        )
-        self.devices_group.append(self.devices_empty)
-        content.append(self.devices_group)
-
-        scripts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        scripts.append(Gtk.Label(label="Script apps", xalign=0, css_classes=["heading"]))
-        self.script_tiles = self._tile_grid()
-        scripts.append(self.script_tiles)
-        content.append(scripts)
-
-        bookmarks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
-        bookmarks.append(Gtk.Label(label="Bookmarked apps", xalign=0, css_classes=["heading"]))
         self.app_tiles = self._tile_grid()
-        bookmarks.append(self.app_tiles)
-        content.append(bookmarks)
+        content.append(self.app_tiles)
+        content.append(self._agent_prompt())
         clamp = Adw.Clamp(maximum_size=420, tightening_threshold=360, child=content)
         self.home_sections.add_titled(
             Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp), "apps", "Apps"
@@ -280,6 +273,40 @@ class BrowserWindow(Adw.ApplicationWindow):
         home.append(self.home_sections)
         self.refresh_recents()
         return home
+
+    def _agent_prompt(self):
+        self.agent_prompt = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            css_classes=["card"],
+        )
+        body = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            margin_top=16,
+            margin_bottom=16,
+            margin_start=16,
+            margin_end=16,
+        )
+        body.append(Gtk.Label(label="Agent prompt", xalign=0, css_classes=["heading"]))
+        self.agent_prompt_text = Gtk.Label(
+            label=AGENT_PROMPT,
+            xalign=0,
+            wrap=True,
+            wrap_mode=Pango.WrapMode.WORD_CHAR,
+            selectable=True,
+            css_classes=["monospace"],
+        )
+        body.append(self.agent_prompt_text)
+        self.copy_agent_prompt_button = Gtk.Button(label="Copy prompt", halign=Gtk.Align.START)
+        self.copy_agent_prompt_button.connect("clicked", self._copy_agent_prompt)
+        body.append(self.copy_agent_prompt_button)
+        self.agent_prompt.append(body)
+        return self.agent_prompt
+
+    def _copy_agent_prompt(self, _button):
+        self.get_clipboard().set(AGENT_PROMPT)
+        self.toast("Agent prompt copied")
 
     def _history_page(self):
         self.history_model = Gio.ListStore.new(HistoryItem)
@@ -371,16 +398,12 @@ class BrowserWindow(Adw.ApplicationWindow):
     def refresh_recents(self):
         """Refresh app launchers and the history tab when it is visible."""
         self.app_tiles.remove_all()
-        self.script_tiles.remove_all()
-        self.device_tiles.remove_all()
         saved = self.library.home_apps()
         saved_sites = {app["site"] for app in saved}
         records = saved + [
             app for app in self.library.bookmarked_apps() if app["site"] not in saved_sites
         ]
         devices = self.get_application().device_tiles()
-        self.devices_empty.set_visible(not devices)
-        self.device_tiles.set_visible(bool(devices))
         icon = Gtk.Image.new_from_file(str(DEEPSEEK_ICON))
         icon.set_pixel_size(44)
         self.deepseek_button = self._app_tile(
@@ -390,7 +413,6 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._open_deepseek,
         )
         self.deepseek_button.set_sensitive(not self._deepseek_pending)
-        self.script_tiles.append(self.deepseek_button)
         for device, subtitle in devices:
             body = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL,
@@ -429,7 +451,8 @@ class BrowserWindow(Adw.ApplicationWindow):
                 "clicked",
                 lambda _button, device_id=device.id: self.get_application().open_device(device_id),
             )
-            self.device_tiles.append(button)
+            self.app_tiles.append(button)
+        self.app_tiles.append(self.deepseek_button)
         for record in records:
             host = record["site"].split("://", 1)[1].removeprefix("www.")
             title = " ".join((record["title"] or host).split())
@@ -503,7 +526,6 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.script_loading.start()
         self.stack.set_visible_child_name("script-loading")
         self.set_title("DeepSeek Harness")
-        self.script_loading.output.grab_focus()
 
         def update_log():
             if self._closing or self._deepseek_owner is not owner or not self._deepseek_pending:

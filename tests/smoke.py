@@ -104,15 +104,49 @@ def run():
                     assert window.home_sections.get_visible_child_name() == "apps"
                     pages = window.home_sections.get_pages()
                     assert [pages[i].get_title() for i in range(2)] == ["Apps", "History"]
-                    assert window.app_tiles.get_child_at_index(1) is not None
-                    assert window.app_tiles.get_child_at_index(2) is None
-                    assert window.devices_empty.get_visible()
+                    assert (
+                        window.app_tiles.get_child_at_index(0).get_child() == window.deepseek_button
+                    )
+                    assert window.app_tiles.get_child_at_index(2) is not None
+                    assert window.app_tiles.get_child_at_index(3) is None
+                    assert not any(
+                        isinstance(widget, Gtk.Label)
+                        and widget.get_text() in {"Devices", "Script apps", "Bookmarked apps"}
+                        for widget in widgets(window.app_tiles.get_parent())
+                    )
                     assert not window.lookup_action("bookmark").get_enabled()
                     window.home_sections.set_visible_child_name("history")
                     assert window.history_stack.get_visible_child_name() == "empty"
                     window.home_sections.set_visible_child_name("apps")
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
+                    assert window.agent_prompt.get_parent().get_last_child() == window.agent_prompt
+                    state["visible_agent_prompt"] = window.agent_prompt_text.get_text()
+                    window.copy_agent_prompt_button.grab_focus()
+                    window.copy_agent_prompt_button.emit("clicked")
+
+                    def copied(clipboard, result):
+                        try:
+                            state["agent_prompt"] = clipboard.read_text_finish(result)
+                        except Exception as error:
+                            fail(error)
+
+                    window.get_clipboard().read_text_async(None, copied)
+                    state["phase"] = "agent-prompt"
+                elif state["phase"] == "agent-prompt":
+                    if "agent_prompt" not in state:
+                        return GLib.SOURCE_CONTINUE
+                    assert state["agent_prompt"] == state["visible_agent_prompt"]
+                    adjustment = window.home_sections.get_child_by_name("apps").get_vadjustment()
+                    adjustment.set_value(adjustment.get_upper() - adjustment.get_page_size())
+                    state["phase"] = "agent-prompt-visible"
+                elif state["phase"] == "agent-prompt-visible":
+                    valid, bounds = window.copy_agent_prompt_button.compute_bounds(window)
+                    assert valid and 0 <= bounds.get_y() < window.get_height()
+                    if len(sys.argv) > 1:
+                        path = Path(sys.argv[1])
+                        snapshot(window, str(path.with_name(path.stem + "-agent-prompt.png")))
+                    window.home_sections.get_child_by_name("apps").get_vadjustment().set_value(0)
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
                     state["phase"] = 1
@@ -359,8 +393,8 @@ def run():
                     assert window.get_title() == "Mini Browser"
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
-                    assert window.app_tiles.get_child_at_index(2) is not None
-                    assert window.app_tiles.get_child_at_index(3) is None
+                    assert window.app_tiles.get_child_at_index(3) is not None
+                    assert window.app_tiles.get_child_at_index(4) is None
                     state["ready"] = time.monotonic() + 0.2
                     state["phase"] = 31
                 elif state["phase"] == 31 and time.monotonic() >= state["ready"]:

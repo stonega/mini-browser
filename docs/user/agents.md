@@ -1,5 +1,9 @@
 # Agent control and UI testing
 
+Home's Apps tab ends with a selectable, monospace **Agent prompt** and **Copy prompt** button.
+Paste it into an agent chat for CLI discovery, page/native inspection, saving
+Home apps and screenshot verification. Copying it does not enable agent control.
+
 Start Mini Browser with local control enabled:
 
 ```sh
@@ -89,9 +93,9 @@ mini-browser agent apps
 mini-browser agent remove-app https://example.com/dashboard
 ```
 
-Saved apps appear in **Apps → Bookmarked apps**, before presets and bookmark
-sites. They survive restarts and remain visible as history changes. Existing
-Home windows refresh immediately. Saving does not open the site, fetch its title
+Saved apps appear in **Apps**, alongside devices and script apps, before presets
+and bookmark sites. They survive restarts and remain visible as history changes.
+Existing Home windows refresh immediately. Saving does not open the site, fetch its title
 or icon, or add a history/bookmark record. Clicking the tile opens its saved URL.
 
 Use a full `http://` or `https://` URL, including loopback URLs for local apps.
@@ -103,7 +107,7 @@ query strings and fragments remain distinct, so one site can have several apps.
 Bookmark-derived tiles for a saved app's origin are hidden while it is saved.
 Removing a saved tile leaves bookmarks and browsing history intact; the website
 may still appear as a bookmarked app or in History. DeepSeek keeps its built-in
-tile under Script apps. The menu's **Bookmark App** action saves a website root;
+tile in Apps. The menu's **Bookmark App** action saves a website root;
 agent-saved Home apps continue to open their explicit URLs.
 
 The same operations are available as MCP tools `add_home_app`, `list_home_apps`

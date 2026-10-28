@@ -1,73 +1,86 @@
-"""Native loading feedback for a script app before its web server is ready."""
+"""Centered, animated startup output for a script app."""
 
-from .gtk import Adw, Gtk
+import time
+
+from .gtk import GLib, Gtk, Pango
 
 
 class ScriptLoading(Gtk.Box):
     def __init__(self):
         super().__init__(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=20,
-            margin_top=32,
+            margin_top=24,
             margin_bottom=24,
-            margin_start=24,
-            margin_end=24,
+            margin_start=32,
+            margin_end=32,
         )
-        spinner_type = getattr(Adw, "Spinner", Gtk.Spinner)
-        self.spinner = spinner_type(width_request=32, height_request=32, halign=Gtk.Align.CENTER)
-        self.append(self.spinner)
-        self.append(
-            Gtk.Label(
-                label="Starting DeepSeek Harness…",
-                css_classes=["title-2"],
-                wrap=True,
-                justify=Gtk.Justification.CENTER,
-            )
+        self.output = Gtk.Label(
+            xalign=0,
+            yalign=0,
+            halign=Gtk.Align.CENTER,
+            wrap=True,
+            wrap_mode=Pango.WrapMode.WORD_CHAR,
+            css_classes=["monospace"],
         )
-        self.append(
-            Gtk.Label(
-                label="The first launch may take a few minutes.",
-                css_classes=["dim-label"],
-                wrap=True,
-                justify=Gtk.Justification.CENTER,
-            )
+        self.scroll = Gtk.ScrolledWindow(
+            child=self.output,
+            hscrollbar_policy=Gtk.PolicyType.NEVER,
+            propagate_natural_height=True,
+            max_content_height=480,
+            valign=Gtk.Align.CENTER,
+            vexpand=True,
         )
-        self.append(Gtk.Label(label="Startup log", xalign=0, css_classes=["heading"]))
-        self.output = Gtk.TextView(
-            editable=False,
-            cursor_visible=False,
-            monospace=True,
-            wrap_mode=Gtk.WrapMode.WORD_CHAR,
-            top_margin=12,
-            bottom_margin=12,
-            left_margin=12,
-            right_margin=12,
-        )
-        self.buffer = self.output.get_buffer()
-        self.end = self.buffer.create_mark(None, self.buffer.get_end_iter(), False)
-        scroll = Gtk.ScrolledWindow(
-            child=self.output, vexpand=True, hscrollbar_policy=Gtk.PolicyType.NEVER
-        )
-        self.append(Gtk.Frame(child=scroll, vexpand=True))
-        self._text = None
+        self.scroll.get_vadjustment().connect("changed", self._scroll_to_end)
+        self.append(self.scroll)
+        self._animation_source = 0
+        self._target = self._text = ""
+        self._cursor_visible = True
 
     def start(self):
-        self.set_log("")
-        self.spinner.set_visible(True)
-        if isinstance(self.spinner, Gtk.Spinner):
-            self.spinner.start()
+        self.stop()
+        self._last_frame = self._cursor_time = time.monotonic()
+        self._cursor_visible = True
+        self._render()
+        self._animation_source = GLib.timeout_add(30, self._animate)
 
     def set_log(self, text):
-        text = text or "Waiting for startup output…"
-        if text != self._text:
-            self._text = text
-            self.buffer.set_text(text)
-            self.buffer.move_mark(self.end, self.buffer.get_end_iter())
-            self.output.scroll_to_mark(self.end, 0.0, False, 0.0, 1.0)
+        if not self._animation_source or text == self._target:
+            return
+        if not text.startswith(self._text):
+            # Bounded snapshots can drop older lines. Keep their current prefix
+            # visible and animate the latest line instead of replaying old output.
+            head, separator, _tail = text.rpartition("\n")
+            self._text = head + separator
+        self._target = text
+
+    def _animate(self):
+        now = time.monotonic()
+        elapsed, self._last_frame = now - self._last_frame, now
+        remaining = len(self._target) - len(self._text)
+        if remaining:
+            # Catch up with bursts without letting a long log delay new output.
+            count = max(1, int(elapsed * max(80, remaining / 0.25)))
+            self._text = self._target[: len(self._text) + count]
+            self._cursor_visible = True
+            self._cursor_time = now
+        elif now - self._cursor_time >= 0.5:
+            self._cursor_visible = not self._cursor_visible
+            self._cursor_time = now
+        self._render()
+        return GLib.SOURCE_CONTINUE
+
+    def _render(self):
+        text = self._text + ("▌" if self._cursor_visible else "\u00a0")
+        if text != self.output.get_text():
+            self.output.set_text(text)
+
+    @staticmethod
+    def _scroll_to_end(adjustment):
+        adjustment.set_value(max(0, adjustment.get_upper() - adjustment.get_page_size()))
 
     def stop(self):
-        if isinstance(self.spinner, Gtk.Spinner):
-            self.spinner.stop()
-        self.spinner.set_visible(False)
-        self.buffer.set_text("")
-        self._text = None
+        if self._animation_source:
+            GLib.source_remove(self._animation_source)
+            self._animation_source = 0
+        self._target = self._text = ""
+        self.output.set_text("")

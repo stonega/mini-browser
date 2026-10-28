@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Simplify script-app loading to a centered monospace log with typing animation and a blinking cursor.
+- Combine devices, script apps, and bookmarked apps into one Home Apps grid without group titles.
+- Show a selectable, monospace agent prompt with a Copy prompt button at the bottom of Home's Apps tab.
 - Add persistent Home app tiles through `agent add-app URL --title NAME`, with
   `apps` and `remove-app` commands and matching native MCP tools.
 - Add opt-in `--agent` control, a JSON CLI and a native stdio MCP server for Codex.

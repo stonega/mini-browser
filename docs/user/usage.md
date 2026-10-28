@@ -2,10 +2,10 @@
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
-Home has **Apps** and **History** tabs. Apps groups **Devices**, **Script apps**
-(including DeepSeek Harness), and **Bookmarked apps** with YouTube and Bilibili
-presets, saved Home apps, and bookmarked websites. History shows every saved
-history address, including imported Chrome history, newest first. Each compact
+Home has **Apps** and **History** tabs. Apps shows devices, script apps
+(including DeepSeek Harness), YouTube and Bilibili presets, saved Home apps,
+and bookmarked websites together in one grid without group titles. History shows
+every saved history address, including imported Chrome history, newest first. Each compact
 row spans the window and shows the page title, full URL, and last visit time;
 long text is shortened to fit, with details available on hover. Select a row to
 reopen that exact page. Repeat visits update the address's time and visit count.
@@ -19,13 +19,17 @@ dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
 
 Choose **Bookmark App** from the three-line menu, or press Ctrl+D, to add the
-current website to Bookmarked apps. Bookmarks use URL apps: bookmarking
+current website to Apps. Bookmarks use URL apps: bookmarking
 `https://apc.example.com/sdacsd/sdca` saves and opens `https://apc.example.com/`.
 Paths, queries, and fragments are removed; subdomains, scheme, and non-default
 ports are retained. Repeated bookmarks of that site share one tile. Imported
 bookmarks also appear grouped by site, while their original page links stay in
 the library. Visiting a site adds history rather than an app tile.
 Return home with Alt+Home. Other home windows refresh as you visit or bookmark sites.
+
+At the bottom of Home's Apps tab, **Agent prompt** shows monospace instructions for an AI
+agent to control the browser, add apps and test the UI. Select the text or choose
+**Copy prompt** to paste it into your agent chat.
 
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
@@ -58,12 +62,13 @@ pages from this window, newest first. Select a page to jump directly to it.
 
 ## DeepSeek Harness
 
-Open **DeepSeek Harness** under **Apps → Script apps** to start its local web server
+Open **DeepSeek Harness** under **Apps** to start its local web server
 and open it inside Mini Browser. The tile uses DeepSeek's official whale icon.
 Node.js and npm's `npx` must be available on the desktop session's PATH. On first
 launch, npx downloads the official package; starting it can take a few minutes.
-The tile immediately opens a separate window with an animated spinner and a
-scrolling startup log. When the server is ready, the app opens in that same
+The tile immediately opens a separate window with a centered monospace startup
+log, a typing animation, and a blinking cursor at the end. Longer logs scroll
+to the newest output. When the server is ready, the app opens in that same
 window. Startup output stays in memory only; common credential fields and URL
 query parameters are redacted. Closing the loading window cancels its launch.
 Configure models and choose a workspace in DeepSeek's own interface.
@@ -86,8 +91,8 @@ need HTTPS. Pages cannot read the desktop clipboard through this integration.
 
 ## Phone apps
 
-Connected Android phones appear under **Apps → Devices** automatically within
-a few seconds. An empty group explains how to add a phone in Settings.
+Connected Android phones appear in **Apps** automatically within a few seconds,
+alongside script apps and websites. Manage phones in **Settings → Devices**.
 Enable USB debugging in Android Developer options, connect by USB, and approve
 this computer on the phone. The tile shows **Connected**, **Allow USB debugging**,
 or **Offline**. Open it to show the phone in a native window; opening it again
