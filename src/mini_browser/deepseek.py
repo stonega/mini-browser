@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -26,6 +27,13 @@ COMMAND = (
     "0",
 )
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+OSC = re.compile(r"\x1b\].*?(?:\x07|\x1b\\)")
+URL = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+SECRET = re.compile(
+    r"(?i)(\b[\w-]*(?:token|secret|password|passwd|api[_-]?key|authorization|credential)"
+    r"""[\w-]*["']?\s*(?:[:=]\s*|\s+))(?:"[^"]*"|'[^']*'|[^\s,;]+)"""
+)
+BEARER = re.compile(r"(?i)(\bbearer\s+)\S+")
 FAILED = (
     "DeepSeek Harness stopped. Open its tile to try again. "
     "If this keeps happening, run npx @deepseek-ai/dsh web in a terminal to check its setup."
@@ -65,6 +73,26 @@ def startup_uri(line):
     return None
 
 
+def startup_message(line):
+    """Prepare transient startup output for display, without terminal commands or secrets."""
+    line = ANSI.sub("", OSC.sub("", line))
+    line = "".join(char for char in line if char.isprintable() or char == "\t").strip()
+
+    def redact_url(match):
+        try:
+            parts = urlsplit(match.group())
+            host = parts.netloc.rsplit("@", 1)[-1]
+            return f"{parts.scheme}://{host}{parts.path}" + (
+                "?[redacted]" if parts.query or parts.fragment else ""
+            )
+        except ValueError:
+            return "[redacted URL]"
+
+    line = URL.sub(redact_url, line)
+    line = BEARER.sub(r"\1[redacted]", line)
+    return SECRET.sub(r"\1[redacted]", line)[:1000]
+
+
 def terminate(process):
     """Give the entire session a grace period, then kill surviving descendants."""
     with contextlib.suppress(ProcessLookupError):
@@ -98,6 +126,7 @@ class DeepSeekHarness:
         self._process = None
         self._thread = None
         self._closed = False
+        self._startup_log = deque(maxlen=80)
 
     def acquire(self, owner, callback):
         with self._condition:
@@ -123,6 +152,20 @@ class DeepSeekHarness:
             if not self._clients and self._cancel:
                 self._uri = None
                 self._cancel.set()
+            if not self._clients:
+                self._startup_log.clear()
+
+    def startup_log(self, owner):
+        """Return a bounded snapshot only for a window awaiting this startup."""
+        with self._condition:
+            return "\n".join(self._startup_log) if owner in self._pending else ""
+
+    def _append_log(self, line, cancel):
+        message = startup_message(line)
+        if message:
+            with self._condition:
+                if not self._closed and not cancel.is_set():
+                    self._startup_log.append(message)
 
     def owns_uri(self, uri):
         with self._condition:
@@ -133,6 +176,7 @@ class DeepSeekHarness:
             self._closed = True
             self._clients.clear()
             self._pending.clear()
+            self._startup_log.clear()
             if self._cancel:
                 self._cancel.set()
             self._condition.notify()
@@ -146,6 +190,7 @@ class DeepSeekHarness:
                 if self._closed:
                     return
                 cancel = self._cancel = threading.Event()
+                self._startup_log.clear()
             try:
                 self._serve(cancel)
             except (OSError, RuntimeError) as error:
@@ -170,6 +215,7 @@ class DeepSeekHarness:
                 owners = self._clients
             callbacks = [self._clients[owner] for owner in owners]
             self._pending.clear()
+            self._startup_log.clear()
         for callback in callbacks:
             callback(uri, error)
 
@@ -213,8 +259,6 @@ class DeepSeekHarness:
             with selectors.DefaultSelector() as selector:
                 selector.register(process.stdout, selectors.EVENT_READ)
                 while not cancel.is_set():
-                    if process.poll() is not None:
-                        raise HarnessError(FAILED)
                     if not ready and time.monotonic() >= deadline:
                         raise HarnessError(
                             "DeepSeek Harness took too long to start. Check your network and "
@@ -225,18 +269,28 @@ class DeepSeekHarness:
                         if not chunk:
                             selector.unregister(process.stdout)
                             continue
-                        for index, part in enumerate(chunk.split(b"\n")):
+                        for index, part in enumerate(chunk.replace(b"\r", b"\n").split(b"\n")):
                             if index:
-                                if not discarding and not ready:
-                                    uri = startup_uri(pending.decode("utf-8", errors="replace"))
+                                if not ready:
+                                    line = pending.decode("utf-8", errors="replace")
+                                    uri = None if discarding else startup_uri(line)
                                     if uri:
                                         ready = True
                                         self._notify(uri, None, cancel)
+                                    else:
+                                        self._append_log(
+                                            "[Long startup message omitted]"
+                                            if discarding
+                                            else line,
+                                            cancel,
+                                        )
                                 pending, discarding = b"", False
                             if not ready and not discarding:
                                 pending += part
                                 if len(pending) > 16384:
                                     pending, discarding = b"", True
+                    if process.poll() is not None:
+                        raise HarnessError(FAILED)
         finally:
             os.close(writer)
             terminate(process)

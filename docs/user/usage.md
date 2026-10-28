@@ -2,8 +2,14 @@
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
-Home has a **Devices** group for detected and saved phones and an **Apps** group
-with DeepSeek Harness and up to six recently opened sites. A native GNOME header
+Home has **Apps** and **History** tabs. Apps groups **Devices**, **Script apps**
+(including DeepSeek Harness), and **Bookmarked apps** with YouTube and Bilibili
+presets, saved Home apps, and bookmarked websites. History shows every saved
+history address, including imported Chrome history, newest first. Each compact
+row spans the window and shows the page title, full URL, and last visit time;
+long text is shortened to fit, with details available on hover. Select a row to
+reopen that exact page. Repeat visits update the address's time and visit count.
+A native GNOME header
 bar always includes a Home button, followed by Back when available, the page
 title, pin, layout icon, three-line main menu, and close button.
 Home returns to the home page even when browsing history is available.
@@ -12,10 +18,14 @@ Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
 
-Recent tiles group pages from the same website and reopen its most recently
-visited page. They track sites opened in Mini Browser; importing Chrome history
-does not add tiles. Return home with Alt+Home. Other home windows refresh when
-you open a site in another Mini Browser window.
+Choose **Bookmark App** from the three-line menu, or press Ctrl+D, to add the
+current website to Bookmarked apps. Bookmarks use URL apps: bookmarking
+`https://apc.example.com/sdacsd/sdca` saves and opens `https://apc.example.com/`.
+Paths, queries, and fragments are removed; subdomains, scheme, and non-default
+ports are retained. Repeated bookmarks of that site share one tile. Imported
+bookmarks also appear grouped by site, while their original page links stay in
+the library. Visiting a site adds history rather than an app tile.
+Return home with Alt+Home. Other home windows refresh as you visit or bookmark sites.
 
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
@@ -48,10 +58,14 @@ pages from this window, newest first. Select a page to jump directly to it.
 
 ## DeepSeek Harness
 
-Open **DeepSeek Harness** in Home's **Apps** group to start its local web server
+Open **DeepSeek Harness** under **Apps → Script apps** to start its local web server
 and open it inside Mini Browser. The tile uses DeepSeek's official whale icon.
 Node.js and npm's `npx` must be available on the desktop session's PATH. On first
 launch, npx downloads the official package; starting it can take a few minutes.
+The tile immediately opens a separate window with an animated spinner and a
+scrolling startup log. When the server is ready, the app opens in that same
+window. Startup output stays in memory only; common credential fields and URL
+query parameters are redacted. Closing the loading window cancels its launch.
 Configure models and choose a workspace in DeepSeek's own interface.
 
 DeepSeek windows share one server. Returning Home, navigating to another site,
@@ -63,7 +77,7 @@ any agent tasks it is running, so let tasks finish before leaving its last windo
 
 DeepSeek keeps its own settings and sessions in its usual location (`~/.dsh`,
 or `DSH_HOME` when set). Mini Browser starts it from your home directory and does
-not delete that data. DeepSeek pages do not create duplicate recent-site tiles.
+not delete that data. DeepSeek pages do not create website apps or history entries.
 
 Text Copy buttons work with GNOME's clipboard, including DeepSeek's local HTTP
 page. Keep the page active and click its Copy button, then paste into another
@@ -72,8 +86,8 @@ need HTTPS. Pages cannot read the desktop clipboard through this integration.
 
 ## Phone apps
 
-Connected Android phones appear in Home's **Devices** group automatically within
-a few seconds. The group is hidden when there are no detected or saved devices.
+Connected Android phones appear under **Apps → Devices** automatically within
+a few seconds. An empty group explains how to add a phone in Settings.
 Enable USB debugging in Android Developer options, connect by USB, and approve
 this computer on the phone. The tile shows **Connected**, **Allow USB debugging**,
 or **Offline**. Open it to show the phone in a native window; opening it again
@@ -292,3 +306,16 @@ these codecs; Fedora 43/44 and ARM use the stock engine. A codec-enabled x86_64
 user build requires glibc 2.44 or newer; see the
 [setup guide](../implementation/setup.md#h264aac-web-video-x86_64).
 DRM-protected video requires Widevine, which is not included.
+
+## Agent control
+
+Start with `mini-browser --agent` to enable the local JSON CLI and native Codex
+MCP server. Use `mini-browser agent --help` for commands and `mini-browser mcp`
+as the MCP stdio command. See [agent control and UI testing](agents.md) for
+the full command reference, Codex configuration, and isolated UI tests.
+
+To add an app to Home, run
+`mini-browser agent add-app https://example.com --title 'Example'` while agent
+control is enabled. Saved tiles stay on Home across restarts. Use
+`mini-browser agent apps` to list them and `mini-browser agent remove-app URL`
+to remove one. See [saved Home apps](agents.md#saved-home-apps) for details.

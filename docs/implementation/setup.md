@@ -256,3 +256,11 @@ Reference APIs:
 - <https://api.pygobject.gnome.org/Gtk-4.0/>
 - <https://api.pygobject.gnome.org/Adw-1/>
 - <https://cef-builds.spotifycdn.com/docs/stable/>
+
+## Agent control checks
+
+`./scripts/smoke --test=agent` exercises the public JSON CLI and native stdio MCP
+server against real GTK/CEF on the suite's isolated GNOME desktop. All test pages
+and profiles are synthetic. The agent test is included in `./scripts/smoke`.
+Deterministic socket, schema, MCP and screenshot-file checks run in
+`./scripts/check`. See [agent setup and commands](../user/agents.md).

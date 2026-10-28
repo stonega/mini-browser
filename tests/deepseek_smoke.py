@@ -43,7 +43,12 @@ def run():
     with tempfile.TemporaryDirectory(prefix="mini-browser-harness-") as temporary:
         root = Path(temporary)
         helpers = root / "helpers"
-        environment = fake_harness(helpers, child=True)
+        environment = fake_harness(
+            helpers,
+            child=True,
+            delay=0.8,
+            messages=["Installing synthetic package", "token=private-fixture-token"],
+        )
         app = BrowserApplication(
             discover_devices=False,
             silent=True,
@@ -61,33 +66,61 @@ def run():
                 if phase == 0:
                     if not app.get_windows():
                         return GLib.SOURCE_CONTINUE
-                    first = state["first"] = app.get_windows()[0]
+                    first = state["home"] = app.get_windows()[0]
                     first._test_paintable = Gtk.WidgetPaintable.new(first)
                     icon = first.deepseek_button.get_child().get_first_child()
                     assert isinstance(icon, Gtk.Image)
                     assert icon.get_paintable().get_intrinsic_width() > 0
-                    assert first.recent_tiles.get_child_at_index(1) is None
+                    assert first.script_tiles.get_child_at_index(1) is None
+                    assert first.app_tiles.get_child_at_index(1) is not None
                     state["phase"] = 1
                 elif phase == 1:
-                    first = state["first"]
+                    first = state["home"]
                     if len(sys.argv) > 1:
                         snapshot(first, sys.argv[1])
                     Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.FORCE_DARK)
                     state["ready"] = time.monotonic() + 0.3
                     state["phase"] = 11
                 elif phase == 11 and time.monotonic() >= state["ready"]:
-                    first = state["first"]
+                    first = state["home"]
                     if len(sys.argv) > 1:
                         target = Path(sys.argv[1])
                         snapshot(first, target.with_name(target.stem + "-dark.png"))
                     Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
+                    before = set(app.get_windows())
                     first.deepseek_button.emit("clicked")
+                    launched = state["first"] = (set(app.get_windows()) - before).pop()
+                    assert launched.stack.get_visible_child_name() == "script-loading"
+                    assert launched._deepseek_pending
+                    assert launched.script_loading.spinner.get_visible()
+                    assert launched.get_title() == "DeepSeek Harness"
+                    assert first.stack.get_visible_child_name() == "home"
+                    launched._test_paintable = Gtk.WidgetPaintable.new(launched)
+                    before = set(app.get_windows())
                     first.deepseek_button.emit("clicked")
-                    assert not first.deepseek_button.get_sensitive()
-                    second = state["second"] = app.new_window()
-                    second.deepseek_button.emit("clicked")
+                    state["second"] = (set(app.get_windows()) - before).pop()
+                    state["phase"] = 12
+                elif phase == 12:
+                    launched = state["first"]
+                    buffer = launched.script_loading.buffer
+                    output = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
+                    if "Installing synthetic package" not in output:
+                        return GLib.SOURCE_CONTINUE
+                    assert "private-fixture-token" not in output
+                    assert "[redacted]" in output
+                    # Allow the changed buffer and spinner to reach the rendered frame.
+                    state["ready"] = time.monotonic() + 0.2
+                    state["phase"] = 13
+                elif phase == 13 and time.monotonic() >= state["ready"]:
+                    if len(sys.argv) > 1:
+                        target = Path(sys.argv[1])
+                        snapshot(state["first"], target.with_name(target.stem + "-loading.png"))
                     state["phase"] = 2
                 elif phase == 2 and loaded(state["first"]) and loaded(state["second"]):
+                    for window in (state["first"], state["second"]):
+                        assert not window.script_loading.spinner.get_visible()
+                        assert window.script_loading.buffer.get_char_count() == 0
+                        assert window._deepseek_log_source == 0
                     assert len(runs(helpers)) == 1, "DeepSeek windows must share one server"
                     assert app.library.search("history") == []
                     assert app.library.recent_apps() == []
@@ -107,13 +140,13 @@ def run():
                     # Cancel a slow startup through Home, then immediately reopen.
                     fake_harness(helpers, delay=0.4, child=True)
                     second = state["second"]
-                    second.deepseek_button.emit("clicked")
+                    second._start_deepseek()
                     state["phase"] = 4
                 elif phase == 4 and len(runs(helpers)) >= 2:
                     second = state["second"]
                     second.home_button.emit("clicked")
                     assert second._deepseek_owner is None
-                    second.deepseek_button.emit("clicked")
+                    second._start_deepseek()
                     state["phase"] = 5
                 elif phase == 5 and loaded(state["second"]):
                     assert state["second"].get_default_size() == (850, 650)
@@ -139,8 +172,25 @@ def run():
                     assert state["second"].get_default_size() == (850, 650)
                     assert app.library.search("history") == []
                     assert app.library.recent_apps() == []
-                    state["completed"] = True
                     state["second"].close()
+                    fake_harness(helpers, delay=2, child=True, messages=["Starting fixture"])
+                    state["previous_runs"] = len(runs(helpers))
+                    before = set(app.get_windows())
+                    state["home"].deepseek_button.emit("clicked")
+                    state["cancelled"] = (set(app.get_windows()) - before).pop()
+                    state["phase"] = 8
+                elif phase == 8 and len(runs(helpers)) > state["previous_runs"]:
+                    cancelled = state["cancelled"]
+                    assert cancelled._deepseek_pending
+                    cancelled.close()
+                    assert cancelled._deepseek_owner is None
+                    assert cancelled._deepseek_log_source == 0
+                    assert cancelled.script_loading.buffer.get_char_count() == 0
+                    assert not cancelled.script_loading.spinner.get_visible()
+                    state["phase"] = 9
+                elif phase == 9 and not any(running(item["pid"]) for item in runs(helpers)):
+                    state["completed"] = True
+                    state["home"].close()
                     return GLib.SOURCE_REMOVE
             except Exception as error:
                 errors.append(str(error))
@@ -169,7 +219,8 @@ def run():
         if errors or not state["completed"]:
             raise SystemExit("; ".join(errors) or "Harness smoke exited early")
         print(
-            "PASS: DeepSeek icon, shared server, token exchange, Home/close cleanup, "
+            "PASS: DeepSeek launch window, spinner, live redacted startup log, icon, "
+            "shared server, token exchange, Home/close cleanup, "
             "startup cancellation, rapid reopen, crash, retry and shutdown"
         )
 

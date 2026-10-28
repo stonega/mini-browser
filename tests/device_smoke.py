@@ -81,10 +81,11 @@ def run():
                     assert status == "Connected"
                     assert home.devices_group.get_visible()
                     assert (
-                        home.recent_tiles.get_child_at_index(0).get_child() == home.deepseek_button
+                        home.script_tiles.get_child_at_index(0).get_child() == home.deepseek_button
                     )
-                    assert home.recent_tiles.get_child_at_index(1) is None
-                    assert home.recent_empty.get_visible()
+                    assert home.script_tiles.get_child_at_index(1) is None
+                    assert not home.devices_empty.get_visible()
+                    assert home.app_tiles.get_child_at_index(1) is not None
                     home.device_tiles.get_child_at_index(0).get_child().emit("clicked")
                     state["detected_window"] = app.device_windows[detected.id]
                     state["detected_window"]._test_paintable = Gtk.WidgetPaintable.new(

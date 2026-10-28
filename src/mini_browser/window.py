@@ -1,5 +1,7 @@
 """One WebView per portrait window with a native GNOME header bar."""
 
+from datetime import datetime
+
 from . import APP_NAME, autofill
 from .audio_player import AudioPlayer
 from .deepseek import COMMAND as DEEPSEEK_COMMAND
@@ -12,10 +14,11 @@ from .dialogs import (
     settings_dialog,
     shortcuts_dialog,
 )
-from .gtk import Adw, Gio, GLib, Gtk, Pango, Web
+from .gtk import Adw, Gio, GLib, GObject, Gtk, Pango, Web
 from .media import video_window_size
 from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
+from .script_loading import ScriptLoading
 from .video_player import VideoPlayer
 from .window_pin import WindowPin
 from .window_size import DEFAULT_SIZE, WindowSizeMemory, script_app_key, web_app_key
@@ -23,6 +26,12 @@ from .window_size import DEFAULT_SIZE, WindowSizeMemory, script_app_key, web_app
 DEFAULT_WIDTH, DEFAULT_HEIGHT = DEFAULT_SIZE
 AUDIO_WIDTH = 420
 AUDIO_HEIGHT = 200
+
+
+class HistoryItem(GObject.Object):
+    def __init__(self, record):
+        super().__init__()
+        self.record = record
 
 
 class BrowserWindow(Adw.ApplicationWindow):
@@ -39,6 +48,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._closing = False
         self._deepseek_owner = None
         self._deepseek_pending = False
+        self._deepseek_log_source = 0
+        self.script_loading = None
         self.audio_mode = False
         self.video_mode = False
         self._video_available = False
@@ -145,6 +156,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         menu.append("New Window", "app.new-window")
         menu.append("Refresh Page", "win.reload")
         menu.append("Reload Without Cache", "win.reload-bypass-cache")
+        menu.append("Bookmark App", "win.bookmark")
         menu.append("Settings", "win.settings")
         menu.append(f"About {APP_NAME}", "win.about")
         self.menu_button = Gtk.MenuButton(
@@ -198,10 +210,14 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.window_size.select(key)
 
     def _home(self):
+        home = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, margin_top=16)
+        self.home_sections = Gtk.Stack(hhomogeneous=False, vhomogeneous=False, vexpand=True)
+        self.home_tabs = Gtk.StackSwitcher(stack=self.home_sections, halign=Gtk.Align.CENTER)
+        home.append(self.home_tabs)
         content = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
-            spacing=32,
-            margin_top=40,
+            spacing=24,
+            margin_top=8,
             margin_bottom=24,
             margin_start=24,
             margin_end=24,
@@ -211,10 +227,12 @@ class BrowserWindow(Adw.ApplicationWindow):
             primary_icon_name="system-search-symbolic",
             secondary_icon_name="go-next-symbolic",
             height_request=48,
+            margin_start=24,
+            margin_end=24,
         )
         self.home_entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, False)
         self.home_entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, "Open website")
-        content.append(self.home_entry)
+        home.append(self.home_entry)
 
         def open_address(*_):
             try:
@@ -229,29 +247,114 @@ class BrowserWindow(Adw.ApplicationWindow):
                 open_address() if position == Gtk.EntryIconPosition.SECONDARY else None
             ),
         )
-        self.devices_group = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=16, visible=False
-        )
+        self.devices_group = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         self.devices_group.append(Gtk.Label(label="Devices", xalign=0, css_classes=["heading"]))
         self.device_tiles = self._tile_grid()
         self.devices_group.append(self.device_tiles)
-        content.append(self.devices_group)
-
-        recent = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        recent.append(Gtk.Label(label="Apps", xalign=0, css_classes=["heading"]))
-        self.recent_tiles = self._tile_grid()
-        self.recent_empty = Gtk.Label(
-            label="Sites you open will appear here.",
+        self.devices_empty = Gtk.Label(
+            label="No devices connected. Add a phone in Settings.",
             xalign=0,
             wrap=True,
             css_classes=["dim-label"],
         )
-        recent.append(self.recent_tiles)
-        recent.append(self.recent_empty)
-        content.append(recent)
-        self.refresh_recents()
+        self.devices_group.append(self.devices_empty)
+        content.append(self.devices_group)
+
+        scripts = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        scripts.append(Gtk.Label(label="Script apps", xalign=0, css_classes=["heading"]))
+        self.script_tiles = self._tile_grid()
+        scripts.append(self.script_tiles)
+        content.append(scripts)
+
+        bookmarks = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        bookmarks.append(Gtk.Label(label="Bookmarked apps", xalign=0, css_classes=["heading"]))
+        self.app_tiles = self._tile_grid()
+        bookmarks.append(self.app_tiles)
+        content.append(bookmarks)
         clamp = Adw.Clamp(maximum_size=420, tightening_threshold=360, child=content)
-        return Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp)
+        self.home_sections.add_titled(
+            Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp), "apps", "Apps"
+        )
+        self.home_sections.add_titled(self._history_page(), "history", "History")
+        self.home_sections.connect("notify::visible-child-name", self._home_section_changed)
+        home.append(self.home_sections)
+        self.refresh_recents()
+        return home
+
+    def _history_page(self):
+        self.history_model = Gio.ListStore.new(HistoryItem)
+        self._history_records = None
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._history_setup)
+        factory.connect("bind", self._history_bind)
+        self.history_list = Gtk.ListView(
+            model=Gtk.NoSelection(model=self.history_model),
+            factory=factory,
+            single_click_activate=True,
+            show_separators=True,
+        )
+        self.history_list.connect(
+            "activate", lambda _view, index: self.load_uri(self.history_model[index].record["url"])
+        )
+        self.history_empty = Adw.StatusPage(
+            icon_name="document-open-recent-symbolic",
+            title="No history yet",
+            description="Pages you visit will appear here.",
+        )
+        self.history_stack = Gtk.Stack()
+        self.history_stack.add_named(
+            Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=self.history_list),
+            "list",
+        )
+        self.history_stack.add_named(self.history_empty, "empty")
+        return self.history_stack
+
+    @staticmethod
+    def _history_setup(_factory, item):
+        body = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=2,
+            margin_top=6,
+            margin_bottom=6,
+            margin_start=12,
+            margin_end=12,
+        )
+        heading = Gtk.Box(spacing=8)
+        item.title_label = Gtk.Label(xalign=0, hexpand=True, ellipsize=Pango.EllipsizeMode.END)
+        item.time_label = Gtk.Label(css_classes=["caption", "dim-label"])
+        heading.append(item.title_label)
+        heading.append(item.time_label)
+        item.url_label = Gtk.Label(
+            xalign=0, ellipsize=Pango.EllipsizeMode.END, css_classes=["caption", "dim-label"]
+        )
+        body.append(heading)
+        body.append(item.url_label)
+        item.set_child(body)
+
+    @staticmethod
+    def _history_bind(_factory, item):
+        record = item.get_item().record
+        item.title_label.set_label(" ".join((record["title"] or record["url"]).split()))
+        item.url_label.set_label(record["url"])
+        try:
+            visited = datetime.fromtimestamp(record["last_visit"]).strftime("%Y-%m-%d %H:%M")
+        except (OSError, OverflowError, ValueError):
+            visited = ""
+        item.time_label.set_label(visited)
+        item.get_child().set_tooltip_text(f"{record['title']}\n{record['url']}\n{visited}")
+
+    def _home_section_changed(self, *_):
+        if self.home_sections.get_visible_child_name() == "history":
+            self._refresh_history()
+
+    def _refresh_history(self):
+        records = self.library.search("history", limit=None)
+        if records != self._history_records:
+            self.history_model.splice(
+                0, self.history_model.get_n_items(), [HistoryItem(record) for record in records]
+            )
+            self._history_records = records
+        self.history_stack.set_visible_child_name("list" if records else "empty")
 
     @staticmethod
     def _tile_grid():
@@ -266,13 +369,18 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
 
     def refresh_recents(self):
-        self.recent_tiles.remove_all()
+        """Refresh app launchers and the history tab when it is visible."""
+        self.app_tiles.remove_all()
+        self.script_tiles.remove_all()
         self.device_tiles.remove_all()
-        records = self.library.recent_apps()
+        saved = self.library.home_apps()
+        saved_sites = {app["site"] for app in saved}
+        records = saved + [
+            app for app in self.library.bookmarked_apps() if app["site"] not in saved_sites
+        ]
         devices = self.get_application().device_tiles()
-        self.devices_group.set_visible(bool(devices))
-        self.recent_empty.set_visible(not records)
-        self.recent_tiles.set_visible(True)
+        self.devices_empty.set_visible(not devices)
+        self.device_tiles.set_visible(bool(devices))
         icon = Gtk.Image.new_from_file(str(DEEPSEEK_ICON))
         icon.set_pixel_size(44)
         self.deepseek_button = self._app_tile(
@@ -282,7 +390,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._open_deepseek,
         )
         self.deepseek_button.set_sensitive(not self._deepseek_pending)
-        self.recent_tiles.append(self.deepseek_button)
+        self.script_tiles.append(self.deepseek_button)
         for device, subtitle in devices:
             body = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL,
@@ -331,8 +439,9 @@ class BrowserWindow(Adw.ApplicationWindow):
                 Adw.Avatar(size=44, text=host, show_initials=True),
                 lambda _button, url=record["url"]: self.load_uri(url),
             )
-            button.set_tooltip_text(f"{title}\n{record['site']}")
-            self.recent_tiles.append(button)
+            button.set_tooltip_text(f"{title}\n{record['url']}")
+            self.app_tiles.append(button)
+        self._home_section_changed()
 
     @staticmethod
     def _app_tile(title, subtitle, icon, callback):
@@ -374,6 +483,12 @@ class BrowserWindow(Adw.ApplicationWindow):
         return button
 
     def _open_deepseek(self, *_):
+        if not self._closing:
+            window = self.get_application().new_window()
+            window._start_deepseek()
+            return window
+
+    def _start_deepseek(self):
         if self._closing or self._deepseek_pending:
             return
         self._release_deepseek()
@@ -382,12 +497,29 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._restore_page()
         self.window_size.select(script_app_key(DEEPSEEK_COMMAND))
         self.refresh_recents()
+        if self.script_loading is None:
+            self.script_loading = ScriptLoading()
+            self.stack.add_named(self.script_loading, "script-loading")
+        self.script_loading.start()
+        self.stack.set_visible_child_name("script-loading")
+        self.set_title("DeepSeek Harness")
+        self.script_loading.output.grab_focus()
+
+        def update_log():
+            if self._closing or self._deepseek_owner is not owner or not self._deepseek_pending:
+                self._deepseek_log_source = 0
+                return GLib.SOURCE_REMOVE
+            self.script_loading.set_log(self.get_application().deepseek.startup_log(owner))
+            return GLib.SOURCE_CONTINUE
+
+        self._deepseek_log_source = GLib.timeout_add(100, update_log)
 
         def changed(uri, error):
             def update():
                 if self._closing or self._deepseek_owner is not owner:
                     return GLib.SOURCE_REMOVE
                 self._deepseek_pending = False
+                self._stop_deepseek_loading()
                 if error:
                     self.show_home()
                     dialog = Adw.AlertDialog(heading="DeepSeek Harness stopped", body=error)
@@ -396,7 +528,7 @@ class BrowserWindow(Adw.ApplicationWindow):
                     dialog.set_default_response("retry")
                     dialog.set_close_response("close")
                     dialog.connect(
-                        "response", lambda _d, answer: answer == "retry" and self._open_deepseek()
+                        "response", lambda _d, answer: answer == "retry" and self._start_deepseek()
                     )
                     dialog.present(self)
                 else:
@@ -407,9 +539,17 @@ class BrowserWindow(Adw.ApplicationWindow):
 
         self.get_application().deepseek.acquire(owner, changed)
 
+    def _stop_deepseek_loading(self):
+        if self._deepseek_log_source:
+            GLib.source_remove(self._deepseek_log_source)
+            self._deepseek_log_source = 0
+        if self.script_loading is not None:
+            self.script_loading.stop()
+
     def _release_deepseek(self):
         owner, self._deepseek_owner = self._deepseek_owner, None
         self._deepseek_pending = False
+        self._stop_deepseek_loading()
         if owner is not None:
             self.get_application().deepseek.release(owner)
 
@@ -476,6 +616,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
         self.lookup_action("reload-bypass-cache").set_enabled(
             browsing and bool(self.webview.get_uri())
+        )
+        uri = self.webview.get_uri() or ""
+        self.lookup_action("bookmark").set_enabled(
+            browsing and is_web_url(uri) and not self.get_application().deepseek.owns_uri(uri)
         )
 
     def _back(self):
@@ -944,10 +1088,13 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _bookmark(self):
         uri = self.webview.get_uri() or ""
-        if is_web_url(uri):
+        if self.lookup_action("bookmark").get_enabled() and is_web_url(uri):
             try:
-                self.library.add_bookmark(uri, self.webview.get_title())
-                self.toast("Bookmark saved")
+                self.library.add_bookmark_app(uri)
+                for window in self.get_application().get_windows():
+                    if isinstance(window, BrowserWindow):
+                        window.refresh_recents()
+                self.toast("App bookmarked")
             except Exception:
                 self.toast("Could not save this bookmark.")
 

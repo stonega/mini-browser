@@ -32,14 +32,18 @@ An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
 `Adw.HeaderBar` with Home, Back, the page title, pin toggle, layout menu, main menu, and close
-control above the content. The home body contains
-only a search/address entry, a Devices group for detected and saved phones, and
-an Apps group with a built-in DeepSeek Harness tile and up to six recent-site
-tiles. Empty device groups are hidden.
+control above the content. The home body contains a native `Gtk.StackSwitcher`
+with Apps and History tabs above a shared search/address entry. Apps groups
+Devices, Script apps (including DeepSeek Harness), and Bookmarked apps. Empty
+device groups show a hint; bookmarked apps include YouTube and Bilibili presets,
+saved Home launchers, and bookmark origins. History uses a `Gtk.ListView` directly
+inside a scroller, backed by `Gio.ListStore` and a list-item factory so only
+visible rows need widgets. It shows all stored history addresses, including
+imports, in compact full-width rows with title, URL and last visit time.
 Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 The three-line main menu follows the layout button and offers New Window,
-Refresh Page (using the existing reload action), Reload Without Cache, Settings,
+Refresh Page (using the existing reload action), Reload Without Cache, Bookmark App, Settings,
 and an `Adw.AboutDialog` displaying the app's name, version, and license.
 Reload Without Cache uses CEF's `ReloadIgnoreCache()` to retry incomplete
 pages without clearing cookies or website storage. It is disabled on Home.
@@ -150,11 +154,30 @@ Local navigation increments visit counts. Folder names are retained for Chrome
 bookmarks; the initial library UI is a flat searchable list. Library searches
 return at most 200 matches to keep the narrow UI responsive.
 
+`add_bookmark_app()` saves a normalized origin URL with its hostname as title;
+paths, query strings and fragments are discarded, while scheme, subdomain and
+non-default port remain part of the origin. `bookmarked_apps()` groups every
+existing bookmark by that same root without rewriting imported records and adds
+the YouTube/Bilibili presets. The window's Bookmark App action refreshes every
+browser window and is disabled on Home and managed script pages. Full history
+and bookmark-app queries opt out of the library dialog's 200-result limit.
+History retains one row per URL with its latest visit time and visit count.
+
+The `home_apps` table stores explicit URL/title launchers independently of history,
+bookmarks and recents. The agent CLI/MCP can add, list and remove them without
+loading websites. Normalized URLs deduplicate repeated additions; explicit names
+and original insertion order survive visits and restarts. Home renders saved
+launchers in Bookmarked apps before presets and bookmark-derived launchers,
+suppressing duplicate bookmark origins. Multiple explicitly saved paths from
+one origin remain separate tiles and open their exact saved URLs. Mutations
+refresh every browser window's Home widgets on the main thread.
+
 The `recent_apps` table tracks actual Mini Browser navigation separately from
 imported history. It groups by origin and retains the latest URL, title, and
 opening time for each site. Schema creation adds this table to existing libraries
-without altering bookmark/history records. Home tiles are sorted by most recent
-use; open home windows refresh after another window records a visit. Tiles use
+without altering bookmark/history records. This legacy recent-site index is no
+longer rendered on Home; the History tab shows all saved addresses instead.
+Open home windows refresh after another window records a visit. App tiles use
 native initial avatars and make no background requests to the saved websites.
 Card buttons draw their own rounded hover and pressed states; the surrounding
 FlowBox children remain transparent to avoid a second outline around each tile.
@@ -163,9 +186,15 @@ FlowBox children remain transparent to avoid a second outline around each tile.
 lease one shared server. Its worker invokes `npx --yes @deepseek-ai/dsh web
 --no-open --host 127.0.0.1 --port 0` from the user's home directory. The official
 `dsh web:` announcement provides the authenticated startup URL; only loopback
-root URLs are accepted. Output is bounded in memory, continuously drained, and
-never logged or forwarded to error dialogs. Managed origins are excluded from
-the library so startup tokens and duplicate app tiles are not saved there.
+root URLs are accepted. Output is continuously drained. Each tile click opens
+a separate browser window immediately, displaying a native spinner and startup
+log until the server announces readiness. The worker retains at most 80 sanitized
+lines of 1,000 characters; GTK polls snapshots every 100 ms so verbose output
+cannot flood the main loop. Terminal escape sequences, common credential fields
+and URL query parameters are removed or redacted before display. The log is
+cleared on readiness, failure or cancellation, never written to disk or forwarded
+to error dialogs, and output after readiness is discarded. Managed origins are
+excluded from the library so startup tokens and duplicate app tiles are not saved there.
 The official MIT-licensed SVG is bundled with its source revision and license.
 
 Returning Home, external navigation and window closure release leases. The last
@@ -199,9 +228,8 @@ so saving a detected phone retains
 its existing window and session. Existing saved IDs remain valid. Detection is
 stopped and its subprocess reaped at shutdown; it never opens a screen. Device
 entries never enter website recents or history. `BrowserWindow` renders detected
-and saved phone tiles in a separate Devices group before the Apps website group;
-management belongs in Devices preferences. Each group has its own tile grid and
-visibility state, so devices do not suppress the empty website hint.
+and saved phone tiles in the Apps tab's Devices group before script and bookmarked
+apps; management belongs in Devices preferences. Each group has its own tile grid.
 Authorized transports resolve the phone's hardware serial, cached briefly, so USB
 and Wi-Fi aliases merge into one physical device. USB is preferred among equally
 authorized transports; the saved tile ID and custom name are retained when the
@@ -317,6 +345,18 @@ Unprivileged user namespaces, seccomp and no-new-privileges are required. The
 setuid helper is unused; neither `--no-sandbox` nor TLS bypass flags are used.
 
 The adapter uses CEF's in-process DevTools API; it opens no debugging port.
+Explicit `--agent` activation adds a private same-user Unix control socket.
+`control.py` handles bounded socket I/O on worker threads; `automation.py`
+dispatches application and DevTools operations through GLib on the main thread.
+`agent_cli.py` and the native `mcp.py` stdio server share `agent_tools.py` schemas
+and use that socket without loading GTK. The application holds its lifecycle
+while control is enabled, until Quit or `quit_browser`; shutdown closes the
+listener and removes its socket. Accessibility snapshots bind element uids to
+the view, navigation generation and latest snapshot. Native snapshots redact
+editable values and block password dialogs; native button input and a bounded
+action allowlist support UI tests. There is no vault control interface, remote
+debugging port, Chrome extension dependency or CDP event stream. See the
+[agent guide](../user/agents.md) for protocol limits and compatibility boundaries.
 Document-start scripts run in named isolated worlds. Typed function calls use
 a unique execution-context ID and typed protocol argument values, with both
 navigation generation and cancellation checked. Passwords never become script

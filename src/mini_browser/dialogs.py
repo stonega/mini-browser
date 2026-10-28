@@ -399,7 +399,7 @@ def shortcuts_dialog(window):
         ("Go back", "<Alt>Left"),
         ("Go forward", "<Alt>Right"),
         ("Bookmarks and history", "<Primary>b"),
-        ("Bookmark this page", "<Primary>d"),
+        ("Bookmark this website as an app", "<Primary>d"),
         ("Import from Chrome", "<Primary><Shift>i"),
         ("Manage passwords", "<Primary><Shift>p"),
         ("Fill saved login", "<Primary><Shift>l"),

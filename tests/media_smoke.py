@@ -814,6 +814,14 @@ def run():
                     "resized responsive video",
                     lambda size=(width, height): (window.get_width(), window.get_height()) == size,
                 )
+                # GTK allocation precedes CEF's asynchronous renderer resize.
+                yield from javascript(
+                    window,
+                    f"const deadline = performance.now() + 5000; "
+                    f"while ((innerWidth !== {width} || innerHeight !== {height}) && "
+                    "performance.now() < deadline) await new Promise(requestAnimationFrame); "
+                    "return true;",
+                )
                 layout = yield from javascript(
                     window,
                     "updateVideoLayout(); const video = document.querySelector('video'); "

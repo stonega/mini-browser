@@ -12,7 +12,7 @@ from urllib.request import ProxyHandler, build_opener
 
 from harness_helper import fake_harness, running, runs
 
-from mini_browser.deepseek import COMMAND, DeepSeekHarness, startup_uri
+from mini_browser.deepseek import COMMAND, DeepSeekHarness, startup_message, startup_uri
 
 
 def wait_for(predicate):
@@ -66,6 +66,52 @@ class DeepSeekTests(unittest.TestCase):
         self.assertTrue(events.empty())
         self.harness.release(second)
         self.assert_stopped()
+
+    def test_startup_log_is_live_shared_bounded_and_cleared(self):
+        messages = [f"Installing package {index}" for index in range(100)]
+        messages.append("\x1b[32mDownloading dependencies\x1b[0m\rStarting server")
+        messages.append("OPENAI_API_KEY=synthetic-secret")
+        fake_harness(self.root, mode="silent", messages=messages)
+        first, abandoned = self.acquire()
+        wait_for(lambda: "Starting server" in self.harness.startup_log(first))
+        second, _events = self.acquire()
+        output = self.harness.startup_log(second)
+        self.assertEqual(output, self.harness.startup_log(first))
+        self.assertEqual(len(output.splitlines()), 80)
+        self.assertNotIn("Installing package 0\n", output)
+        self.assertNotIn("synthetic-secret", output)
+        self.assertNotIn("\x1b", output)
+        self.assertEqual(self.harness.startup_log(object()), "")
+        self.harness.release(first)
+        self.assertEqual(self.harness.startup_log(first), "")
+        self.assertIn("Downloading dependencies", self.harness.startup_log(second))
+        self.harness.release(second)
+        self.assert_stopped()
+        self.assertFalse(self.harness._startup_log)
+        self.assertTrue(abandoned.empty())
+        fake_harness(self.root)
+        owner, events = self.acquire()
+        self.assertIsNotNone(events.get(timeout=6)[0])
+        self.assertEqual(self.harness.startup_log(owner), "")
+
+    def test_startup_output_redacts_secrets_and_terminal_controls(self):
+        for line in (
+            "token=synthetic-secret",
+            'password="synthetic secret with spaces"',
+            "'api_key': 'synthetic secret with spaces'",
+            "Authorization: Bearer synthetic-secret",
+            "--auth-token synthetic-secret",
+            "Ready http://user:synthetic-secret@127.0.0.1:3000/?token=synthetic-secret#secret",
+        ):
+            with self.subTest(line=line):
+                output = startup_message(line)
+                self.assertNotIn("synthetic", output)
+                self.assertIn("[redacted]", output)
+        self.assertEqual(
+            startup_message("\x1b]0;window title\x07\x1b[32mInstalling packages\x1b[0m\x00"),
+            "Installing packages",
+        )
+        self.assertEqual(len(startup_message("x" * 2000)), 1000)
 
     def test_cancel_startup_and_immediate_reopen(self):
         fake_harness(self.root, delay=0.4, child=True)

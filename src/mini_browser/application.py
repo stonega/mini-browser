@@ -37,6 +37,15 @@ class BrowserApplication(Adw.Application):
         self._discover_devices = discover_devices
         self._shutting_down = False
         self.discovery = None
+        self.agent_control = None
+        self.add_main_option(
+            "agent",
+            0,
+            GLib.OptionFlags.NONE,
+            GLib.OptionArg.NONE,
+            "Enable private local agent control",
+            None,
+        )
         self.deepseek = DeepSeekHarness()
         self.data_dir = Path(
             data_dir
@@ -199,6 +208,8 @@ class BrowserApplication(Adw.Application):
 
     def do_shutdown(self):
         self._shutting_down = True
+        if self.agent_control:
+            self.agent_control.close()
         for window in self.get_windows():
             if hasattr(window, "window_size"):
                 window.window_size.close()
@@ -223,6 +234,18 @@ class BrowserApplication(Adw.Application):
         self.new_window()
 
     def do_command_line(self, command_line):
+        if command_line.get_options_dict().contains("agent") and self.agent_control is None:
+            from .automation import Automation
+            from .control import ControlError, ControlServer
+
+            try:
+                automation = Automation(self)
+                self.agent_control = ControlServer(automation.dispatch)
+            except (ControlError, OSError) as error:
+                command_line.printerr(f"Cannot enable agent control: {error}\n")
+                return 1
+            self.connect("window-removed", automation.window_removed)
+            self.hold()
         args = command_line.get_arguments()[1:]
         if args and args[0] == "--":
             args = args[1:]

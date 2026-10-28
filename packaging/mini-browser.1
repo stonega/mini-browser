@@ -3,7 +3,13 @@
 mini-browser \- a small native GNOME web browser
 .SH SYNOPSIS
 .B mini-browser
-.RI [ URL " or " "search terms" ]...
+.RI [ --agent ] " [" URL " or " "search terms" ]...
+.br
+.B mini-browser agent
+.RI [ --socket " PATH] " COMMAND " ..."
+.br
+.B mini-browser mcp
+.RI [ --socket " PATH]"
 .SH DESCRIPTION
 Mini Browser opens one page per resizable portrait window, with a native
 GNOME header bar and sandboxed Chromium web content. Each command-line argument opens a separate window.
@@ -33,6 +39,36 @@ Show usage information.
 .TP
 .B \-\-version
 Show the application version.
+.TP
+.B \-\-agent
+Enable private same-user agent control and keep running after the last window
+closes. Use mini-browser agent stop or Quit to stop the application.
+.SH AGENT CONTROL
+mini-browser agent --help lists JSON control commands. Commands include list,
+open, add-app, apps, remove-app, navigate, close, snapshot, click, fill, press, eval, screenshot, resize,
+inspect, native-click, native-fill, action, cdp, tools, call, and stop. Page commands use
+the numeric page ID returned by list or open. Navigation is asynchronous.
+.PP
+mini-browser agent add-app URL --title NAME saves a persistent Home tile without
+opening the website or changing history. URL must be a full HTTP(S) address.
+The title is optional. Repeated URLs update the existing tile; omitting the title
+preserves its name. Saved apps appear before recents and survive restarts.
+Use mini-browser agent apps to list saved tiles and mini-browser agent remove-app
+URL to remove one. These operations require no page ID.
+.PP
+mini-browser mcp provides native MCP over stdio for Codex. Register it with:
+.PP
+.B codex mcp add mini_browser -- mini-browser mcp
+.PP
+Start the GUI separately with --agent. Control uses a private Unix socket,
+not a TCP debugging port. MINI_BROWSER_AGENT_SOCKET overrides the default
+$XDG_RUNTIME_DIR/mini-browser-agent/control.sock. The socket directory must be
+owned by the current user with mode 0700. Raw CDP and page JavaScript provide
+development access to websites and their sessions. Password dialogs and the
+encrypted vault have no agent interface.
+.PP
+See docs/user/agents.md for the full command reference, compatibility boundaries,
+and isolated UI tests (./scripts/smoke --test=agent).
 .SH KEYBOARD SHORTCUTS
 .TP
 .B Ctrl+L

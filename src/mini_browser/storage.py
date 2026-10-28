@@ -4,9 +4,33 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from .navigation import is_web_url
+
+
+def home_app_url(value: str) -> str:
+    """Validate a launcher URL and normalize its origin without changing the page."""
+    if not isinstance(value, str):
+        raise ValueError("Home apps require a full http:// or https:// URL.")
+    value = value.strip()
+    if not is_web_url(value) or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError("Home apps require a full http:// or https:// URL.")
+    parts = urlsplit(value)
+    if parts.username is not None or parts.password is not None:
+        raise ValueError("Home app URLs cannot contain a username or password.")
+    host = parts.hostname
+    if ":" in host:
+        host = f"[{host}]"
+    if parts.port and parts.port != (443 if parts.scheme == "https" else 80):
+        host += f":{parts.port}"
+    return urlunsplit((parts.scheme, host, parts.path or "/", parts.query, parts.fragment))
+
+
+def bookmark_app_url(value: str) -> str:
+    """A bookmarked URL app opens its origin, retaining subdomains and ports."""
+    parts = urlsplit(home_app_url(value))
+    return urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
 
 
 class Library:
@@ -33,6 +57,11 @@ class Library:
                     url TEXT NOT NULL,
                     title TEXT NOT NULL,
                     last_opened REAL NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS home_apps (
+                    url TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    created_at REAL NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS window_sizes (
                     kind TEXT NOT NULL,
@@ -109,6 +138,29 @@ class Library:
                 (url, title or url, time.time()),
             )
 
+    def add_bookmark_app(self, url: str):
+        url = bookmark_app_url(url)
+        self.add_bookmark(url, urlsplit(url).hostname)
+
+    def bookmarked_apps(self) -> list[dict]:
+        """Project bookmarks into one launcher per origin, with built-in presets."""
+        apps = {}
+        for url, title in (
+            ("https://www.youtube.com/", "YouTube"),
+            ("https://www.bilibili.com/", "Bilibili"),
+        ):
+            apps[url] = {"url": url, "site": url.rstrip("/"), "title": title}
+        for record in self.search("bookmarks", limit=None):
+            try:
+                url = bookmark_app_url(record["url"])
+            except ValueError:
+                continue
+            apps.setdefault(
+                url,
+                {"url": url, "site": url.rstrip("/"), "title": urlsplit(url).hostname},
+            )
+        return list(apps.values())
+
     def record_visit(self, url: str, title: str):
         visited = time.time()
         with self.connect() as db:
@@ -134,16 +186,56 @@ class Library:
                     (site, url, title or parts.hostname, visited),
                 )
 
-    def recent_apps(self, limit: int = 6) -> list[dict]:
+    def add_home_app(self, url: str, title: str | None = None) -> dict:
+        """Save a durable Home tile without visiting the page or changing history."""
+        url = home_app_url(url)
+        if title is not None:
+            if not isinstance(title, str) or any(ord(char) < 32 for char in title):
+                raise ValueError("App title must be plain text between 1 and 200 characters.")
+            title = " ".join(title.split())
+            if not 1 <= len(title) <= 200:
+                raise ValueError("App title must be plain text between 1 and 200 characters.")
+        with self.connect() as db:
+            db.execute(
+                """INSERT INTO home_apps VALUES (?, ?, ?)
+                   ON CONFLICT(url) DO UPDATE SET title=COALESCE(?, home_apps.title)""",
+                (url, title or urlsplit(url).hostname, time.time(), title),
+            )
+            row = db.execute("SELECT * FROM home_apps WHERE url=?", (url,)).fetchone()
+        return self._home_app_record(row)
+
+    @staticmethod
+    def _home_app_record(row) -> dict:
+        record = dict(row)
+        parts = urlsplit(record["url"])
+        record["site"] = f"{parts.scheme}://{parts.netloc}"
+        return record
+
+    def home_apps(self) -> list[dict]:
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM home_apps ORDER BY created_at, url").fetchall()
+        return [self._home_app_record(row) for row in rows]
+
+    def remove_home_app(self, url: str) -> bool:
+        url = home_app_url(url)
+        with self.connect() as db:
+            return db.execute("DELETE FROM home_apps WHERE url=?", (url,)).rowcount > 0
+
+    def recent_apps(self, limit: int = 6, *, exclude_sites=()) -> list[dict]:
         """Sites actually opened here, grouped by origin, with their latest page."""
         with self.connect() as db:
+            excluded = tuple(exclude_sites)
+            condition = (
+                "WHERE site NOT IN (" + ",".join("?" for _ in excluded) + ")" if excluded else ""
+            )
             rows = db.execute(
-                "SELECT * FROM recent_apps ORDER BY last_opened DESC, site ASC LIMIT ?",
-                (limit,),
+                f"SELECT * FROM recent_apps {condition} "
+                "ORDER BY last_opened DESC, site ASC LIMIT ?",
+                (*excluded, limit),
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def search(self, kind: str, query: str = "", limit: int = 200) -> list[dict]:
+    def search(self, kind: str, query: str = "", limit: int | None = 200) -> list[dict]:
         if kind not in {"bookmarks", "history"}:
             raise ValueError("Unknown library section")
         order = "created_at" if kind == "bookmarks" else "last_visit"
@@ -154,7 +246,7 @@ class Library:
             rows = db.execute(
                 f"""SELECT * FROM {kind}
                     WHERE title LIKE ? ESCAPE '\\' OR url LIKE ? ESCAPE '\\'
-                    ORDER BY {order} DESC LIMIT ?""",
-                (pattern, pattern, limit),
+                    ORDER BY {order} DESC, url ASC LIMIT ?""",
+                (pattern, pattern, -1 if limit is None else limit),
             ).fetchall()
         return [dict(row) for row in rows]

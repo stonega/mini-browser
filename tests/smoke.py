@@ -101,8 +101,16 @@ def run():
                     assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     assert window.stack.get_visible_child_name() == "home"
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
-                    assert window.recent_empty.get_visible()
-                    assert not window.devices_group.get_visible()
+                    assert window.home_sections.get_visible_child_name() == "apps"
+                    pages = window.home_sections.get_pages()
+                    assert [pages[i].get_title() for i in range(2)] == ["Apps", "History"]
+                    assert window.app_tiles.get_child_at_index(1) is not None
+                    assert window.app_tiles.get_child_at_index(2) is None
+                    assert window.devices_empty.get_visible()
+                    assert not window.lookup_action("bookmark").get_enabled()
+                    window.home_sections.set_visible_child_name("history")
+                    assert window.history_stack.get_visible_child_name() == "empty"
+                    window.home_sections.set_visible_child_name("apps")
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
                     window.home_entry.set_text(base)
@@ -118,8 +126,15 @@ def run():
                         snapshot(window, sys.argv[1])
                     with patch.object(window, "toast") as notified:
                         window.activate_action("win.bookmark", None)
-                        notified.assert_called_once_with("Bookmark saved")
+                        notified.assert_called_once_with("App bookmarked")
                     assert len(app.library.search("bookmarks")) == 1
+                    assert app.library.search("bookmarks")[0]["url"] == base + "/"
+                    menu = window.menu_button.get_menu_model()
+                    assert any(
+                        menu.get_item_attribute_value(i, "action", None).get_string()
+                        == "win.bookmark"
+                        for i in range(menu.get_n_items())
+                    )
                     # Verify each temporary dialog can be constructed in a narrow window.
                     for callback in [address_dialog, library_dialog, shortcuts_dialog]:
                         callback(window)
@@ -331,7 +346,11 @@ def run():
                     other.close()
                     state["phase"] = 3
                 elif state["phase"] == 3 and len(windows) == 1:
-                    # Synthetic app history also exercises the complete home grid.
+                    # Imported addresses and separate paths must all appear in History.
+                    app.library.import_records(
+                        [],
+                        [(base + f"/imported/{i}", f"Imported page {i}", i, 1) for i in range(250)],
+                    )
                     for name in ["Notes", "Calendar", "Mail", "Projects", "Music"]:
                         app.library.record_visit(f"https://{name.lower()}.example", name)
                     app.library.record_visit(base + "/second", "Local app")
@@ -340,7 +359,8 @@ def run():
                     assert window.get_title() == "Mini Browser"
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
-                    assert not window.recent_empty.get_visible()
+                    assert window.app_tiles.get_child_at_index(2) is not None
+                    assert window.app_tiles.get_child_at_index(3) is None
                     state["ready"] = time.monotonic() + 0.2
                     state["phase"] = 31
                 elif state["phase"] == 31 and time.monotonic() >= state["ready"]:
@@ -355,7 +375,30 @@ def run():
                         path = Path(sys.argv[1])
                         snapshot(window, str(path.with_name(path.stem + "-settings.png")))
                     window.get_visible_dialog().force_close()
-                    window.recent_tiles.get_child_at_index(1).get_child().emit("clicked")
+                    window.home_sections.set_visible_child_name("history")
+                    assert window.history_model.get_n_items() > 250
+                    assert window.history_model.get_n_items() == len(
+                        app.library.search("history", limit=None)
+                    )
+                    state["ready"] = time.monotonic() + 0.2
+                    state["phase"] = 33
+                elif state["phase"] == 33 and time.monotonic() >= state["ready"]:
+                    if len(sys.argv) > 1:
+                        path = Path(sys.argv[1])
+                        snapshot(window, str(path.with_name(path.stem + "-history.png")))
+                    assert window.history_list.get_width() == window.get_width()
+                    row = next(
+                        child
+                        for child in widgets(window.history_list)
+                        if isinstance(child, Gtk.Label) and child.get_label() == "Local app"
+                    )
+                    assert row.get_width() > 100
+                    index = next(
+                        i
+                        for i in range(window.history_model.get_n_items())
+                        if window.history_model[i].record["url"] == base + "/second"
+                    )
+                    window.history_list.emit("activate", index)
                     state["phase"] = 4
                 elif (
                     state["phase"] == 4
@@ -411,7 +454,8 @@ def run():
                     assert (window.get_width(), window.get_height()) == (730, 620)
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
-                        "history, bookmark, settings imports, home entry, recent apps, "
+                        "complete history list, URL app bookmarks, Apps/History tabs, "
+                        "settings imports, home entry, "
                         "same-window links/popups/POST, Back for links/typed URLs/History API/"
                         "fragments, persistent Home button, header restored on media "
                         "URL change, explicit new window, remembered per-host sizes, close"

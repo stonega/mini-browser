@@ -7,7 +7,7 @@ A native GNOME web browser with a small footprint on your screen.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
 - A pin button before the layout icon, with always-on-top enabled by default in media layouts.
-- A home page with a search/address bar, DeepSeek Harness, recent sites, and phone tiles.
+- A home page with Apps/History tabs, phone and script apps, bookmarks, and complete saved history.
 - A DeepSeek launcher with its official icon and managed local-server lifetime.
 - Native Android mirroring with basic input, and authenticated iPhone AirPlay viewing.
 - Automatic Android phone tiles, with scrcpy's phone-side helper included in the app.
@@ -15,8 +15,15 @@ A native GNOME web browser with a small footprint on your screen.
 - Chrome password CSV import into an app-local encrypted vault, with login filling.
 - Shared, persistent website sessions across Mini Browser windows.
 - Native dialogs for addresses, the searchable library, import, and downloads.
+- Opt-in agent CLI and native Codex MCP tools for Chromium and GTK UI testing.
 
 See the [release notes](docs/user/releases.md) for the latest changes.
+
+Agent control: start with `mini-browser --agent`, then use
+`mini-browser agent --help`. Register native MCP with
+`codex mcp add mini_browser -- mini-browser mcp`.
+See [agent commands, Codex setup and UI testing](docs/user/agents.md).
+Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
 Version 0.3.1 adds H.264/AAC playback on Fedora 45+ x86_64, native page Copy,
@@ -64,8 +71,11 @@ From this directory:
 ./scripts/run 'weather in Taipei'
 ```
 
-Each argument opens its own window. The home page has a search/address field
-and tiles for DeepSeek Harness and recently opened sites. DeepSeek starts on
+Each argument opens its own window. Home has Apps and History tabs above a
+search/address field. Apps groups devices, script apps such as DeepSeek Harness,
+and bookmarked apps with YouTube and Bilibili presets. History lists all saved
+addresses in compact full-width rows. Choose Bookmark App in the main menu to
+save the current website's root URL as an app. DeepSeek starts on
 demand using `npx @deepseek-ai/dsh web` and stops when its last window leaves;
 Node.js and npm must be on your desktop's PATH. The header bar's three-line menu, after the
 layout button, contains Settings for devices, imports, passwords, and your library, plus
@@ -91,7 +101,7 @@ the RPM or running `scripts/install`, log out and back in, then run
 | Back / forward | Alt+Left / Alt+Right |
 | Reload / stop | Ctrl+R or F5 / Escape |
 | Bookmarks and history | Ctrl+B or Ctrl+H |
-| Bookmark current page | Ctrl+D |
+| Bookmark current website as an app | Ctrl+D |
 | Import Chrome data | Ctrl+Shift+I |
 | Manage passwords / import CSV | Ctrl+Shift+P |
 | Fill a saved login | Ctrl+Shift+L |

@@ -67,6 +67,8 @@ def main():
     temporary.replace(root / f"run-{os.getpid()}.json")
     if config.get("child"):
         subprocess.Popen([sys.executable, __file__, "--child"])
+    for message in config.get("messages", []):
+        print(message, flush=True)
     if config.get("mode") == "fail":
         print("Synthetic failure with private-fixture-token", file=sys.stderr, flush=True)
         return 1

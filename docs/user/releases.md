@@ -1,5 +1,15 @@
 # Release notes
 
+## Unreleased
+
+- Add persistent Home app tiles through `agent add-app URL --title NAME`, with
+  `apps` and `remove-app` commands and matching native MCP tools.
+- Add opt-in `--agent` control, a JSON CLI and a native stdio MCP server for Codex.
+- Support Chromium snapshots, element input, screenshots, JavaScript and raw CDP,
+  plus native GTK inspection, button/text input, window actions and resizing.
+- Add the [agent command reference and Codex setup](agents.md) and an isolated
+  `./scripts/smoke --test=agent` integration test using synthetic pages and profiles.
+
 ## 0.3.1 — October 27, 2026
 
 - Enable H.264/AAC playback, including MediaSource streaming, in Fedora 45 and
