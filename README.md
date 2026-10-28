@@ -26,8 +26,9 @@ See [agent commands, Codex setup and UI testing](docs/user/agents.md).
 Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-Version 0.3.1 adds H.264/AAC playback on Fedora 45+ x86_64, native page Copy,
-remembered window sizes and a DeepSeek Harness launcher.
+Version 0.4.0 adds opt-in agent CLI and native Codex MCP control, a unified
+Home Apps grid with persistent app tiles, and animated script startup logs.
+H.264/AAC playback remains available on Fedora 45+ x86_64.
 
 ## Fedora RPM
 
@@ -45,7 +46,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.3.1-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.0-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 

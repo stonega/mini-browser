@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased
+## 0.4.0 — October 28, 2026
 
 - Hide the page layout button in Home windows, including the History tab.
 - Make Home close the app window and focus an existing Home window, creating a clean one when needed; add Home to phone windows.
@@ -14,6 +14,12 @@
   plus native GTK inspection, button/text input, window actions and resizing.
 - Add the [agent command reference and Codex setup](agents.md) and an isolated
   `./scripts/smoke --test=agent` integration test using synthetic pages and profiles.
+
+Close all Mini Browser windows and reopen the app after upgrading. The library,
+website sessions and encrypted vault are preserved. Agent control is opt-in:
+start the app with `mini-browser --agent`; see the [agent guide](agents.md) for
+CLI commands and native Codex MCP setup. H.264/AAC remains limited to Fedora 45
+and Rawhide x86_64; Fedora 43/44 and aarch64 retain the stock engine.
 
 ## 0.3.1 — October 27, 2026
 

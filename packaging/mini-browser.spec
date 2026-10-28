@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.3.1
+Version:        0.4.0
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -154,6 +154,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Wed Oct 28 2026 Mini Browser contributors - 0.4.0-1
+- Add opt-in agent CLI and native MCP control for Chromium and GTK.
+- Unify Home apps, add persistent agent-created tiles, and simplify startup logs.
+- Return app windows to a shared Home window and hide its page layout controls.
+
 * Tue Oct 27 2026 Mini Browser contributors - 0.3.1-1
 - Enable H.264/AAC web video on Fedora 45+ x86_64 with a pinned CEF runtime.
 - Fix page Copy buttons, remember window sizes, and add the DeepSeek launcher.
