@@ -70,8 +70,67 @@ class Library:
                     height INTEGER NOT NULL CHECK (height > 0),
                     PRIMARY KEY (kind, app_key)
                 );
+                CREATE TABLE IF NOT EXISTS permissions (
+                    origin TEXT NOT NULL,
+                    permission TEXT NOT NULL,
+                    state TEXT NOT NULL CHECK (state IN ('allow', 'block')),
+                    updated_at REAL NOT NULL,
+                    PRIMARY KEY (origin, permission)
+                );
             """)
         path.chmod(0o600)
+
+    def permission_decision(self, origin: str, permission: str) -> str | None:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT state FROM permissions WHERE origin=? AND permission=?",
+                (origin, permission),
+            ).fetchone()
+        return row["state"] if row else None
+
+    def set_permission(self, origin: str, permission: str, state: str):
+        if not isinstance(origin, str) or not origin:
+            raise ValueError("A site origin is required.")
+        if not isinstance(permission, str) or not permission:
+            raise ValueError("A permission name is required.")
+        if state not in {"allow", "block", "ask"}:
+            raise ValueError("Unknown permission choice.")
+        with self.connect() as db:
+            if state == "ask":
+                db.execute(
+                    "DELETE FROM permissions WHERE origin=? AND permission=?",
+                    (origin, permission),
+                )
+            else:
+                db.execute(
+                    """INSERT INTO permissions VALUES (?, ?, ?, ?)
+                       ON CONFLICT(origin, permission) DO UPDATE SET
+                         state=excluded.state, updated_at=excluded.updated_at""",
+                    (origin, permission, state, time.time()),
+                )
+
+    def clear_permissions(self, origin: str | None = None) -> int:
+        if origin is not None and (not isinstance(origin, str) or not origin):
+            raise ValueError("A site origin is required.")
+        with self.connect() as db:
+            if origin is None:
+                return db.execute("DELETE FROM permissions").rowcount
+            return db.execute("DELETE FROM permissions WHERE origin=?", (origin,)).rowcount
+
+    def permission_records(self, origin: str | None = None) -> list[dict]:
+        with self.connect() as db:
+            if origin is None:
+                rows = db.execute(
+                    "SELECT origin, permission, state, updated_at FROM permissions "
+                    "ORDER BY origin, permission"
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT origin, permission, state, updated_at FROM permissions "
+                    "WHERE origin=? ORDER BY permission",
+                    (origin,),
+                ).fetchall()
+        return [dict(row) for row in rows]
 
     def window_size(self, kind: str, app_key: str) -> tuple[int, int] | None:
         with self.connect() as db:

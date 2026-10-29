@@ -37,7 +37,9 @@ builds the small C++ bridge and subprocess. It supports x86_64 and aarch64; the
 latter needs a native ARM build. Allow roughly 2 GiB for SDK and build files.
 Use `--sdk /absolute/path` for an extracted SDK, or `--archive path.tar.bz2`
 for an offline, checksum-verified build. Runtime output is `build/cef/runtime`.
-`MINI_BROWSER_CEF_RUNTIME` can select an alternate compatible runtime.
+`MINI_BROWSER_CEF_RUNTIME` can select an alternate compatible runtime. The
+bridge ABI must match the Python adapter; rebuild it after changing
+`native/cef/bridge.cc`.
 Linux must permit unprivileged user namespaces. The app keeps Chromium's sandbox
 and TLS verification enabled; it has no insecure fallback.
 
@@ -140,6 +142,13 @@ is needed. The runner starts a separate accessibility bus and registry daemon
 before Chromium launches, avoiding private-bus systemd activation failures.
 Test windows stay off the user's desktop. Navigation checks cover same-window
 target links, script popups, native POST submissions, Back, and explicit new windows.
+Delayed loopback responses verify the loading spinner replaces Back and restores
+it after completion, cancellation and connection failure. Optional captures
+include a `-loading.png` image of the header indicator.
+The browser check also opens the site-permission manager, saves a Notifications
+choice, verifies Chromium reports it, and exercises the native permission prompt
+with a synthetic request. Unit tests cover origin normalization, mask mapping,
+and permission persistence.
 The runner copies and enables the bundled pin extension only in the disposable
 desktop. Media checks verify manual pinning, pinning by default in both player
 layouts, and restoration of the page's prior pin setting.

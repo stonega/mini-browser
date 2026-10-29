@@ -20,6 +20,13 @@ from mini_browser.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
+        if events := self.server.slow_loads.get(self.path):
+            started, release = events
+            started.set()
+            assert release.wait(8), "Loading indicator check did not release the response"
+            if self.path == "/fail-loading":
+                self.close_connection = True
+                return
         second = self.path == "/second"
         page = (
             '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">'
@@ -35,7 +42,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(page)))
         self.end_headers()
-        self.wfile.write(page)
+        try:
+            self.wfile.write(page)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # The stopped-load check deliberately disconnects before the response.
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
@@ -63,6 +73,10 @@ def run():
     with tempfile.TemporaryDirectory(prefix="mini-browser-smoke-") as temp:
         root = Path(temp)
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        server.slow_loads = {
+            path: (threading.Event(), threading.Event())
+            for path in ("/loading", "/cancel-loading", "/fail-loading")
+        }
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_port}"
         app = BrowserApplication(
@@ -76,8 +90,24 @@ def run():
         errors = []
         state = {"phase": 0}
 
+        class FakePermissionRequest:
+            def __init__(self, origin):
+                self.supported = True
+                self.names = ("geolocation",)
+                self.origin = origin
+                self.cancelled = False
+                self.answered = False
+
+            def allow(self):
+                self.answered = True
+                state["prompt_allowed"] = True
+
+            def deny(self):
+                self.answered = True
+                state["prompt_allowed"] = False
+
         def fail(exc):
-            errors.append(str(exc))
+            errors.append(f"Smoke phase {state['phase']}: {exc or type(exc).__name__}")
             traceback.print_exc()
             app.quit()
 
@@ -103,6 +133,7 @@ def run():
                 if state["phase"] == 0:
                     assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     assert window.stack.get_visible_child_name() == "home"
+                    assert not window.loading_spinner.get_visible()
                     assert not window.layout_button.get_visible()
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.home_sections.get_visible_child_name() == "apps"
@@ -157,11 +188,15 @@ def run():
                     window.home_sections.get_child_by_name("apps").get_vadjustment().set_value(0)
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
+                    assert window.loading_spinner.get_visible()
+                    assert not window.back_button.get_visible()
+                    assert not window.back_button.get_sensitive()
                     state["phase"] = 1
                 elif state["phase"] == 1 and window.webview.get_title() == "Mini smoke":
                     if window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
                     assert window.stack.get_visible_child_name() == "web"
+                    assert not window.loading_spinner.get_visible()
                     assert window.layout_button.get_visible()
                     assert len(app.library.search("history")) == 1
                     assert len(app.library.recent_apps()) == 1
@@ -178,6 +213,21 @@ def run():
                         == "win.bookmark"
                         for i in range(menu.get_n_items())
                     )
+                    assert window.permissions_button.get_visible()
+                    window.activate_action("win.permissions", None)
+                    site_permissions = window.get_visible_dialog()
+                    assert isinstance(site_permissions, Adw.PreferencesDialog)
+                    assert site_permissions.get_title() == "Site permissions"
+                    assert app.library.permission_records() == []
+                    if len(sys.argv) > 1:
+                        path = Path(sys.argv[1])
+                        snapshot(window, str(path.with_name(path.stem + "-permissions.png")))
+                    site_permissions.force_close()
+                    window.activate_action("win.permissions-all", None)
+                    all_permissions = window.get_visible_dialog()
+                    assert isinstance(all_permissions, Adw.PreferencesDialog)
+                    assert all_permissions.get_title() == "Permissions"
+                    all_permissions.force_close()
                     # Verify each temporary dialog can be constructed in a narrow window.
                     for callback in [address_dialog, library_dialog, shortcuts_dialog]:
                         callback(window)
@@ -538,15 +588,154 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     assert window.get_default_size() == (730, 620)
                     assert (window.get_width(), window.get_height()) == (730, 620)
+                    window.load_uri(base + "/loading")
+                    state["phase"] = "loading"
+                elif state["phase"] in ("loading", "cancel-loading", "fail-loading"):
+                    window = state["size_window"]
+                    started, release = server.slow_loads["/" + state["phase"]]
+                    if not started.is_set():
+                        return GLib.SOURCE_CONTINUE
+                    assert window.webview.is_loading()
+                    assert window.loading_spinner.get_visible()
+                    assert window.loading_spinner.get_mapped()
+                    assert window.loading_spinner.get_width() >= 16
+                    assert window.loading_spinner.get_height() >= 16
+                    assert not window.back_button.get_visible()
+                    assert window.loading_spinner.get_tooltip_text() == "Loading page"
+                    if state["phase"] == "loading":
+                        shown = state.setdefault("spinner_shown", time.monotonic())
+                        if time.monotonic() - shown < 0.5:
+                            return GLib.SOURCE_CONTINUE
+                        painted = Gtk.WidgetPaintable.new(window.loading_spinner)
+                        shot = Gtk.Snapshot.new()
+                        painted.snapshot(shot, 16, 16)
+                        assert shot.to_node() is not None, "Loading spinner renders no pixels"
+                        if len(sys.argv) > 1:
+                            path = Path(sys.argv[1])
+                            state["paintable"] = Gtk.WidgetPaintable.new(window)
+                            snapshot(window, str(path.with_name(path.stem + "-loading.png")))
+                        release.set()
+                        state["phase"] = "loaded"
+                    elif state["phase"] == "cancel-loading":
+                        window.activate_action("win.stop", None)
+                        state["phase"] = "stopped"
+                    else:
+                        release.set()
+                        state["phase"] = "failed"
+                elif state["phase"] in ("loaded", "stopped", "failed", "recovered"):
+                    window = state["size_window"]
+                    if window.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
+                    if state["phase"] == "failed":
+                        assert window.stack.get_visible_child_name() == "error"
+                    assert not window.loading_spinner.get_visible()
+                    assert window.back_button.get_mapped()
+                    assert window.back_button.get_icon_name() == "go-previous-symbolic"
+                    assert window.back_button.get_sensitive()
+                    if state["phase"] == "loaded":
+                        window.load_uri(base + "/cancel-loading")
+                        state["phase"] = "cancel-loading"
+                        return GLib.SOURCE_CONTINUE
+                    if state["phase"] == "stopped":
+                        server.slow_loads["/cancel-loading"][1].set()
+                        window.load_uri(base + "/fail-loading")
+                        state["phase"] = "fail-loading"
+                        return GLib.SOURCE_CONTINUE
+                    if state["phase"] == "failed":
+                        window.load_uri(base + "/recovered")
+                        state["phase"] = "recovered"
+                        return GLib.SOURCE_CONTINUE
+                    state["permission_origin"] = f"http://127.0.0.1:{server.server_port}"
+                    window.activate_action("win.permissions", None)
+                    dialog = window.get_visible_dialog()
+                    assert dialog.get_title() == "Site permissions"
+                    dropdown = next(
+                        widget
+                        for widget in widgets(dialog)
+                        if isinstance(widget, Gtk.DropDown)
+                        and "Notifications permission" in (widget.get_tooltip_text() or "")
+                    )
+                    dropdown.set_selected(1)
+                    assert (
+                        app.library.permission_decision(state["permission_origin"], "notifications")
+                        == "allow"
+                    )
+                    dialog.force_close()
+                    state["permission_started"] = time.monotonic()
+                    state["phase"] = "permission-applied"
+                    return GLib.SOURCE_CONTINUE
+                elif state["phase"] == "permission-applied":
+                    window = state["size_window"]
+                    if time.monotonic() - state["permission_started"] < 0.5:
+                        return GLib.SOURCE_CONTINUE
+
+                    def permission_value(view, result):
+                        try:
+                            state["permission_value"] = json.loads(
+                                view.evaluate_javascript_finish(result).to_json(0)
+                            )
+                        except Exception as exc:
+                            fail(exc)
+                        state["phase"] = "permission-checked"
+
+                    window.webview.evaluate_javascript(
+                        "Notification.permission",
+                        -1,
+                        None,
+                        None,
+                        None,
+                        permission_value,
+                    )
+                    return GLib.SOURCE_CONTINUE
+                elif state["phase"] == "permission-checked":
+                    window = state["size_window"]
+                    assert state["permission_value"] == "granted", state["permission_value"]
+                    window.webview.emit(
+                        "permission-request",
+                        FakePermissionRequest(state["permission_origin"]),
+                    )
+                    state["phase"] = "prompt-shown"
+                    return GLib.SOURCE_CONTINUE
+                elif state["phase"] == "prompt-shown":
+                    window = state["size_window"]
+                    if window._permission_dialog is None:
+                        state.setdefault("prompt_wait", time.monotonic())
+                        assert time.monotonic() - state["prompt_wait"] < 2, (
+                            "permission prompt did not open",
+                            window._permission_current,
+                            window._permission_queue,
+                            app.library.permission_records(state["permission_origin"]),
+                        )
+                        return GLib.SOURCE_CONTINUE
+                    prompt = window._permission_dialog
+                    assert isinstance(prompt, Adw.AlertDialog)
+                    assert prompt.get_heading() == "Permission request"
+                    if len(sys.argv) > 1:
+                        path = Path(sys.argv[1])
+                        snapshot(window, str(path.with_name(path.stem + "-prompt.png")))
+                    prompt.emit("response", "allow")
+                    prompt.force_close()
+                    state["phase"] = "prompt-answered"
+                    return GLib.SOURCE_CONTINUE
+                elif state["phase"] == "prompt-answered":
+                    window = state["size_window"]
+                    assert state.get("prompt_allowed")
+                    assert (
+                        app.library.permission_decision(state["permission_origin"], "geolocation")
+                        == "allow"
+                    )
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "complete history list, URL app bookmarks, Apps/History tabs, "
-                        "settings imports, home entry, "
+                        "settings imports, site permission manager, home entry, "
                         "same-window links/popups/POST, Back for links/typed URLs/History API/"
                         "fragments, Home closes apps and creates or focuses Home, "
                         "header restored on media "
-                        "URL change, explicit new window, remembered per-host sizes, close"
+                        "URL change, explicit new window, remembered per-host sizes, "
+                        "loading indicator and Back restoration after completion/stop/failure, "
+                        "close"
                     )
+                    state["phase"] = "done"
                     window.close()
                     return GLib.SOURCE_REMOVE
             except StopIteration:
@@ -562,15 +751,17 @@ def run():
             return GLib.SOURCE_REMOVE
 
         GLib.timeout_add(100, tick)
-        timeout_source = GLib.timeout_add_seconds(25, timeout)
+        timeout_source = GLib.timeout_add_seconds(45, timeout)
         try:
             app.run(["mini-browser-smoke"])
         finally:
             GLib.source_remove(timeout_source)
+            for _started, release in server.slow_loads.values():
+                release.set()
             server.shutdown()
         if errors:
             raise SystemExit("; ".join(errors))
-        if state["phase"] != 46:
+        if state["phase"] != "done":
             raise SystemExit("Smoke test exited before completion")
 
 

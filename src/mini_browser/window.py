@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from . import APP_NAME, autofill
+from . import APP_NAME, autofill, permissions
 from .audio_player import AudioPlayer
 from .deepseek import COMMAND as DEEPSEEK_COMMAND
 from .deepseek import ICON as DEEPSEEK_ICON
@@ -18,6 +18,7 @@ from .gtk import Adw, Gio, GLib, GObject, Gtk, Pango, Web
 from .media import video_window_size
 from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
+from .permission_dialogs import permission_prompt, permissions_dialog
 from .script_loading import ScriptLoading
 from .video_player import VideoPlayer
 from .window_pin import WindowPin
@@ -74,6 +75,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._media_generation = 0
         self._media_drag_origin = None
         self.document_generation = 0
+        self._permission_queue = []
+        self._permission_dialog = None
+        self._permission_current = None
+        self._permission_origin = None
         self.webview = Web.View(network_session=app.network_session)
         self._user_content_manager = self.webview.get_user_content_manager()
         self._user_content_manager.add_script(
@@ -109,6 +114,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.webview.connect("web-process-terminated", self._web_process_terminated)
         self.webview.connect("notify::playing-audio", self._audio_changed)
         self.webview.connect("notify::is-muted", self._audio_changed)
+        self.webview.connect("permission-request", self._permission_requested)
+        self.webview.connect("permission-dismissed", self._permission_dismissed)
 
         self.stack = Gtk.Stack(hhomogeneous=False, vhomogeneous=False)
         self.stack.add_named(self._home(), "home")
@@ -144,6 +151,18 @@ class BrowserWindow(Adw.ApplicationWindow):
             tooltip_text="Back (Alt+Left)",
             action_name="win.back",
         )
+        # Prefer Adwaita's native animation, retaining support for libadwaita 1.5.
+        spinner_type = getattr(Adw, "Spinner", Gtk.Spinner)
+        self.loading_spinner = spinner_type(
+            width_request=16,
+            height_request=16,
+            halign=Gtk.Align.CENTER,
+            valign=Gtk.Align.CENTER,
+            tooltip_text="Loading page",
+            visible=False,
+            margin_start=9,
+            margin_end=9,
+        )
         self.back_history = Gtk.Popover(position=Gtk.PositionType.BOTTOM)
         self.back_history.set_parent(self.back_button)
         self.back_history.connect("notify::visible", self._menu_changed)
@@ -153,7 +172,14 @@ class BrowserWindow(Adw.ApplicationWindow):
         history_press.connect("pressed", self._back_history_pressed)
         self.back_button.add_controller(history_press)
         self.headerbar.pack_start(self.back_button)
+        self.headerbar.pack_start(self.loading_spinner)
         header_actions = Gtk.Box(spacing=0)
+        self.permissions_button = Gtk.Button(
+            icon_name="security-high-symbolic",
+            tooltip_text="Site permissions",
+            action_name="win.permissions",
+        )
+        header_actions.append(self.permissions_button)
         self.pin_button = Gtk.ToggleButton(icon_name="view-pin-symbolic", tooltip_text="Pin on top")
         header_actions.append(self.pin_button)
         self.pin = WindowPin(self, self.pin_button)
@@ -634,7 +660,11 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.layout_button.set_visible(browsing)
         media = self.audio_mode or self.video_mode
         can_go_back = media or self.webview.can_go_back()
-        self.back_button.set_visible(browsing and can_go_back)
+        loading = browsing and not self.failed and self.webview.is_loading()
+        self.loading_spinner.set_visible(loading)
+        if isinstance(self.loading_spinner, Gtk.Spinner):
+            self.loading_spinner.set_spinning(loading)
+        self.back_button.set_visible(browsing and can_go_back and not loading)
         self.lookup_action("back").set_enabled(browsing and can_go_back)
         self.back_button.set_tooltip_text("Return to Full page" if media else "Back (Alt+Left)")
         self.lookup_action("forward").set_enabled(browsing and self.webview.can_go_forward())
@@ -642,6 +672,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             browsing and bool(self.webview.get_uri())
         )
         uri = self.webview.get_uri() or ""
+        self.permissions_button.set_visible(browsing and is_web_url(uri))
         self.lookup_action("bookmark").set_enabled(
             browsing and is_web_url(uri) and not self.get_application().deepseek.owns_uri(uri)
         )
@@ -744,6 +775,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         if self.stack.get_visible_child_name() != "home":
             self._select_window_size(self.webview.get_uri() or "")
         self._navigation_changed()
+        self._apply_page_permissions()
 
     def _cancel_header_hide(self):
         if self._header_source:
@@ -954,6 +986,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._restore_page()
         else:
             self.webview.stop_loading()
+            self._navigation_changed()
 
     def _resize_layout(self, width, height, *, maximized=False, fullscreen=False):
         if self._layout_source:
@@ -1011,6 +1044,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             "import": lambda: import_dialog(self),
             "library": lambda: library_dialog(self),
             "bookmark": self._bookmark,
+            "permissions": self._permissions,
+            "permissions-all": lambda: permissions_dialog(self),
             "passwords": lambda: passwords_dialog(self),
             "import-passwords": lambda: passwords_dialog(self, import_now=True),
             "fill-login": lambda: fill_login(self),
@@ -1038,14 +1073,17 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.failed_uri = None
         self._restore_page()
         self._select_window_size(uri)
+        self.apply_site_permissions(uri)
         self.stack.set_visible_child_name("web")
         self.webview.load_uri(uri)
+        self._navigation_changed()
         self.webview.grab_focus()
 
     def _load_changed(self, view, event):
         if self._closing:
             return
         if event == Web.LoadEvent.STARTED:
+            self._dismiss_permission_prompts()
             self.player.reset()
             self.video_player.reset()
             self._video_available = False
@@ -1069,6 +1107,7 @@ class BrowserWindow(Adw.ApplicationWindow):
                     self.toast("Could not save this visit to history.")
         self._navigation_changed()
         self._audio_changed()
+        self._apply_page_permissions()
 
     def _show_error(self, uri, message):
         if self._closing:
@@ -1081,6 +1120,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._restore_page()
         self.error_page.set_description(message)
         self.stack.set_visible_child_name("error")
+        self._navigation_changed()
         self._audio_changed()
 
     def _load_failed(self, _view, _event, uri, error):
@@ -1122,6 +1162,148 @@ class BrowserWindow(Adw.ApplicationWindow):
             except Exception:
                 self.toast("Could not save this bookmark.")
 
+    def _permissions(self):
+        uri = self.webview.get_uri() or ""
+        origin = None
+        if is_web_url(uri):
+            try:
+                origin = permissions.normalize_origin(uri)
+            except ValueError:
+                origin = None
+        permissions_dialog(self, origin)
+
+    def apply_site_permissions(self, origin=None):
+        """Apply stored choices to Chromium, defaulting to the current page."""
+        if origin is None:
+            origin = self.webview.get_uri() or ""
+        try:
+            origin = permissions.normalize_origin(origin)
+        except ValueError:
+            return
+        try:
+            records = {
+                record["permission"]: record["state"]
+                for record in self.library.permission_records(origin)
+            }
+            self.webview.apply_permissions(origin, records)
+        except Exception:
+            self.toast("Could not apply this permission choice.")
+
+    def reset_site_permissions(self, origin):
+        try:
+            origin = permissions.normalize_origin(origin)
+        except ValueError:
+            return
+        self.webview.apply_permissions(origin, {})
+        if self._permission_origin == origin:
+            self._permission_origin = None
+
+    def reset_all_site_permissions(self):
+        self.webview.reset_permissions()
+        self._permission_origin = None
+
+    def _apply_page_permissions(self):
+        if not self.webview.prepared:
+            return
+        uri = self.webview.get_uri() or ""
+        try:
+            origin = permissions.normalize_origin(uri)
+        except ValueError:
+            return
+        if origin == self._permission_origin:
+            return
+        self._permission_origin = origin
+        self.apply_site_permissions(origin)
+
+    def _permission_requested(self, _view, request):
+        if self._closing or not request.supported:
+            request.deny()
+            return
+        self._permission_queue.append(request)
+        self._show_next_permission()
+
+    def _show_next_permission(self):
+        if self._closing or self._permission_dialog is not None:
+            return
+        while self._permission_queue:
+            request = self._permission_queue.pop(0)
+            if request.cancelled or request.answered:
+                continue
+            states = [
+                permissions.decision(self.library, request.origin, name) for name in request.names
+            ]
+            if permissions.BLOCK in states:
+                request.deny()
+                continue
+            asked = tuple(
+                name
+                for name, state in zip(request.names, states, strict=True)
+                if state == permissions.ASK
+            )
+            if not asked:
+                request.allow()
+                continue
+            request.prompt_names = asked
+            self._permission_current = request
+            self._permission_dialog = permission_prompt(
+                self,
+                request,
+                lambda allow, remember, request=request: self._permission_answer(
+                    request, allow, remember
+                ),
+            )
+            return
+
+    def _permission_answer(self, request, allow, remember):
+        if request.cancelled or request.answered:
+            self._permission_dialog = None
+            self._permission_current = None
+            self._show_next_permission()
+            return
+        if remember:
+            try:
+                for name in getattr(request, "prompt_names", request.names):
+                    self.library.set_permission(
+                        request.origin,
+                        name,
+                        permissions.ALLOW if allow else permissions.BLOCK,
+                    )
+            except Exception:
+                self.toast("Could not save this permission choice.")
+        if allow:
+            request.allow()
+        else:
+            request.deny()
+        if remember:
+            GLib.idle_add(self.apply_site_permissions, request.origin)
+        self._permission_dialog = None
+        self._permission_current = None
+        GLib.idle_add(self._show_next_permission)
+
+    def _permission_dismissed(self, _view, request):
+        request.cancelled = True
+        try:
+            self._permission_queue.remove(request)
+        except ValueError:
+            pass
+        if request is self._permission_current:
+            dialog, self._permission_dialog = self._permission_dialog, None
+            self._permission_current = None
+            if dialog:
+                dialog.force_close()
+            GLib.idle_add(self._show_next_permission)
+
+    def _dismiss_permission_prompts(self):
+        for request in self._permission_queue:
+            request.cancelled = True
+        self._permission_queue.clear()
+        if self._permission_current:
+            self._permission_current.cancelled = True
+        dialog, self._permission_dialog = self._permission_dialog, None
+        self._permission_current = None
+        if dialog:
+            dialog.force_close()
+
     def _zoom(self, delta):
         self.webview.set_zoom_level(max(0.5, min(3, self.webview.get_zoom_level() + delta)))
 
@@ -1132,6 +1314,10 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _close_requested(self, *_):
         self.window_size.close()
         self._closing = True
+        self.loading_spinner.set_visible(False)
+        if isinstance(self.loading_spinner, Gtk.Spinner):
+            self.loading_spinner.stop()
+        self._dismiss_permission_prompts()
         self._release_deepseek()
         self.back_history.popdown()
         self.back_history.unparent()

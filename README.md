@@ -2,7 +2,8 @@
 
 A native GNOME web browser with a small footprint on your screen.
 
-- A native GNOME header bar with Home, Back, the page title, and close button, plus web content.
+- A native GNOME header bar with Home, Back, the page title, site permissions, and close button, plus web content.
+- Site permission management for camera, microphone, location, and notifications, with a shield button and saved per-site choices.
 - Links requesting a new tab or window open in the current window; Ctrl+N opens another.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
@@ -79,7 +80,7 @@ addresses in compact full-width rows. Choose Bookmark App in the main menu to
 save the current website's root URL as an app. DeepSeek starts on
 demand using `npx @deepseek-ai/dsh web` and stops when its last window leaves;
 Node.js and npm must be on your desktop's PATH. The header bar's three-line menu, after the
-layout button, contains Settings for devices, imports, passwords, and your library, plus
+layout button, contains Settings for devices, imports, passwords, site permissions, and your library, plus
 About Mini Browser with the app version and license. While browsing, the header
 bar sits above the page. The narrow window lets responsive websites use their compact
 layout; the browser keeps Chromium's normal desktop user agent.

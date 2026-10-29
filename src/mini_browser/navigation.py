@@ -79,4 +79,4 @@ def address_to_uri(value: str) -> str:
         raise ValueError("This website address is not valid.")
     if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", value):
         raise ValueError("Mini Browser opens http:// and https:// websites.")
-    return "https://duckduckgo.com/?q=" + quote_plus(value)
+    return "https://www.google.com/search?q=" + quote_plus(value)

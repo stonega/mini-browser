@@ -2,6 +2,7 @@
 
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
+Searches use Google by default, including searches from Ctrl+L and the command line.
 Home has **Apps** and **History** tabs. Apps shows devices, script apps
 (including DeepSeek Harness), YouTube and Bilibili presets, saved Home apps,
 and bookmarked websites together in one grid without group titles. History shows
@@ -11,13 +12,16 @@ long text is shortened to fit, with details available on hover. Select a row to
 reopen that exact page. Repeat visits update the address's time and visit count.
 A native GNOME header
 bar includes a Home button in opened apps, followed by Back when available, the page
-title, pin, three-line main menu, and close button. The Home and page layout buttons
+title, site permissions (shield), pin, layout menu, three-line main menu, and close
+button. The Home, site permissions, and page layout buttons
 stay hidden on Home, including its History tab.
 Home (or Alt+Home) closes the current app window and activates an existing Home
 window. If none is open, it creates a fresh Home window with an empty search bar
 and the Apps tab selected. Using Home while already on Home keeps that window.
 This also applies to phone windows; Phone Home in their menu controls the phone.
 Back returns to the previous page and is hidden when there is no previous page.
+While a page loads, a spinner replaces Back, including on the first page. When
+loading finishes, is stopped with Escape, or fails, Back returns if there is history.
 Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
@@ -37,13 +41,28 @@ agent to control the browser, add apps and test the UI. Select the text or choos
 
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
-saved passwords, Devices, and shortcuts.
+saved passwords, Devices, site permissions, and shortcuts.
 Choose **New Window** in the same menu (or press Ctrl+N) to open another portrait window.
 Choose **Refresh Page** (or press Ctrl+R or F5) to reload the current page.
 If a page stays partly loaded, choose **Reload Without Cache** (Ctrl+Shift+R or
 Ctrl+F5) to fetch its resources again. This keeps cookies and saved sign-ins;
 it does not reset the website's stored data.
 Choose **About Mini Browser** in the same menu to see the app version and license.
+
+## Site permissions
+
+While a website is open, the shield button before the pin button opens **Site
+permissions** for the current origin. **Settings → Site permissions** opens the
+same manager for every site with a saved choice. Camera, microphone, location,
+and notifications each have an **Ask**, **Allow**, or **Block** choice. Ask is the default; Allow and Block are saved per origin, including the
+scheme and any non-default port, and apply immediately.
+
+When a page requests one of these permissions, a native prompt offers **Allow**,
+**Block**, or **Not now**. Leave **Remember this choice for this site** selected
+to save Allow or Block; clear it, or choose **Not now**, to answer only this
+request. Unsupported permission types and screen sharing remain blocked.
+**Reset this site** returns that origin's choices to Ask; **Reset all site
+permissions** returns every site to Ask.
 
 Website links that request a new tab or window open in the current window, as do
 ordinary links. Scripted popup flows that need a separate window handle or build

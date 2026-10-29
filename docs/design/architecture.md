@@ -31,7 +31,8 @@ layouts never replace the full-page dimensions.
 An `Adw.ApplicationWindow` contains a stack for the start page, web content,
 compact audio player, and load errors. Video mode reuses the web-content child.
 An `Adw.ToolbarView` places a native
-`Adw.HeaderBar` with Home, Back, the page title, pin toggle, layout menu, main menu, and close
+`Adw.HeaderBar` with Home, Back, the page title, a site-permissions button, pin toggle,
+layout menu, main menu, and close
 control above the content. The home body contains a native `Gtk.StackSwitcher`
 with Apps and History tabs above a shared search/address entry. Apps uses one
 `Gtk.FlowBox` for devices, script apps (including DeepSeek Harness), saved Home
@@ -44,8 +45,23 @@ imports, in compact full-width rows with title, URL and last visit time.
 The Apps scroller ends with a wrapped, selectable monospace agent prompt and native Copy
 prompt button. It copies static usage instructions to the GTK clipboard and
 confirms with a toast; it does not expose page data or enable control.
+`navigation.address_to_uri` resolves input from Home, the address dialog, and
+the launcher. Search text opens Google with a URL-encoded query.
 Settings uses a
-native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
+native `Adw.PreferencesDialog` for imports, passwords, the library, site
+permissions, and shortcuts.
+Site choices live in the library's `permissions` table, keyed by a normalized
+origin and one of `camera`, `microphone`, `geolocation`, or
+`notifications`. Origins retain their scheme and non-default port, normalize
+internationalized hosts, and reject credentials. A missing row means Ask. The
+header's shield button opens the current origin's manager; Settings opens the
+global list. Each row is an Ask/Allow/Block dropdown. Changes persist
+immediately and reapply the origin's choices with Chromium's
+`Browser.setPermission`; Reset this site sets all four to prompt, and Reset all
+site permissions uses `Browser.resetPermissions`. Permission prompts are
+serialized per window so requests cannot stack native dialogs, and unsupported
+CEF permission types are denied. Choices are app data, not browsing history,
+and are never logged.
 The three-line main menu follows the layout button and offers New Window,
 Refresh Page (using the existing reload action), Reload Without Cache, Bookmark App, Settings,
 and an `Adw.AboutDialog` displaying the app's icon, name, version, and license.
@@ -58,15 +74,20 @@ Full page uses the native `view-paged-symbolic` icon.
 Address, library, import, and help controls live in temporary adaptive libadwaita
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track Chromium's back-forward list and
-are disabled on the home page, where the Home, Back and page layout buttons are hidden.
-The Home and layout buttons appear when an app is opened. The `win.home` action
+are disabled on the home page, where the Home, Back, site-permissions and page layout buttons are hidden.
+The Home, site-permissions, and layout buttons appear when an app is opened. The `win.home` action
 calls `BrowserApplication.return_home` to present an existing Home window or create
 a clean one before closing the source
 app window. A source already on Home stays open. Closing uses the normal cleanup
 for Chromium, script leases, media playback and phone transports; new Home windows
 start on Apps with an empty entry and fresh WebView. Internal script-error recovery
 can still show Home in place to retain its retry dialog.
-Back is hidden on pages without back history. Media layouts
+While Chromium loads a page, a native loading spinner replaces Back in its
+header slot: `Adw.Spinner` when available, with a `Gtk.Spinner` fallback for
+libadwaita 1.5. This also covers a first navigation awaiting
+engine startup. Completion, cancellation and failures restore the Back icon and
+its normal availability; keyboard Back remains available when there is history.
+Back is hidden on idle pages without back history. Media layouts
 keep both Home and Back, with Back restoring Full page. URI notifications and load events also refresh
 their state. Same-document URL changes (History API or fragments) leave media
 mode and restore the browsing header, just like full-page navigation.
@@ -377,8 +398,15 @@ Document-start scripts run in named isolated worlds. Typed function calls use
 a unique execution-context ID and typed protocol argument values, with both
 navigation generation and cancellation checked. Passwords never become script
 source. Console output and CEF logging are disabled; protocol results are capped
-at 8 MiB. Chromium's own credential-saving service is disabled. Camera, microphone
-and geolocation permission prompts are currently denied. DRM/Widevine is not
+at 8 MiB. Chromium's own credential-saving service is disabled. Camera, microphone,
+geolocation and notifications choices are managed by Mini Browser rather
+than blindly granted or denied. The native bridge forwards
+permission prompts and media-access requests; unknown permission types and
+desktop capture remain denied. Stored choices apply to the shared Chromium
+context through the DevTools `Browser.setPermission` method whenever an origin
+is loaded and after a choice changes. `Browser.resetPermissions` clears an
+explicit reset-all. A native prompt is used when Chromium asks for a decision,
+with a checked-by-default "Remember this choice" option. DRM/Widevine is not
 bundled. The stock official CEF SDK lacks H.264/AAC. The optional x86_64
 `scripts/build-cef --codecs` build uses Arch Linux's codec-enabled CEF, matching
 the official SDK's exact CEF and Chromium versions. `native/cef/codecs.json`

@@ -53,9 +53,17 @@ bool navigable(const CefString &url) {
 
 struct Reply {
   int view = 0;
+  uint64_t prompt = 0;
+  uint32_t permissions = 0;
   CefRefPtr<CefAuthCallback> auth;
   CefRefPtr<CefJSDialogCallback> javascript;
   CefRefPtr<CefFileDialogCallback> file;
+  CefRefPtr<CefMediaAccessCallback> media;
+  CefRefPtr<CefPermissionPromptCallback> permission;
+};
+struct PendingMedia {
+  int request = 0;
+  CefRefPtr<CefMediaAccessCallback> callback;
 };
 std::mutex reply_mutex;
 std::atomic<int> next_reply{1};
@@ -85,6 +93,28 @@ void cancel_replies(int view) {
       reply.javascript->Continue(false, "");
     if (reply.file)
       reply.file->Cancel();
+    if (reply.media)
+      reply.media->Cancel();
+    // CEF dismisses a permission prompt itself when its browser closes.
+  }
+}
+void dismiss_media_replies(int view) {
+  std::vector<PendingMedia> cancelled;
+  {
+    std::lock_guard<std::mutex> guard(reply_mutex);
+    for (auto iterator = replies.begin(); iterator != replies.end();) {
+      if (iterator->second.view == view && iterator->second.media) {
+        cancelled.push_back({iterator->first, iterator->second.media});
+        iterator = replies.erase(iterator);
+      } else
+        ++iterator;
+    }
+  }
+  for (auto &reply : cancelled) {
+    reply.callback->Cancel();
+    auto data = dict();
+    data->SetInt("request", reply.request);
+    emit(view, "permission-dismissed", data);
   }
 }
 
@@ -282,9 +312,12 @@ public:
   }
   bool OnBeforeBrowse(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
                       CefRefPtr<CefRequest> request, bool, bool) override {
-    if (frame->IsMain() && !navigable(request->GetURL())) {
-      emit(id, "unsupported-uri");
-      return true;
+    if (frame->IsMain()) {
+      dismiss_media_replies(id);
+      if (!navigable(request->GetURL())) {
+        emit(id, "unsupported-uri");
+        return true;
+      }
     }
     return false;
   }
@@ -387,11 +420,56 @@ public:
     emit(id, "file-dialog", data);
     return true;
   }
-  bool OnShowPermissionPrompt(
-      CefRefPtr<CefBrowser>, uint64_t, const CefString &, uint32_t,
-      CefRefPtr<CefPermissionPromptCallback> callback) override {
-    callback->Continue(CEF_PERMISSION_RESULT_DENY);
+  bool OnRequestMediaAccessPermission(
+      CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+      const CefString &requesting_origin, uint32_t requested_permissions,
+      CefRefPtr<CefMediaAccessCallback> callback) override {
+    Reply reply;
+    reply.view = id;
+    reply.permissions = requested_permissions;
+    reply.media = callback;
+    auto data = dict();
+    data->SetInt("request", remember(reply));
+    data->SetString("origin", requesting_origin);
+    data->SetInt("permissions", static_cast<int>(requested_permissions));
+    emit(id, "media-permission", data);
     return true;
+  }
+  bool OnShowPermissionPrompt(
+      CefRefPtr<CefBrowser>, uint64_t prompt_id,
+      const CefString &requesting_origin, uint32_t requested_permissions,
+      CefRefPtr<CefPermissionPromptCallback> callback) override {
+    Reply reply;
+    reply.view = id;
+    reply.prompt = prompt_id;
+    reply.permissions = requested_permissions;
+    reply.permission = callback;
+    auto data = dict();
+    data->SetInt("request", remember(reply));
+    data->SetString("origin", requesting_origin);
+    data->SetInt("permissions", static_cast<int>(requested_permissions));
+    emit(id, "permission", data);
+    return true;
+  }
+  void OnDismissPermissionPrompt(
+      CefRefPtr<CefBrowser>, uint64_t prompt_id,
+      cef_permission_request_result_t) override {
+    int request = 0;
+    {
+      std::lock_guard<std::mutex> guard(reply_mutex);
+      for (auto iterator = replies.begin(); iterator != replies.end(); ++iterator) {
+        if (iterator->second.permission && iterator->second.prompt == prompt_id) {
+          request = iterator->first;
+          replies.erase(iterator);
+          break;
+        }
+      }
+    }
+    if (request) {
+      auto data = dict();
+      data->SetInt("request", request);
+      emit(id, "permission-dismissed", data);
+    }
   }
   void OnBeforeContextMenu(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
                            CefRefPtr<CefContextMenuParams> parameters,
@@ -496,7 +574,7 @@ CefRefPtr<CefBrowser> page(int id) {
 } // namespace
 
 extern "C" {
-int mini_cef_abi_version() { return 3; }
+int mini_cef_abi_version() { return 4; }
 const char *mini_cef_version() { return CEF_VERSION; }
 int mini_cef_initialize(const char *runtime, const char *profile,
                         const char *cache, int autoplay, int mute,
@@ -734,6 +812,15 @@ void mini_cef_reply(int id, int accepted, const char *json) {
       reply.file->Continue(paths);
     }
   }
+  if (reply.media) {
+    if (accepted)
+      reply.media->Continue(reply.permissions);
+    else
+      reply.media->Cancel();
+  }
+  if (reply.permission)
+    reply.permission->Continue(accepted ? CEF_PERMISSION_RESULT_ACCEPT
+                                        : CEF_PERMISSION_RESULT_DENY);
 }
 int mini_cef_shutdown() {
   if (!initialized)

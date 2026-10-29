@@ -19,7 +19,9 @@ class NavigationTests(unittest.TestCase):
                 self.assertEqual(address_to_uri(value), expected)
 
     def test_searches_are_encoded(self):
-        self.assertEqual(address_to_uri("gnome & gtk"), "https://duckduckgo.com/?q=gnome+%26+gtk")
+        self.assertEqual(
+            address_to_uri("gnome & gtk"), "https://www.google.com/search?q=gnome+%26+gtk"
+        )
 
     def test_unsafe_and_invalid_addresses(self):
         for value in [

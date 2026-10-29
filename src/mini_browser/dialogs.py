@@ -358,6 +358,12 @@ def settings_dialog(window):
                     "win.passwords",
                 ),
                 (
+                    "Site permissions",
+                    "Camera, microphone, location and notifications",
+                    "security-high-symbolic",
+                    "win.permissions-all",
+                ),
+                (
                     "Keyboard shortcuts",
                     "Navigation and window controls",
                     "preferences-desktop-keyboard-shortcuts-symbolic",

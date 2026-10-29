@@ -17,7 +17,7 @@ from pathlib import Path
 
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Graphene, Gtk
 
-from . import page_clipboard
+from . import page_clipboard, permissions
 
 PAINT = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int)
 EVENT = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p)
@@ -89,7 +89,7 @@ class Bridge:
             function = getattr(self.native, "mini_cef_" + name)
             function.argtypes, function.restype = arguments, result
             setattr(self, name, function)
-        if self.abi_version() != 3:
+        if self.abi_version() != 4:
             raise ImportError("Chromium bridge version mismatch. Run ./scripts/build-cef again.")
 
 
@@ -313,6 +313,33 @@ class JavaScriptValue:
         return json.dumps(self.value)
 
 
+class PermissionRequest:
+    """One pending Chromium permission decision for a page origin."""
+
+    def __init__(self, view, identifier, kind, origin, names, supported):
+        self.view = view
+        self.identifier = identifier
+        self.kind = kind
+        self.origin = origin
+        self.names = names
+        self.supported = supported
+        self.answered = self.cancelled = False
+
+    def allow(self):
+        return self._finish(True)
+
+    def deny(self):
+        return self._finish(False)
+
+    def _finish(self, accepted):
+        if self.answered or self.cancelled:
+            return False
+        self.answered = True
+        self.view.bridge.reply(self.identifier, bool(accepted and self.supported), b"{}")
+        self.view.permission_requests.pop(self.identifier, None)
+        return True
+
+
 class View(Gtk.Widget):
     __gtype_name__ = "MiniBrowserChromiumView"
     __gsignals__ = {
@@ -322,6 +349,8 @@ class View(Gtk.Widget):
         "web-process-terminated": (GObject.SignalFlags.RUN_LAST, None, (int,)),
         "close": (GObject.SignalFlags.RUN_LAST, None, ()),
         "unsupported-uri": (GObject.SignalFlags.RUN_LAST, None, ()),
+        "permission-request": (GObject.SignalFlags.RUN_LAST, None, (object,)),
+        "permission-dismissed": (GObject.SignalFlags.RUN_LAST, None, (object,)),
     }
     title = GObject.Property(type=str, default="")
     uri = GObject.Property(type=str, default="")
@@ -344,6 +373,7 @@ class View(Gtk.Widget):
         self.zoom_factor = 1.0
         self.position = (0, 0)
         self.dialogs = set()
+        self.permission_requests = {}
         self._media_busy = False
         self._media_source = GLib.timeout_add(400, self._poll_audio)
         self.page_clipboard = page_clipboard.PageClipboard(self)
@@ -352,6 +382,26 @@ class View(Gtk.Widget):
 
     def command(self, method, parameters=None, callback=None):
         self.session.command(self, method, parameters, callback)
+
+    def apply_permissions(self, origin, decisions):
+        """Persist site choices in Chromium's shared browser context."""
+        if self.closed or not self.prepared:
+            return
+        for name, cdp_name in permissions.CDP_NAMES.items():
+            state = decisions.get(name, permissions.ASK)
+            setting = permissions.CDP_SETTINGS.get(state, permissions.CDP_SETTINGS[permissions.ASK])
+            self.command(
+                "Browser.setPermission",
+                {
+                    "permission": {"name": cdp_name},
+                    "setting": setting,
+                    "origin": origin,
+                },
+            )
+
+    def reset_permissions(self):
+        if not self.closed and self.prepared:
+            self.command("Browser.resetPermissions", {})
 
     def _prepare(self):
         operations = [
@@ -459,6 +509,10 @@ class View(Gtk.Widget):
                 self.audio_contexts.pop(data.get("contextId"), None)
         elif kind in ("authenticate", "javascript-dialog", "file-dialog"):
             self._dialog(kind, data)
+        elif kind in ("permission", "media-permission"):
+            self._permission(kind, data)
+        elif kind == "permission-dismissed":
+            self._permission_dismissed(data)
         elif kind == "context-menu":
             self._context_menu(data)
         elif kind == "caret":
@@ -476,6 +530,31 @@ class View(Gtk.Widget):
         self.audio_contexts.clear()
         self._set_audio(False)
         self.emit("load-changed", LoadEvent.STARTED)
+
+    def _permission(self, kind, data):
+        if self.closed:
+            return
+        identifier = data.get("request")
+        if not isinstance(identifier, int):
+            return
+        try:
+            origin = permissions.normalize_origin(data.get("origin", ""))
+        except ValueError:
+            origin = ""
+        names, unknown = permissions.parse_mask(int(data.get("permissions") or 0), kind)
+        supported = bool(origin and names and not unknown)
+        request = PermissionRequest(self, identifier, kind, origin, names, supported)
+        if not supported:
+            request.deny()
+            return
+        self.permission_requests[identifier] = request
+        self.emit("permission-request", request)
+
+    def _permission_dismissed(self, data):
+        request = self.permission_requests.pop(data.get("request"), None)
+        if request:
+            request.cancelled = True
+            self.emit("permission-dismissed", request)
 
     def _finish_load(self):
         if not self.closed and self.loading:
@@ -986,6 +1065,9 @@ class View(Gtk.Widget):
         if self.frame_source:
             GLib.source_remove(self.frame_source)
             self.frame_source = 0
+        for request in tuple(self.permission_requests.values()):
+            request.cancelled = True
+        self.permission_requests.clear()
         for dialog in tuple(self.dialogs):
             dialog.force_close()
         self.pending_frame = self.texture = None
