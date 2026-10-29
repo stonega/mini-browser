@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.0
+Version:        0.4.1
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -117,7 +117,7 @@ cp -aL build/cef/runtime/. %{buildroot}%{_libdir}/%{name}/cef/
 install -Dpm 0755 packaging/mini-browser %{buildroot}%{_bindir}/mini-browser
 install -Dpm 0644 data/io.github.stone.MiniBrowser.desktop \
     %{buildroot}%{_datadir}/applications/io.github.stone.MiniBrowser.desktop
-install -Dpm 0644 data/io.github.stone.MiniBrowser.svg \
+install -Dpm 0644 src/mini_browser/icons/io.github.stone.MiniBrowser.svg \
     %{buildroot}%{_datadir}/icons/hicolor/scalable/apps/io.github.stone.MiniBrowser.svg
 install -Dpm 0644 packaging/mini-browser.1 %{buildroot}%{_mandir}/man1/mini-browser.1
 install -d %{buildroot}%{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone
@@ -154,6 +154,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Thu Oct 29 2026 Mini Browser contributors - 0.4.1-1
+- Hide the Home button on Home, including its History tab.
+- Bundle the app icon so About resolves it in source and installed builds.
+
 * Wed Oct 28 2026 Mini Browser contributors - 0.4.0-1
 - Add opt-in agent CLI and native MCP control for Chromium and GTK.
 - Unify Home apps, add persistent agent-created tiles, and simplify startup logs.

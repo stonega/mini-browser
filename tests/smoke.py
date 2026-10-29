@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-from mini_browser import APP_NAME, VERSION
+from mini_browser import APP_ID, APP_NAME, VERSION
 from mini_browser.application import BrowserApplication
 from mini_browser.dialogs import address_dialog, library_dialog, shortcuts_dialog
 from mini_browser.gtk import Adw, GLib, Gtk
@@ -190,6 +190,26 @@ def run():
                     assert isinstance(about, Adw.AboutDialog)
                     assert about.get_application_name() == APP_NAME
                     assert about.get_version() == VERSION
+                    icons = Gtk.IconTheme.get_for_display(window.get_display())
+                    assert icons.has_icon(about.get_application_icon()), "About icon is missing"
+                    icon = icons.lookup_icon(
+                        APP_ID,
+                        [],
+                        128,
+                        window.get_scale_factor(),
+                        Gtk.TextDirection.NONE,
+                        Gtk.IconLookupFlags.FORCE_REGULAR,
+                    )
+                    assert icon.get_file().get_basename() == f"{APP_ID}.svg"
+                    state["about_shown"] = time.monotonic()
+                    state["phase"] = "about"
+                elif state["phase"] == "about":
+                    if time.monotonic() - state["about_shown"] < 0.5:
+                        return GLib.SOURCE_CONTINUE
+                    if len(sys.argv) > 1:
+                        path = Path(sys.argv[1])
+                        snapshot(window, str(path.with_name(path.stem + "-about.png")))
+                    about = window.get_visible_dialog()
                     about.force_close()
                     with patch("mini_browser.dialogs.discover_profiles", return_value=[]):
                         window.activate_action("win.settings", None)

@@ -90,6 +90,11 @@ class InstallTests(unittest.TestCase):
             )
             icon = data / "mini-browser/app/mini_browser/icons/deepseek.svg"
             self.assertIn("Copyright (c) 2026 DeepSeek", icon.read_text())
+            app_icon = data / "mini-browser/app/mini_browser/icons/io.github.stone.MiniBrowser.svg"
+            self.assertEqual(
+                app_icon.read_bytes(),
+                (data / "icons/hicolor/scalable/apps/io.github.stone.MiniBrowser.svg").read_bytes(),
+            )
             bundled = data / "mini-browser/app/mini_browser/vendor/scrcpy"
             self.assertTrue((bundled / "scrcpy-server").is_file())
             self.assertTrue((bundled / "LICENSE").is_file())

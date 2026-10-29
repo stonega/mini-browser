@@ -48,7 +48,10 @@ Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, and shortcuts.
 The three-line main menu follows the layout button and offers New Window,
 Refresh Page (using the existing reload action), Reload Without Cache, Bookmark App, Settings,
-and an `Adw.AboutDialog` displaying the app's name, version, and license.
+and an `Adw.AboutDialog` displaying the app's icon, name, version, and license.
+Startup adds the package's `icons` directory to GTK's icon search path. The same
+bundled SVG is used for desktop integration, so the About icon also works from
+a source checkout without installing the desktop entry or updating icon caches.
 Reload Without Cache uses CEF's `ReloadIgnoreCache()` to retry incomplete
 pages without clearing cookies or website storage. It is disabled on Home.
 Full page uses the native `view-paged-symbolic` icon.

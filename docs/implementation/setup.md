@@ -164,6 +164,8 @@ The GNOME process and test process groups are stopped and temporary desktop data
 is removed after the run, including failed tests. Each test also uses a separate
 application ID, temporary browser data, and a loopback HTTP server.
 Pass an optional PNG filename to capture only the test application window.
+The browser check verifies that the About icon resolves in the isolated desktop
+and saves an additional `-about.png` capture when requested.
 The media smoke test serves a generated WAV and canvas video. It verifies Chromium
 audio detection, square edge-to-edge artwork at default and resized dimensions,
 track metadata and cover updates, missing-cover and page-preview fallbacks,
@@ -199,7 +201,7 @@ To build a local package instead:
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff cmake ninja-build gcc-c++
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.0-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.1-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
@@ -218,7 +220,7 @@ enabled target succeeds before announcing repository availability:
 
 ```sh
 ./scripts/build-rpm --source-only
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.0-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.1-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 

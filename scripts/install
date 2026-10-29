@@ -75,7 +75,7 @@ desktop_path.write_text(
 )
 icons = data / "icons/hicolor/scalable/apps"
 icons.mkdir(parents=True, exist_ok=True)
-shutil.copy2(project / "data/io.github.stone.MiniBrowser.svg", icons)
+shutil.copy2(project / "src/mini_browser/icons/io.github.stone.MiniBrowser.svg", icons)
 extension = "mini-browser-pin@io.github.stone"
 shutil.copytree(
     project / "data/gnome-shell" / extension,

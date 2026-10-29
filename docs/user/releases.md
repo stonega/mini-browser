@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.4.1 — October 29, 2026
+
+- Hide the Home button on Home, including its History tab; keep it available in opened apps.
+- Fix the About dialog's app icon by bundling the SVG with the application and
+  adding it to GTK's icon search path, including when running from a source checkout.
+- Use the same bundled icon for user installations and Fedora RPM desktop integration.
+
+Close all Mini Browser windows and reopen the app after upgrading. The library,
+website sessions and encrypted vault are preserved.
+
 ## 0.4.0 — October 28, 2026
 
 - Hide the page layout button in Home windows, including the History tab.

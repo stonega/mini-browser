@@ -64,6 +64,10 @@ class BrowserApplication(Adw.Application):
 
     def do_startup(self):
         Adw.Application.do_startup(self)
+        # Resolve the About icon even without a desktop icon installation.
+        Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).add_search_path(
+            str(Path(__file__).resolve().parent / "icons")
+        )
         # The card buttons own interaction styling; FlowBox only arranges them.
         styles = Gtk.CssProvider()
         styles.load_from_string("""
