@@ -1,5 +1,27 @@
 # Release notes
 
+## 0.4.2 — October 29, 2026
+
+- Add an **Agent** tab beside Apps and History, with a three-line prompt preview
+  and a **Copy prompt** button that copies the complete instructions.
+- Show the latest 100 CLI/MCP action records in Agent, newest first, with time,
+  optional page ID and status. Records are shared across windows, kept only for
+  the current application session, and exclude request contents and results.
+- Manage camera, microphone, location and notification permissions per site
+  through the header's shield button, Settings and native permission prompts.
+  Save Ask, Allow or Block choices and reset individual sites or all sites.
+- Show a native spinner while pages load, restoring Back when loading finishes,
+  stops or fails. Keep Back hidden when no previous page is available.
+- Use Google for searches from Home, the address dialog and the command line.
+- Keep same-origin links requesting another tab/window in the current window;
+  open other HTTP(S) origins in a separate native window, preserving the source page.
+  Submitted forms continue in the current window.
+
+Close all Mini Browser windows and reopen the app after upgrading. The library,
+website sessions and encrypted vault are preserved. Agent control remains opt-in;
+copying the prompt does not enable control. H.264/AAC remains available on Fedora
+45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the stock engine.
+
 ## 0.4.1 — October 29, 2026
 
 - Hide the Home button on Home, including its History tab; keep it available in opened apps.

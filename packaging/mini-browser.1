@@ -1,4 +1,4 @@
-.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.4.1" "User Commands"
+.TH MINI-BROWSER 1 "October 2026" "Mini Browser 0.4.2" "User Commands"
 .SH NAME
 mini-browser \- a small native GNOME web browser
 .SH SYNOPSIS
@@ -14,12 +14,15 @@ mini-browser \- a small native GNOME web browser
 Mini Browser opens one page per resizable portrait window, with a native
 GNOME header bar and sandboxed Chromium web content. Each command-line argument opens a separate window.
 Quote search terms containing spaces. Without arguments, the start page opens.
-It contains an address/search field and tiles for recently opened sites.
+It contains an address/search field and Apps, History and Agent tabs.
+Apps contains phone, script and saved website tiles. History lists saved addresses.
+Agent shows a three-line prompt preview, a Copy prompt button for the complete
+instructions, and the latest 100 CLI/MCP action records from this browser session.
 The header bar's main menu opens Settings, including Chrome data import.
 Its Home button appears in opened apps and stays hidden on Home;
 Back returns to the previous page when available.
-Website links requesting another
-tab or window open in the current window.
+Website links requesting another tab or window stay in the current window for
+the same origin; other HTTP(S) origins open a separate native window.
 .PP
 Audio and video layouts hide the title bar; move to the top edge or press F10
 to reveal it. Video windows initially match the video's aspect ratio.
@@ -53,7 +56,7 @@ the numeric page ID returned by list or open. Navigation is asynchronous.
 mini-browser agent add-app URL --title NAME saves a persistent Home tile without
 opening the website or changing history. URL must be a full HTTP(S) address.
 The title is optional. Repeated URLs update the existing tile; omitting the title
-preserves its name. Saved apps appear before recents and survive restarts.
+preserves its name. Saved apps appear before bookmark-derived tiles and survive restarts.
 Use mini-browser agent apps to list saved tiles and mini-browser agent remove-app
 URL to remove one. These operations require no page ID.
 .PP

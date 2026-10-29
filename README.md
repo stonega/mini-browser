@@ -4,11 +4,13 @@ A native GNOME web browser with a small footprint on your screen.
 
 - A native GNOME header bar with Home, Back, the page title, site permissions, and close button, plus web content.
 - Site permission management for camera, microphone, location, and notifications, with a shield button and saved per-site choices.
-- Links requesting a new tab or window open in the current window; Ctrl+N opens another.
+- Links requesting a new tab or window stay in the current window for the same origin;
+  other HTTP(S) origins open a separate native window. Ctrl+N opens another window.
 - A resizable **420 × 780** portrait window by default.
 - Compact audio and video layouts, available from the layout icon beside Close.
 - A pin button before the layout icon, with always-on-top enabled by default in media layouts.
-- A home page with Apps/History tabs, phone and script apps, bookmarks, and complete saved history.
+- A home page with Apps, History and Agent tabs, phone and script apps, bookmarks,
+  complete saved history, a copyable agent prompt, and session action records.
 - A DeepSeek launcher with its official icon and managed local-server lifetime.
 - Native Android mirroring with basic input, and authenticated iPhone AirPlay viewing.
 - Automatic Android phone tiles, with scrcpy's phone-side helper included in the app.
@@ -27,8 +29,8 @@ See [agent commands, Codex setup and UI testing](docs/user/agents.md).
 Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-Version 0.4.1 hides the Home button on Home and fixes the About dialog's app icon
-in source checkouts and installed builds.
+Version 0.4.2 adds an Agent tab, per-site permissions, a native loading indicator,
+Google search, and separate windows for cross-origin new-tab links.
 H.264/AAC playback remains available on Fedora 45+ x86_64.
 
 ## Fedora RPM
@@ -47,7 +49,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.1-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.2-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
@@ -73,10 +75,12 @@ From this directory:
 ./scripts/run 'weather in Taipei'
 ```
 
-Each argument opens its own window. Home has Apps and History tabs above a
+Each argument opens its own window. Home has Apps, History and Agent tabs above a
 search/address field. Apps groups devices, script apps such as DeepSeek Harness,
 and bookmarked apps with YouTube and Bilibili presets. History lists all saved
-addresses in compact full-width rows. Choose Bookmark App in the main menu to
+addresses in compact full-width rows. Agent shows a three-line prompt preview,
+a Copy prompt button for the full instructions, and the latest 100 CLI/MCP action
+records from the current browser session. Choose Bookmark App in the main menu to
 save the current website's root URL as an app. DeepSeek starts on
 demand using `npx @deepseek-ai/dsh web` and stops when its last window leaves;
 Node.js and npm must be on your desktop's PATH. The header bar's three-line menu, after the

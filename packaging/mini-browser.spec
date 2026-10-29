@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.1
+Version:        0.4.2
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -154,6 +154,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Thu Oct 29 2026 Mini Browser contributors - 0.4.2-1
+- Add an Agent tab with a three-line prompt preview and session action records.
+- Add per-site permissions and a native loading indicator; search with Google.
+- Open cross-origin new-tab links in separate native windows.
+
 * Thu Oct 29 2026 Mini Browser contributors - 0.4.1-1
 - Hide the Home button on Home, including its History tab.
 - Bundle the app icon so About resolves it in source and installed builds.
