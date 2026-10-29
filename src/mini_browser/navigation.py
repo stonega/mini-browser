@@ -4,8 +4,8 @@ import ipaddress
 import re
 from urllib.parse import quote_plus, urlsplit
 
-# Keep native link/form navigation (including POST bodies) in this WebView.
-# Policy/create handlers also cover script-created popups and modified clicks.
+# Keep native form submissions (including POST bodies) in this WebView.
+# CEF routes new-tab links, script-created popups and modified clicks separately.
 RETARGET = """
 const retarget = (element, attribute, fallback) => {
     const target = element.getAttribute(attribute) ?? fallback ?? '';
@@ -14,11 +14,6 @@ const retarget = (element, attribute, fallback) => {
         return;
     element.setAttribute(attribute, '_top');
 };
-window.addEventListener('click', event => {
-    const link = event.composedPath().find(node =>
-        node instanceof HTMLAnchorElement || node instanceof HTMLAreaElement);
-    if (link) retarget(link, 'target', document.querySelector('base[target]')?.target);
-}, true);
 window.addEventListener('submit', event => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement)) return;

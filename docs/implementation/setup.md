@@ -140,8 +140,10 @@ directories. It requires `gnome-shell`, `dbus-run-session` (`dbus-daemon` on
 Fedora), `at-spi2-core`, and the GStreamer GI typelib. No active graphical session
 is needed. The runner starts a separate accessibility bus and registry daemon
 before Chromium launches, avoiding private-bus systemd activation failures.
-Test windows stay off the user's desktop. Navigation checks cover same-window
-target links, script popups, native POST submissions, Back, and explicit new windows.
+Test windows stay off the user's desktop. Navigation checks cover same-origin
+target links and script popups in the current window, cross-origin links and
+popups in new windows (including named/base targets and hostname/port changes),
+native POST submissions, Back, and explicit new windows.
 Delayed loopback responses verify the loading spinner replaces Back and restores
 it after completion, cancellation and connection failure. Optional captures
 include a `-loading.png` image of the header indicator.

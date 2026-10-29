@@ -104,6 +104,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._user_content_manager.add_script(script)
             self._user_content_manager._mini_vault_world = True
         self.webview.connect("close", lambda *_: self.close())
+        self.webview.connect("new-window", self._new_window_requested)
         self.webview.connect("load-changed", self._load_changed)
         self.webview.connect("load-failed", self._load_failed)
         self.webview.connect("load-failed-with-tls-errors", self._tls_failed)
@@ -1063,6 +1064,20 @@ class BrowserWindow(Adw.ApplicationWindow):
         from .device_dialogs import devices_dialog
 
         devices_dialog(self)
+
+    def _new_window_requested(self, view, uri):
+        if self._closing or not is_web_url(uri):
+            return
+        try:
+            same_app = permissions.normalize_origin(uri) == permissions.normalize_origin(
+                view.get_uri()
+            )
+        except ValueError:
+            same_app = False
+        if same_app:
+            self.load_uri(uri)
+        else:
+            self.get_application().new_window(uri)
 
     def load_uri(self, uri):
         if not is_web_url(uri):

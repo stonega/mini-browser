@@ -64,8 +64,11 @@ request. Unsupported permission types and screen sharing remain blocked.
 **Reset this site** returns that origin's choices to Ask; **Reset all site
 permissions** returns every site to Ask.
 
-Website links that request a new tab or window open in the current window, as do
-ordinary links. Scripted popup flows that need a separate window handle or build
+Website links that request a new tab or window stay in the current window when
+they point to the same origin (scheme, hostname and port), including different
+paths on that site. Links to another origin open a new Mini Browser window and
+leave the original page open. Ordinary links and submitted forms continue in
+the current window. Scripted popup flows that need a separate window handle or build
 a blank popup are unsupported.
 All windows share Mini Browser's own login sessions. Windows can be freely
 resized; the default portrait size does not force a mobile user agent.

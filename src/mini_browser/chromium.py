@@ -349,6 +349,7 @@ class View(Gtk.Widget):
         "web-process-terminated": (GObject.SignalFlags.RUN_LAST, None, (int,)),
         "close": (GObject.SignalFlags.RUN_LAST, None, ()),
         "unsupported-uri": (GObject.SignalFlags.RUN_LAST, None, ()),
+        "new-window": (GObject.SignalFlags.RUN_LAST, None, (str,)),
         "permission-request": (GObject.SignalFlags.RUN_LAST, None, (object,)),
         "permission-dismissed": (GObject.SignalFlags.RUN_LAST, None, (object,)),
     }
@@ -485,6 +486,8 @@ class View(Gtk.Widget):
             self.emit("web-process-terminated", 0)
         elif kind == "unsupported-uri":
             self.emit("unsupported-uri")
+        elif kind == "new-window":
+            self.emit("new-window", data["uri"])
         elif kind == "Runtime.executionContextCreated":
             context = data["context"]
             self.contexts[context["id"]] = context

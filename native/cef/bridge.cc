@@ -321,21 +321,29 @@ public:
     }
     return false;
   }
+  void RequestNewWindow(const CefString &url) {
+    if (closing || !browser || url == "about:blank" || !navigable(url))
+      return;
+    auto data = dict();
+    data->SetString("uri", url);
+    emit(id, "new-window", data);
+  }
   bool OnBeforePopup(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>, int,
                      const CefString &url, const CefString &,
                      cef_window_open_disposition_t, bool,
                      const CefPopupFeatures &, CefWindowInfo &,
                      CefRefPtr<CefClient> &, CefBrowserSettings &,
                      CefRefPtr<CefDictionaryValue> &, bool *) override {
-    if (browser && url != "about:blank" && navigable(url))
-      browser->GetMainFrame()->LoadURL(url);
+    RequestNewWindow(url);
     return true;
   }
   bool OnOpenURLFromTab(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
-                        const CefString &url, cef_window_open_disposition_t,
+                        const CefString &url,
+                        cef_window_open_disposition_t disposition,
                         bool) override {
-    if (browser && navigable(url))
-      browser->GetMainFrame()->LoadURL(url);
+    if (disposition == CEF_WOD_CURRENT_TAB)
+      return false;
+    RequestNewWindow(url);
     return true;
   }
   void OnRenderProcessTerminated(CefRefPtr<CefBrowser>, TerminationStatus, int,

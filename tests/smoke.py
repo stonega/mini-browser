@@ -79,6 +79,11 @@ def run():
         }
         threading.Thread(target=server.serve_forever, daemon=True).start()
         base = f"http://127.0.0.1:{server.server_port}"
+        other_server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        other_server.slow_loads = {}
+        threading.Thread(target=other_server.serve_forever, daemon=True).start()
+        external_base = f"http://127.0.0.1:{other_server.server_port}"
+        other_host = f"http://localhost:{server.server_port}"
         app = BrowserApplication(
             discover_devices=False,
             allow_autoplay=True,
@@ -421,20 +426,91 @@ def run():
                     if window.webview.get_title() != "Mini smoke" or window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
                     if not state.get("policy_link_checked"):
-                        # A site can change the target after our capture listener.
-                        # Exercise Chromium's new-window policy fallback as well.
+                        # Named targets follow the same native popup route.
                         window.webview.evaluate_javascript(
                             "const link = document.querySelector('a'); "
-                            "link.addEventListener('click', () => link.target = '_blank', "
+                            "link.addEventListener('click', () => link.target = 'named-page', "
                             "{once:true}); link.click();",
                             -1,
                         )
                         state["phase"] = 26
                         return GLib.SOURCE_CONTINUE
+                    if not state.get("external_links_checked"):
+                        state["source_window"] = window
+                        state["source_uri"] = window.webview.get_uri()
+                        state["source_history"] = (
+                            window.webview.get_back_forward_list().get_length()
+                        )
+                        state["external_cases"] = iter(
+                            [
+                                (other_host + "/second", "link.target = '_blank'; link.click()"),
+                                (external_base + "/second", "window.open(link.href, '_blank')"),
+                                (
+                                    external_base + "/second",
+                                    "link.target = 'external'; link.click()",
+                                ),
+                                (
+                                    external_base + "/second",
+                                    "link.removeAttribute('target'); "
+                                    "const base = document.createElement('base'); "
+                                    "base.target = '_blank'; "
+                                    "document.head.append(base); link.click()",
+                                ),
+                                (
+                                    external_base + "/second",
+                                    "link.target = '_self'; "
+                                    "link.style.cssText = 'position:fixed;left:0;top:0;"
+                                    "width:200px;height:40px'",
+                                    "middle",
+                                ),
+                            ]
+                        )
+                        state["phase"] = "external-link"
+                        return GLib.SOURCE_CONTINUE
                     window.webview.evaluate_javascript(
                         "document.querySelector('form').requestSubmit()", -1
                     )
                     state["phase"] = 24
+                elif state["phase"] == "external-link":
+                    window = state["source_window"]
+                    case = next(state["external_cases"], None)
+                    if case is None:
+                        state["external_links_checked"] = True
+                        state["phase"] = 23
+                        return GLib.SOURCE_CONTINUE
+                    uri, script, *button = case
+                    state["external_uri"] = uri
+
+                    def activated(view, result):
+                        if result.error:
+                            fail(result.error)
+                        elif button:
+                            view.bridge.mouse(view.identifier, 20, 20, 2, 0, 1)
+                            view.bridge.mouse(view.identifier, 20, 20, 2, 1, 1)
+
+                    window.webview.evaluate_javascript(
+                        "(() => { const link = document.querySelector('a'); "
+                        f"link.href = {json.dumps(uri)}; {script}; }})()",
+                        -1,
+                        callback=activated,
+                    )
+                    state["phase"] = "external-opened"
+                elif state["phase"] == "external-opened":
+                    source = state["source_window"]
+                    assert source.webview.get_uri() == state["source_uri"]
+                    assert (
+                        source.webview.get_back_forward_list().get_length()
+                        == state["source_history"]
+                    )
+                    if len(windows) < 2:
+                        return GLib.SOURCE_CONTINUE
+                    assert len(windows) == 2, "A new-tab link must open exactly one window"
+                    other = next(w for w in windows if w is not source)
+                    if other.webview.get_title() != "Second page" or other.webview.is_loading():
+                        return GLib.SOURCE_CONTINUE
+                    assert other.webview.get_uri() == state["external_uri"]
+                    other.close()
+                    state["phase"] = "external-link"
                 elif state["phase"] == 26:
                     if window.webview.get_title() != "Second page" or window.webview.is_loading():
                         return GLib.SOURCE_CONTINUE
@@ -728,7 +804,8 @@ def run():
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "complete history list, URL app bookmarks, Apps/History tabs, "
                         "settings imports, site permission manager, home entry, "
-                        "same-window links/popups/POST, Back for links/typed URLs/History API/"
+                        "same-origin links/popups, external links in separate windows, POST, "
+                        "Back for links/typed URLs/History API/"
                         "fragments, Home closes apps and creates or focuses Home, "
                         "header restored on media "
                         "URL change, explicit new window, remembered per-host sizes, "
@@ -759,6 +836,7 @@ def run():
             for _started, release in server.slow_loads.values():
                 release.set()
             server.shutdown()
+            other_server.shutdown()
         if errors:
             raise SystemExit("; ".join(errors))
         if state["phase"] != "done":

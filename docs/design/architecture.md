@@ -8,10 +8,14 @@ web UI or JavaScript build toolchain. GTK 4.12+ is required by the CSS API.
 `BrowserApplication` owns the application actions, private data paths, SQLite
 library, and a shared persistent `chromium.Session`. `BrowserWindow` owns
 one WebView and defaults to 420 × 780 logical pixels. Links requesting another
-tab/window navigate that same WebView. A document-start script in an isolated
-world retargets links and submitted forms while preserving native navigation and
-POST bodies; CEF lifespan/request handlers redirect other HTTP(S) GET popup
-requests and refuse new WebViews. `window.open()` returns no popup handle;
+tab/window navigate that same WebView when their origin matches the current page
+(scheme, hostname and port); other HTTP(S) destinations open a new native window
+and leave the source page intact. Paths, queries and fragments do not affect
+this comparison. CEF lifespan/request handlers cancel popup creation and pass
+the URL to GTK through a `new-window` event, also covering `window.open()` and
+modified clicks. A document-start script in an isolated world keeps submitted
+forms in the current WebView, preserving native navigation and POST bodies.
+`window.open()` returns no popup handle;
 blank popups and programmatic POST popups that bypass submission events are
 unsupported. Explicit application new-window actions still create windows, all
 sharing the storage session.
