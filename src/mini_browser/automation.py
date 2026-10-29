@@ -64,15 +64,44 @@ class Automation:
         def run():
             if cancelled.is_set():
                 return GLib.SOURCE_REMOVE
+            activity = self.app.agent_activity
+            record = activity.start(method, params.get("pageId"))
+            monitor = 0
+
+            def completed(result=None, error=None):
+                nonlocal monitor
+                if record.status != "Running":
+                    return
+                if monitor:
+                    GLib.source_remove(monitor)
+                    monitor = 0
+                if cancelled.is_set():
+                    activity.finish(record, "Timed out")
+                    return
+                activity.finish(record, "Failed" if error else "Succeeded")
+                finish(result, error=error)
+
+            completed.cancelled = cancelled
+
+            def check_timeout():
+                nonlocal monitor
+                if cancelled.is_set():
+                    monitor = 0
+                    activity.finish(record, "Timed out")
+                    return GLib.SOURCE_REMOVE
+                return GLib.SOURCE_CONTINUE
+
             try:
                 if self.app._shutting_down:
                     raise ControlError("Mini Browser is shutting down.")
-                self.execute(method, params, finish)
+                self.execute(method, params, completed)
             except ControlError as error:
-                finish(error=error)
+                completed(error=error)
             except Exception:
                 # Never forward exception representations containing page data.
-                finish(error="Agent operation failed. Inspect the page and retry.")
+                completed(error="Agent operation failed. Inspect the page and retry.")
+            if record.status == "Running":
+                monitor = GLib.timeout_add(250, check_timeout)
             return GLib.SOURCE_REMOVE
 
         GLib.idle_add(run)

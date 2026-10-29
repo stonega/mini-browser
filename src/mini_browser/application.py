@@ -8,6 +8,7 @@ import weakref
 from pathlib import Path
 
 from . import APP_ID
+from .agent_activity import AgentActivity
 from .deepseek import DeepSeekHarness
 from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
@@ -38,6 +39,7 @@ class BrowserApplication(Adw.Application):
         self._shutting_down = False
         self.discovery = None
         self.agent_control = None
+        self.agent_activity = AgentActivity(self._agent_activity_changed)
         self.add_main_option(
             "agent",
             0,
@@ -138,6 +140,11 @@ class BrowserApplication(Adw.Application):
         if self._discover_devices:
             self.discovery = AndroidDiscovery(self._devices_detected)
             self.discovery.start()
+
+    def _agent_activity_changed(self):
+        for window in self.get_windows():
+            if isinstance(window, BrowserWindow) and not window._closing:
+                window.refresh_agent_actions()
 
     def _devices_detected(self, records, error):
         def update():

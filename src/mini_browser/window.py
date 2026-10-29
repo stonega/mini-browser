@@ -49,6 +49,12 @@ class HistoryItem(GObject.Object):
         self.record = record
 
 
+class AgentActionItem(GObject.Object):
+    def __init__(self, record):
+        super().__init__()
+        self.record = record
+
+
 class BrowserWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(
@@ -290,16 +296,82 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
         self.app_tiles = self._tile_grid()
         content.append(self.app_tiles)
-        content.append(self._agent_prompt())
         clamp = Adw.Clamp(maximum_size=420, tightening_threshold=360, child=content)
         self.home_sections.add_titled(
             Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp), "apps", "Apps"
         )
         self.home_sections.add_titled(self._history_page(), "history", "History")
+        self.home_sections.add_titled(self._agent_page(), "agent", "Agent")
         self.home_sections.connect("notify::visible-child-name", self._home_section_changed)
         home.append(self.home_sections)
         self.refresh_recents()
         return home
+
+    def _agent_page(self):
+        body = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL,
+            spacing=12,
+            margin_top=8,
+            margin_bottom=24,
+            margin_start=24,
+            margin_end=24,
+        )
+        body.append(self._agent_prompt())
+        body.append(Gtk.Label(label="Agent actions", xalign=0, css_classes=["heading"]))
+        body.append(
+            Gtk.Label(
+                label="Latest 100 actions this session",
+                xalign=0,
+                css_classes=["caption", "dim-label"],
+            )
+        )
+        self.agent_actions_model = Gio.ListStore.new(AgentActionItem)
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._agent_action_setup)
+        factory.connect("bind", self._agent_action_bind)
+        self.agent_actions_list = Gtk.ListView(
+            model=Gtk.NoSelection(model=self.agent_actions_model),
+            factory=factory,
+            show_separators=True,
+        )
+        self.agent_actions_stack = Gtk.Stack(vexpand=True)
+        self.agent_actions_stack.add_named(
+            Gtk.ScrolledWindow(
+                hscrollbar_policy=Gtk.PolicyType.NEVER, child=self.agent_actions_list
+            ),
+            "list",
+        )
+        self.agent_actions_stack.add_named(
+            Gtk.Label(label="No agent actions yet", css_classes=["dim-label"], wrap=True),
+            "empty",
+        )
+        body.append(self.agent_actions_stack)
+        self.refresh_agent_actions()
+        return Adw.Clamp(maximum_size=420, tightening_threshold=360, child=body)
+
+    @staticmethod
+    def _agent_action_setup(_factory, item):
+        item.set_child(Adw.ActionRow(title_lines=1, subtitle_lines=1, use_markup=False))
+
+    @staticmethod
+    def _agent_action_bind(_factory, item):
+        record = item.get_item().record
+        row = item.get_child()
+        row.set_title(record.method.replace("_", " ").capitalize())
+        details = [record.status]
+        if record.page_id is not None:
+            details.append(f"Page {record.page_id}")
+        details.append(datetime.fromtimestamp(record.started).strftime("%H:%M:%S"))
+        row.set_subtitle(" · ".join(details))
+
+    def refresh_agent_actions(self):
+        records = self.get_application().agent_activity.records
+        self.agent_actions_model.splice(
+            0,
+            self.agent_actions_model.get_n_items(),
+            [AgentActionItem(record) for record in records],
+        )
+        self.agent_actions_stack.set_visible_child_name("list" if records else "empty")
 
     def _agent_prompt(self):
         self.agent_prompt = Gtk.Box(
@@ -321,6 +393,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             xalign=0,
             wrap=True,
             wrap_mode=Pango.WrapMode.WORD_CHAR,
+            lines=3,
+            ellipsize=Pango.EllipsizeMode.END,
             selectable=True,
             css_classes=["monospace"],
         )

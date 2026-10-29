@@ -1,8 +1,19 @@
 # Agent control and UI testing
 
-Home's Apps tab ends with a selectable, monospace **Agent prompt** and **Copy prompt** button.
+Home's **Agent** tab has a selectable, monospace **Agent prompt**, limited to a
+three-line preview, and a **Copy prompt** button that copies the complete text.
 Paste it into an agent chat for CLI discovery, page/native inspection, saving
 Home apps and screenshot verification. Copying it does not enable agent control.
+
+**Agent actions** below the prompt shows the latest 100 CLI/MCP requests, newest
+first. Each record includes the command name, start time, page ID when available,
+and Running, Succeeded, Failed or Timed out status. Succeeded means the request
+completed; navigation may still be loading. A timed-out request's outcome may be
+unknown. The list is shared across windows in the current application session,
+including windows opened later. It is kept only in memory and clears on exit.
+Request arguments, URLs, page contents, typed text, results and error details are
+excluded. Requests rejected by the CLI/MCP schema or socket before dispatch do
+not appear in the list.
 
 Start Mini Browser with local control enabled:
 

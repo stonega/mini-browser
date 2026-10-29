@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from mini_browser.application import BrowserApplication
+from mini_browser.automation import Automation
 from mini_browser.gtk import GLib
 
 
@@ -49,6 +50,60 @@ def run():
             application_id=f"io.github.stone.MiniBrowser.AgentSmoke.Run{os.getpid()}",
         )
         errors, completed = [], threading.Event()
+
+        def on_main(callback):
+            done, result = threading.Event(), {}
+
+            def run_callback():
+                try:
+                    result["value"] = callback()
+                except BaseException:
+                    result["error"] = traceback.format_exc()
+                finally:
+                    done.set()
+                return GLib.SOURCE_REMOVE
+
+            GLib.idle_add(run_callback)
+            assert done.wait(5), "Main-thread activity check timed out"
+            assert "error" not in result, result.get("error")
+            return result.get("value")
+
+        def check_activity():
+            records = app.agent_activity.records
+            assert 0 < len(records) <= 100
+            assert any(record.method == "native_fill" for record in records)
+            assert any(record.status == "Failed" for record in records)
+            assert any(record.status == "Succeeded" for record in records)
+            assert "synthetic-private-input" not in repr(records)
+            for window in app.get_windows():
+                window.home_sections.set_visible_child_name("agent")
+                assert window.agent_actions_stack.get_visible_child_name() == "list"
+                assert window.agent_actions_model.get_n_items() == len(records)
+                assert window.agent_actions_model[0].record is records[0]
+
+        def check_timeout():
+            pending, replied = [], []
+            cancelled = threading.Event()
+
+            class PendingAutomation(Automation):
+                def execute(self, _method, _params, finish):
+                    pending.append(finish)
+
+            on_main(
+                lambda: PendingAutomation(app).dispatch(
+                    "list_pages", {}, lambda *args, **kwargs: replied.append(args), cancelled
+                )
+            )
+            record = on_main(lambda: app.agent_activity.records[0])
+            assert on_main(lambda: bool(pending) and record.status == "Running")
+            cancelled.set()
+            deadline = time.monotonic() + 2
+            while on_main(lambda: record.status) == "Running":
+                assert time.monotonic() < deadline, "Timed-out activity stayed Running"
+                time.sleep(0.05)
+            assert record.status == "Timed out"
+            on_main(lambda: pending[0]({"pages": []}))  # Late replies cannot change status.
+            assert record.status == "Timed out" and not replied
 
         def cli(*arguments, success=True):
             run = subprocess.run(
@@ -230,10 +285,25 @@ def run():
                 assert all(
                     n.get("tooltip") != f"{saved_title}\n{saved_url}" for n in home["widgets"]
                 )
+                on_main(check_activity)
+                check_timeout()
+                if len(sys.argv) > 1:
+                    time.sleep(0.2)
+                    target = Path(sys.argv[1])
+                    cli(
+                        "screenshot",
+                        initial,
+                        target.with_name(target.stem + "-agent-actions.png"),
+                        "--native",
+                    )
+                # Activity survives closing every window in an agent-enabled session.
+                recorded = on_main(lambda: app.agent_activity.records[0])
                 cli("close", page)
                 cli("close", initial)
                 assert cli("list")["pages"] == []
                 cli("open")  # The --agent application hold survives its last window.
+                assert on_main(lambda: recorded in app.agent_activity.records)
+                on_main(check_activity)
                 cli("stop")
                 completed.set()
             except BaseException:

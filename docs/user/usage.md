@@ -3,7 +3,7 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 Searches use Google by default, including searches from Ctrl+L and the command line.
-Home has **Apps** and **History** tabs. Apps shows devices, script apps
+Home has **Apps**, **History**, and **Agent** tabs. Apps shows devices, script apps
 (including DeepSeek Harness), YouTube and Bilibili presets, saved Home apps,
 and bookmarked websites together in one grid without group titles. History shows
 every saved history address, including imported Chrome history, newest first. Each compact
@@ -35,9 +35,13 @@ bookmarks also appear grouped by site, while their original page links stay in
 the library. Visiting a site adds history rather than an app tile.
 Return home with Alt+Home. Other home windows refresh as you visit or bookmark sites.
 
-At the bottom of Home's Apps tab, **Agent prompt** shows monospace instructions for an AI
-agent to control the browser, add apps and test the UI. Select the text or choose
-**Copy prompt** to paste it into your agent chat.
+Home's **Agent** tab shows a three-line preview of the monospace **Agent prompt**
+for controlling the browser, adding apps and testing the UI. Choose **Copy prompt**
+to copy the complete instructions into your agent chat.
+Below it, **Agent actions** lists the latest 100 CLI/MCP requests in this browser
+session, newest first, with their time, page ID when available, and status.
+Records update across windows and clear when the application exits. They contain
+command names and status only, without request contents, results or error details.
 
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,

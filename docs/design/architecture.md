@@ -38,7 +38,7 @@ An `Adw.ToolbarView` places a native
 `Adw.HeaderBar` with Home, Back, the page title, a site-permissions button, pin toggle,
 layout menu, main menu, and close
 control above the content. The home body contains a native `Gtk.StackSwitcher`
-with Apps and History tabs above a shared search/address entry. Apps uses one
+with Apps, History and Agent tabs above a shared search/address entry. Apps uses one
 `Gtk.FlowBox` for devices, script apps (including DeepSeek Harness), saved Home
 launchers, and bookmark origins, including YouTube and Bilibili presets. Tiles
 share continuous rows without group headings or an empty-device placeholder.
@@ -46,9 +46,17 @@ History uses a `Gtk.ListView` directly
 inside a scroller, backed by `Gio.ListStore` and a list-item factory so only
 visible rows need widgets. It shows all stored history addresses, including
 imports, in compact full-width rows with title, URL and last visit time.
-The Apps scroller ends with a wrapped, selectable monospace agent prompt and native Copy
-prompt button. It copies static usage instructions to the GTK clipboard and
-confirms with a toast; it does not expose page data or enable control.
+Agent keeps a wrapped, selectable monospace prompt capped at three ellipsized
+lines above a native Copy prompt button. The button copies the complete static
+usage instructions to the GTK clipboard and confirms with a toast; it does not
+expose page data or enable control. Below it, a virtualized `Gtk.ListView` shows
+the latest 100 agent requests, newest first, with start time, command name, optional
+page ID and status. `agent_activity.py` keeps this bounded list in memory for the
+application session, excluding arguments, results and error text; command names
+are allowlisted and page IDs must be integers. `Automation.dispatch` records
+running and completed/failed requests on the GTK thread and watches pending
+requests for transport timeout. Updates refresh every browser window, and new
+windows receive the same records. Nothing is saved to the library or disk.
 `navigation.address_to_uri` resolves input from Home, the address dialog, and
 the launcher. Search text opens Google with a URL-encoded query.
 Settings uses a

@@ -14,7 +14,7 @@ from unittest.mock import patch
 from mini_browser import APP_ID, APP_NAME, VERSION
 from mini_browser.application import BrowserApplication
 from mini_browser.dialogs import address_dialog, library_dialog, shortcuts_dialog
-from mini_browser.gtk import Adw, GLib, Gtk
+from mini_browser.gtk import Adw, GLib, Gtk, Pango
 from mini_browser.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
 
 
@@ -145,7 +145,7 @@ def run():
                     window.activate_action("win.home", None)
                     assert app.get_windows() == [window]
                     pages = window.home_sections.get_pages()
-                    assert [pages[i].get_title() for i in range(2)] == ["Apps", "History"]
+                    assert [pages[i].get_title() for i in range(3)] == ["Apps", "History", "Agent"]
                     assert (
                         window.app_tiles.get_child_at_index(0).get_child() == window.deepseek_button
                     )
@@ -164,7 +164,11 @@ def run():
                     window.home_sections.set_visible_child_name("apps")
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
-                    assert window.agent_prompt.get_parent().get_last_child() == window.agent_prompt
+                    assert window.agent_prompt not in widgets(window.app_tiles.get_parent())
+                    window.home_sections.set_visible_child_name("agent")
+                    assert window.agent_actions_stack.get_visible_child_name() == "empty"
+                    assert window.agent_prompt_text.get_lines() == 3
+                    assert window.agent_prompt_text.get_ellipsize() == Pango.EllipsizeMode.END
                     state["visible_agent_prompt"] = window.agent_prompt_text.get_text()
                     window.copy_agent_prompt_button.grab_focus()
                     window.copy_agent_prompt_button.emit("clicked")
@@ -181,16 +185,16 @@ def run():
                     if "agent_prompt" not in state:
                         return GLib.SOURCE_CONTINUE
                     assert state["agent_prompt"] == state["visible_agent_prompt"]
-                    adjustment = window.home_sections.get_child_by_name("apps").get_vadjustment()
-                    adjustment.set_value(adjustment.get_upper() - adjustment.get_page_size())
                     state["phase"] = "agent-prompt-visible"
                 elif state["phase"] == "agent-prompt-visible":
                     valid, bounds = window.copy_agent_prompt_button.compute_bounds(window)
                     assert valid and 0 <= bounds.get_y() < window.get_height()
+                    assert window.agent_prompt_text.get_layout().is_ellipsized()
+                    assert window.agent_prompt_text.get_layout().get_line_count() == 3
                     if len(sys.argv) > 1:
                         path = Path(sys.argv[1])
                         snapshot(window, str(path.with_name(path.stem + "-agent-prompt.png")))
-                    window.home_sections.get_child_by_name("apps").get_vadjustment().set_value(0)
+                    window.home_sections.set_visible_child_name("apps")
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
                     assert window.loading_spinner.get_visible()
@@ -802,7 +806,7 @@ def run():
                     )
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
-                        "complete history list, URL app bookmarks, Apps/History tabs, "
+                        "complete history list, URL app bookmarks, Apps/History/Agent tabs, "
                         "settings imports, site permission manager, home entry, "
                         "same-origin links/popups, external links in separate windows, POST, "
                         "Back for links/typed URLs/History API/"
