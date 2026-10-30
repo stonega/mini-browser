@@ -259,23 +259,19 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _home(self):
         home = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, margin_top=16)
         self.home_sections = Gtk.Stack(hhomogeneous=False, vhomogeneous=False, vexpand=True)
-        self.home_tabs = Gtk.StackSwitcher(stack=self.home_sections, margin_start=10, margin_end=10)
+        self.home_tabs = Gtk.StackSwitcher(stack=self.home_sections)
         home.append(self.home_tabs)
         content = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
             spacing=24,
             margin_top=8,
             margin_bottom=24,
-            margin_start=24,
-            margin_end=24,
         )
         self.home_entry = Gtk.Entry(
             placeholder_text="Search or enter an address",
             primary_icon_name="system-search-symbolic",
             secondary_icon_name="go-next-symbolic",
             height_request=48,
-            margin_start=24,
-            margin_end=24,
         )
         self.home_entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, False)
         self.home_entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, "Open website")
@@ -306,7 +302,13 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.home_sections.connect("notify::visible-child-name", self._home_section_changed)
         home.append(self.home_sections)
         self.refresh_recents()
-        return home
+        return Adw.Clamp(
+            child=home,
+            maximum_size=600,
+            tightening_threshold=600,
+            margin_start=10,
+            margin_end=10,
+        )
 
     def _agent_page(self):
         body = Gtk.Box(
@@ -314,8 +316,6 @@ class BrowserWindow(Adw.ApplicationWindow):
             spacing=12,
             margin_top=8,
             margin_bottom=24,
-            margin_start=10,
-            margin_end=10,
         )
         body.append(self._agent_prompt())
         body.append(Gtk.Label(label="Agent actions", xalign=0, css_classes=["heading"]))
@@ -492,7 +492,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             selection_mode=Gtk.SelectionMode.NONE,
             homogeneous=True,
             min_children_per_line=2,
-            max_children_per_line=100,
+            max_children_per_line=6,
             column_spacing=12,
             row_spacing=12,
         )

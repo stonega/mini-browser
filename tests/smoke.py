@@ -596,13 +596,22 @@ def run():
                     assert window.history_model.get_n_items() == len(
                         app.library.search("history", limit=None)
                     )
+                    window.set_default_size(900, DEFAULT_HEIGHT)
                     state["ready"] = time.monotonic() + 0.2
                     state["phase"] = 33
                 elif state["phase"] == 33 and time.monotonic() >= state["ready"]:
+                    if window.get_width() != 900:
+                        return GLib.SOURCE_CONTINUE
                     if len(sys.argv) > 1:
                         path = Path(sys.argv[1])
                         snapshot(window, str(path.with_name(path.stem + "-history.png")))
-                    assert window.history_list.get_width() == window.get_width()
+                    for widget in (
+                        window.home_tabs,
+                        window.home_entry,
+                        window.home_sections,
+                        window.history_list,
+                    ):
+                        assert widget.get_allocated_width() == 600
                     row = next(
                         child
                         for child in widgets(window.history_list)
@@ -806,7 +815,8 @@ def run():
                     )
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
-                        "complete history list, URL app bookmarks, Apps/History/Agent tabs, "
+                        "complete history list, 600-pixel Home width, URL app bookmarks, "
+                        "Apps/History/Agent tabs, "
                         "settings imports, site permission manager, home entry, "
                         "same-origin links/popups, external links in separate windows, POST, "
                         "Back for links/typed URLs/History API/"
