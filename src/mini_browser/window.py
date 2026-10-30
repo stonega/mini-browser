@@ -259,7 +259,7 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _home(self):
         home = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, margin_top=16)
         self.home_sections = Gtk.Stack(hhomogeneous=False, vhomogeneous=False, vexpand=True)
-        self.home_tabs = Gtk.StackSwitcher(stack=self.home_sections, halign=Gtk.Align.CENTER)
+        self.home_tabs = Gtk.StackSwitcher(stack=self.home_sections, margin_start=10, margin_end=10)
         home.append(self.home_tabs)
         content = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL,
@@ -296,9 +296,10 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
         self.app_tiles = self._tile_grid()
         content.append(self.app_tiles)
-        clamp = Adw.Clamp(maximum_size=420, tightening_threshold=360, child=content)
         self.home_sections.add_titled(
-            Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=clamp), "apps", "Apps"
+            Gtk.ScrolledWindow(hscrollbar_policy=Gtk.PolicyType.NEVER, child=content),
+            "apps",
+            "Apps",
         )
         self.home_sections.add_titled(self._history_page(), "history", "History")
         self.home_sections.add_titled(self._agent_page(), "agent", "Agent")
@@ -313,8 +314,8 @@ class BrowserWindow(Adw.ApplicationWindow):
             spacing=12,
             margin_top=8,
             margin_bottom=24,
-            margin_start=24,
-            margin_end=24,
+            margin_start=10,
+            margin_end=10,
         )
         body.append(self._agent_prompt())
         body.append(Gtk.Label(label="Agent actions", xalign=0, css_classes=["heading"]))
@@ -347,7 +348,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         )
         body.append(self.agent_actions_stack)
         self.refresh_agent_actions()
-        return Adw.Clamp(maximum_size=420, tightening_threshold=360, child=body)
+        return body
 
     @staticmethod
     def _agent_action_setup(_factory, item):
@@ -491,7 +492,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             selection_mode=Gtk.SelectionMode.NONE,
             homogeneous=True,
             min_children_per_line=2,
-            max_children_per_line=3,
+            max_children_per_line=100,
             column_spacing=12,
             row_spacing=12,
         )

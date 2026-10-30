@@ -40,13 +40,16 @@ layout menu, main menu, and close
 control above the content. The home body contains a native `Gtk.StackSwitcher`
 with Apps, History and Agent tabs above a shared search/address entry. Apps uses one
 `Gtk.FlowBox` for devices, script apps (including DeepSeek Harness), saved Home
-launchers, and bookmark origins, including YouTube and Bilibili presets. Tiles
-share continuous rows without group headings or an empty-device placeholder.
+launchers, and bookmark origins, including YouTube and Bilibili presets. The grid
+uses the full content width with the search entry's side margins, adding columns
+as the window grows. Tiles share continuous rows without group headings or an
+empty-device placeholder.
 History uses a `Gtk.ListView` directly
 inside a scroller, backed by `Gio.ListStore` and a list-item factory so only
 visible rows need widgets. It shows all stored history addresses, including
 imports, in compact full-width rows with title, URL and last visit time.
-Agent keeps a wrapped, selectable monospace prompt capped at three ellipsized
+Agent aligns its prompt card with the tab strip using matching horizontal
+margins. It keeps a wrapped, selectable monospace prompt capped at three ellipsized
 lines above a native Copy prompt button. The button copies the complete static
 usage instructions to the GTK clipboard and confirms with a toast; it does not
 expose page data or enable control. Below it, a virtualized `Gtk.ListView` shows

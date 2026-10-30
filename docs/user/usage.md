@@ -5,7 +5,8 @@ website or search in the home page's input bar, then press Enter or its arrow.
 Searches use Google by default, including searches from Ctrl+L and the command line.
 Home has **Apps**, **History**, and **Agent** tabs. Apps shows devices, script apps
 (including DeepSeek Harness), YouTube and Bilibili presets, saved Home apps,
-and bookmarked websites together in one grid without group titles. History shows
+and bookmarked websites together in one grid without group titles. The grid fills
+the available width and adds columns as you widen the window. History shows
 every saved history address, including imported Chrome history, newest first. Each compact
 row spans the window and shows the page title, full URL, and last visit time;
 long text is shortened to fit, with details available on hover. Select a row to
