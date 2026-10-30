@@ -3,10 +3,13 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <functional>
+#include <future>
 #include <map>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include "include/cef_app.h"
@@ -30,6 +33,35 @@ bool context_ready = false;
 bool allow_autoplay = false;
 bool silent = false;
 std::string disk_cache;
+
+class UiTask final : public CefTask {
+public:
+  explicit UiTask(std::function<void()> work) : work_(std::move(work)) {}
+  void Execute() override { work_(); }
+
+private:
+  std::function<void()> work_;
+  IMPLEMENT_REFCOUNTING(UiTask);
+};
+
+// The C ABI remains synchronous, keeping caller-owned strings alive until the
+// UI task completes. ctypes releases the GIL while waiting, so CEF callbacks
+// can enqueue paint and protocol results without waiting on the GTK thread.
+template <typename Function> auto on_ui(Function function) {
+  using Result = decltype(function());
+  if (CefCurrentlyOn(TID_UI))
+    return function();
+  auto task =
+      std::make_shared<std::packaged_task<Result()>>(std::move(function));
+  auto result = task->get_future();
+  if (!CefPostTask(TID_UI, new UiTask([task] { (*task)(); }))) {
+    if constexpr (!std::is_void_v<Result>)
+      return Result{};
+    else
+      return;
+  }
+  return result.get();
+}
 
 CefRefPtr<CefDictionaryValue> dict() { return CefDictionaryValue::Create(); }
 void emit(int view, const char *type,
@@ -156,6 +188,7 @@ public:
   bool closing = false;
   bool creation_pending = false;
   bool popup_visible = false;
+  bool hidden = true;
   CefRect popup_rect;
   int popup_width = 0;
   int popup_height = 0;
@@ -193,7 +226,8 @@ public:
   }
   void OnPaint(CefRefPtr<CefBrowser>, PaintElementType type, const RectList &,
                const void *buffer, int w, int h) override {
-    if (!paint_callback || closing || w < 1 || h < 1 || w > 4096 || h > 4096)
+    if (!paint_callback || closing || hidden || w < 1 || h < 1 || w > 4096 ||
+        h > 4096)
       return;
     const auto *bytes = static_cast<const unsigned char *>(buffer);
     if (type == PET_VIEW) {
@@ -254,6 +288,7 @@ public:
   }
   void OnAfterCreated(CefRefPtr<CefBrowser> created) override {
     browser = created;
+    browser->GetHost()->WasHidden(hidden);
     observer = browser->GetHost()->AddDevToolsMessageObserver(this);
     if (closing) {
       // Creation still accesses its platform delegate after this callback.
@@ -363,8 +398,7 @@ public:
                        const void *parameters, size_t size) override {
     const auto name = method.ToString();
     if (name.rfind("Runtime.executionContext", 0) != 0 &&
-        name != "Runtime.bindingCalled" &&
-        name != "Page.frameNavigated" &&
+        name != "Runtime.bindingCalled" && name != "Page.frameNavigated" &&
         name != "Page.navigatedWithinDocument" &&
         name.rfind("WebAudio.context", 0) != 0 &&
         name != "Media.playerEventsAdded" &&
@@ -459,14 +493,15 @@ public:
     emit(id, "permission", data);
     return true;
   }
-  void OnDismissPermissionPrompt(
-      CefRefPtr<CefBrowser>, uint64_t prompt_id,
-      cef_permission_request_result_t) override {
+  void OnDismissPermissionPrompt(CefRefPtr<CefBrowser>, uint64_t prompt_id,
+                                 cef_permission_request_result_t) override {
     int request = 0;
     {
       std::lock_guard<std::mutex> guard(reply_mutex);
-      for (auto iterator = replies.begin(); iterator != replies.end(); ++iterator) {
-        if (iterator->second.permission && iterator->second.prompt == prompt_id) {
+      for (auto iterator = replies.begin(); iterator != replies.end();
+           ++iterator) {
+        if (iterator->second.permission &&
+            iterator->second.prompt == prompt_id) {
           request = iterator->first;
           replies.erase(iterator);
           break;
@@ -582,7 +617,7 @@ CefRefPtr<CefBrowser> page(int id) {
 } // namespace
 
 extern "C" {
-int mini_cef_abi_version() { return 4; }
+int mini_cef_abi_version() { return 5; }
 const char *mini_cef_version() { return CEF_VERSION; }
 int mini_cef_initialize(const char *runtime, const char *profile,
                         const char *cache, int autoplay, int mute,
@@ -602,6 +637,10 @@ int mini_cef_initialize(const char *runtime, const char *profile,
   CefMainArgs arguments(argc, argv);
   CefSettings settings;
   settings.no_sandbox = false;
+  // Chromium's GLib source spins with a zero timeout when its RunState is
+  // inactive between manual pumps. Its dedicated UI thread owns a private
+  // GLib context and runs CEF's supported blocking message loop instead.
+  settings.multi_threaded_message_loop = true;
   settings.windowless_rendering_enabled = true;
   settings.log_severity = LOGSEVERITY_DISABLE;
   CefString(&settings.browser_subprocess_path) =
@@ -613,241 +652,301 @@ int mini_cef_initialize(const char *runtime, const char *profile,
   initialized = CefInitialize(arguments, settings, new App, nullptr);
   return initialized;
 }
-void mini_cef_pump() {
-  if (initialized)
-    CefDoMessageLoopWork();
-}
 void mini_cef_create(int id) {
-  if (views.count(id))
-    return;
-  views[id] = new Client(id);
-  if (context_ready)
-    views[id]->Create();
+  on_ui([=]() mutable {
+    if (views.count(id))
+      return;
+    views[id] = new Client(id);
+    if (context_ready)
+      views[id]->Create();
+  });
 }
 void mini_cef_close(int id) {
-  auto *client = view(id);
-  if (!client)
-    return;
-  client->closing = true;
-  cancel_replies(id);
-  if (!client->browser && !client->creation_pending) {
-    views.erase(id);
-    return;
-  }
-  if (client->browser) {
-    client->browser->GetHost()->SetAudioMuted(true);
-    client->browser->GetHost()->CloseBrowser(true);
-  }
+  on_ui([=]() mutable {
+    auto *client = view(id);
+    if (!client)
+      return;
+    client->closing = true;
+    cancel_replies(id);
+    if (!client->browser && !client->creation_pending) {
+      views.erase(id);
+      return;
+    }
+    if (client->browser) {
+      client->browser->GetHost()->SetAudioMuted(true);
+      client->browser->GetHost()->CloseBrowser(true);
+    }
+  });
 }
 void mini_cef_resize(int id, int width, int height) {
-  auto *client = view(id);
-  if (!client)
-    return;
-  client->width = std::clamp(width, 1, 4096);
-  client->height = std::clamp(height, 1, 4096);
-  if (client->browser)
-    client->browser->GetHost()->WasResized();
+  on_ui([=]() mutable {
+    auto *client = view(id);
+    if (!client)
+      return;
+    width = std::clamp(width, 1, 4096);
+    height = std::clamp(height, 1, 4096);
+    if (client->width == width && client->height == height)
+      return;
+    client->width = width;
+    client->height = height;
+    if (client->browser)
+      client->browser->GetHost()->WasResized();
+  });
 }
 void mini_cef_load(int id, const char *url) {
-  auto browser = page(id);
-  if (browser && navigable(url))
-    browser->GetMainFrame()->LoadURL(url);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser && navigable(url))
+      browser->GetMainFrame()->LoadURL(url);
+  });
 }
 void mini_cef_stop(int id) {
-  auto browser = page(id);
-  if (browser)
-    browser->StopLoad();
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser)
+      browser->StopLoad();
+  });
 }
 void mini_cef_reload(int id, int fresh) {
-  auto browser = page(id);
-  if (browser) {
-    if (fresh)
-      browser->ReloadIgnoreCache();
-    else
-      browser->Reload();
-  }
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser) {
+      if (fresh)
+        browser->ReloadIgnoreCache();
+      else
+        browser->Reload();
+    }
+  });
 }
 void mini_cef_focus(int id, int focused) {
-  auto browser = page(id);
-  if (browser)
-    browser->GetHost()->SetFocus(focused != 0);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser)
+      browser->GetHost()->SetFocus(focused != 0);
+  });
+}
+void mini_cef_hidden(int id, int hidden) {
+  on_ui([=]() mutable {
+    auto *client = view(id);
+    if (!client || client->hidden == (hidden != 0))
+      return;
+    client->hidden = hidden != 0;
+    if (client->browser) {
+      client->browser->GetHost()->WasHidden(client->hidden);
+      if (!client->hidden)
+        client->browser->GetHost()->Invalidate(PET_VIEW);
+    }
+    if (client->hidden) {
+      std::vector<unsigned char>().swap(client->pixels);
+      std::vector<unsigned char>().swap(client->popup_pixels);
+      client->popup_visible = false;
+    }
+  });
 }
 void mini_cef_mute(int id, int muted) {
-  auto browser = page(id);
-  if (browser)
-    browser->GetHost()->SetAudioMuted(muted != 0);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser)
+      browser->GetHost()->SetAudioMuted(muted != 0);
+  });
 }
 void mini_cef_zoom(int id, double factor) {
-  auto browser = page(id);
-  if (browser)
-    browser->GetHost()->SetZoomLevel(factor);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser)
+      browser->GetHost()->SetZoomLevel(factor);
+  });
 }
 void mini_cef_frame_rate(int id, int rate) {
-  auto browser = page(id);
-  if (browser)
-    browser->GetHost()->SetWindowlessFrameRate(rate);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser)
+      browser->GetHost()->SetWindowlessFrameRate(rate);
+  });
 }
 void mini_cef_mouse(int id, int x, int y, int button, int released,
                     int clicks) {
-  auto browser = page(id);
-  if (!browser)
-    return;
-  auto *client = view(id);
-  const int flag = button == 1   ? EVENTFLAG_LEFT_MOUSE_BUTTON
-                   : button == 2 ? EVENTFLAG_MIDDLE_MOUSE_BUTTON
-                   : button == 3 ? EVENTFLAG_RIGHT_MOUSE_BUTTON
-                                 : 0;
-  if (button) {
-    if (released)
-      client->buttons &= ~flag;
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (!browser)
+      return;
+    auto *client = view(id);
+    const int flag = button == 1   ? EVENTFLAG_LEFT_MOUSE_BUTTON
+                     : button == 2 ? EVENTFLAG_MIDDLE_MOUSE_BUTTON
+                     : button == 3 ? EVENTFLAG_RIGHT_MOUSE_BUTTON
+                                   : 0;
+    if (button) {
+      if (released)
+        client->buttons &= ~flag;
+      else
+        client->buttons |= flag;
+    }
+    CefMouseEvent event;
+    event.x = x;
+    event.y = y;
+    event.modifiers = client->modifiers | client->buttons;
+    if (!button)
+      browser->GetHost()->SendMouseMoveEvent(event, false);
     else
-      client->buttons |= flag;
-  }
-  CefMouseEvent event;
-  event.x = x;
-  event.y = y;
-  event.modifiers = client->modifiers | client->buttons;
-  if (!button)
-    browser->GetHost()->SendMouseMoveEvent(event, false);
-  else
-    browser->GetHost()->SendMouseClickEvent(event,
-                                            button == 3   ? MBT_RIGHT
-                                            : button == 2 ? MBT_MIDDLE
-                                                          : MBT_LEFT,
-                                            released != 0, clicks);
+      browser->GetHost()->SendMouseClickEvent(event,
+                                              button == 3   ? MBT_RIGHT
+                                              : button == 2 ? MBT_MIDDLE
+                                                            : MBT_LEFT,
+                                              released != 0, clicks);
+  });
 }
 void mini_cef_wheel(int id, int x, int y, int dx, int dy) {
-  auto browser = page(id);
-  if (!browser)
-    return;
-  CefMouseEvent event;
-  event.x = x;
-  event.y = y;
-  browser->GetHost()->SendMouseWheelEvent(event, dx, dy);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (!browser)
+      return;
+    CefMouseEvent event;
+    event.x = x;
+    event.y = y;
+    browser->GetHost()->SendMouseWheelEvent(event, dx, dy);
+  });
 }
 void mini_cef_key(int id, int code, int native_code, int modifiers,
                   int released) {
-  auto browser = page(id);
-  if (!browser)
-    return;
-  view(id)->modifiers = modifiers;
-  CefKeyEvent event;
-  event.type = released ? KEYEVENT_KEYUP : KEYEVENT_RAWKEYDOWN;
-  event.windows_key_code = code;
-  event.native_key_code = native_code;
-  event.modifiers = modifiers;
-  browser->GetHost()->SendKeyEvent(event);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (!browser)
+      return;
+    view(id)->modifiers = modifiers;
+    CefKeyEvent event;
+    event.type = released ? KEYEVENT_KEYUP : KEYEVENT_RAWKEYDOWN;
+    event.windows_key_code = code;
+    event.native_key_code = native_code;
+    event.modifiers = modifiers;
+    browser->GetHost()->SendKeyEvent(event);
+  });
 }
 void mini_cef_text(int id, const char *text) {
-  auto browser = page(id);
-  if (browser)
-    browser->GetHost()->ImeCommitText(text, CefRange::InvalidRange(), 0);
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser)
+      browser->GetHost()->ImeCommitText(text, CefRange::InvalidRange(), 0);
+  });
 }
 void mini_cef_preedit(int id, const char *text, int cursor) {
-  auto browser = page(id);
-  if (!browser)
-    return;
-  const CefString value(text);
-  CefCompositionUnderline underline;
-  underline.range = CefRange(0, value.length());
-  underline.color = 0xff000000;
-  browser->GetHost()->ImeSetComposition(
-      value, {underline}, CefRange::InvalidRange(), CefRange(cursor, cursor));
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (!browser)
+      return;
+    const CefString value(text);
+    CefCompositionUnderline underline;
+    underline.range = CefRange(0, value.length());
+    underline.color = 0xff000000;
+    browser->GetHost()->ImeSetComposition(
+        value, {underline}, CefRange::InvalidRange(), CefRange(cursor, cursor));
+  });
 }
 int mini_cef_command(int id, int message, const char *method,
                      const char *json) {
-  auto browser = page(id);
-  if (!browser)
-    return 0;
-  auto value = CefParseJSON(json, JSON_PARSER_RFC);
-  if (!value || value->GetType() != VTYPE_DICTIONARY)
-    return 0;
-  return browser->GetHost()->ExecuteDevToolsMethod(message, method,
-                                                   value->GetDictionary());
+  return on_ui([=]() mutable {
+    auto browser = page(id);
+    if (!browser)
+      return 0;
+    auto value = CefParseJSON(json, JSON_PARSER_RFC);
+    if (!value || value->GetType() != VTYPE_DICTIONARY)
+      return 0;
+    return browser->GetHost()->ExecuteDevToolsMethod(message, method,
+                                                     value->GetDictionary());
+  });
 }
 void mini_cef_download(int id, const char *path) {
-  auto iterator = destinations.find(id);
-  if (iterator == destinations.end())
-    return;
-  auto callback = iterator->second;
-  destinations.erase(iterator);
-  if (path && *path)
-    callback->Continue(path, false);
-  else {
-    auto cancel = downloads.find(id);
-    if (cancel != downloads.end())
-      cancel->second->Cancel();
-  }
+  on_ui([=]() mutable {
+    auto iterator = destinations.find(id);
+    if (iterator == destinations.end())
+      return;
+    auto callback = iterator->second;
+    destinations.erase(iterator);
+    if (path && *path)
+      callback->Continue(path, false);
+    else {
+      auto cancel = downloads.find(id);
+      if (cancel != downloads.end())
+        cancel->second->Cancel();
+    }
+  });
 }
 void mini_cef_cancel_download(int id) {
-  destinations.erase(id);
-  auto iterator = downloads.find(id);
-  if (iterator != downloads.end())
-    iterator->second->Cancel();
+  on_ui([=]() mutable {
+    destinations.erase(id);
+    auto iterator = downloads.find(id);
+    if (iterator != downloads.end())
+      iterator->second->Cancel();
+  });
 }
 void mini_cef_reply(int id, int accepted, const char *json) {
-  Reply reply;
-  {
-    std::lock_guard<std::mutex> guard(reply_mutex);
-    auto iterator = replies.find(id);
-    if (iterator == replies.end())
-      return;
-    reply = iterator->second;
-    replies.erase(iterator);
-  }
-  auto value = CefParseJSON(json, JSON_PARSER_RFC);
-  auto data = value && value->GetType() == VTYPE_DICTIONARY
-                  ? value->GetDictionary()
-                  : dict();
-  if (reply.auth) {
-    if (accepted)
-      reply.auth->Continue(data->GetString("username"),
-                           data->GetString("password"));
-    else
-      reply.auth->Cancel();
-  }
-  if (reply.javascript)
-    reply.javascript->Continue(accepted != 0, data->GetString("text"));
-  if (reply.file) {
-    if (!accepted)
-      reply.file->Cancel();
-    else {
-      std::vector<CefString> paths;
-      auto list = data->GetList("paths");
-      if (list)
-        for (size_t i = 0; i < list->GetSize(); ++i)
-          paths.push_back(list->GetString(i));
-      reply.file->Continue(paths);
+  on_ui([=]() mutable {
+    Reply reply;
+    {
+      std::lock_guard<std::mutex> guard(reply_mutex);
+      auto iterator = replies.find(id);
+      if (iterator == replies.end())
+        return;
+      reply = iterator->second;
+      replies.erase(iterator);
     }
-  }
-  if (reply.media) {
-    if (accepted)
-      reply.media->Continue(reply.permissions);
-    else
-      reply.media->Cancel();
-  }
-  if (reply.permission)
-    reply.permission->Continue(accepted ? CEF_PERMISSION_RESULT_ACCEPT
-                                        : CEF_PERMISSION_RESULT_DENY);
+    auto value = CefParseJSON(json, JSON_PARSER_RFC);
+    auto data = value && value->GetType() == VTYPE_DICTIONARY
+                    ? value->GetDictionary()
+                    : dict();
+    if (reply.auth) {
+      if (accepted)
+        reply.auth->Continue(data->GetString("username"),
+                             data->GetString("password"));
+      else
+        reply.auth->Cancel();
+    }
+    if (reply.javascript)
+      reply.javascript->Continue(accepted != 0, data->GetString("text"));
+    if (reply.file) {
+      if (!accepted)
+        reply.file->Cancel();
+      else {
+        std::vector<CefString> paths;
+        auto list = data->GetList("paths");
+        if (list)
+          for (size_t i = 0; i < list->GetSize(); ++i)
+            paths.push_back(list->GetString(i));
+        reply.file->Continue(paths);
+      }
+    }
+    if (reply.media) {
+      if (accepted)
+        reply.media->Continue(reply.permissions);
+      else
+        reply.media->Cancel();
+    }
+    if (reply.permission)
+      reply.permission->Continue(accepted ? CEF_PERMISSION_RESULT_ACCEPT
+                                          : CEF_PERMISSION_RESULT_DENY);
+  });
 }
 int mini_cef_shutdown() {
   if (!initialized)
     return 1;
-  std::vector<int> identifiers;
-  for (auto &[id, client] : views)
-    identifiers.push_back(id);
-  for (int id : identifiers)
-    mini_cef_close(id);
+  on_ui([] {
+    std::vector<int> identifiers;
+    for (auto &[id, client] : views)
+      identifiers.push_back(id);
+    for (int id : identifiers)
+      mini_cef_close(id);
+  });
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(5);
-  while (!views.empty() && std::chrono::steady_clock::now() < deadline) {
-    CefDoMessageLoopWork();
+  while (!on_ui([] { return views.empty(); }) &&
+         std::chrono::steady_clock::now() < deadline) {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
-  if (!views.empty())
+  if (!on_ui([] { return views.empty(); }))
     return 0;
-  downloads.clear();
-  destinations.clear();
+  on_ui([] {
+    downloads.clear();
+    destinations.clear();
+  });
   CefShutdown();
   initialized = false;
   context_ready = false;

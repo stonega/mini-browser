@@ -134,6 +134,7 @@ def run_tests(root, arguments):
         "agent": "agent_smoke.py",
     }
     tests["cef"] = "cef_smoke.py"
+    tests["resources"] = "cef_resource_smoke.py"
     tests["engine"] = "chromium_features_smoke.py"
     filenames = tuple(tests.values())
     tests["codecs"] = "codec_smoke.py"
@@ -142,7 +143,7 @@ def run_tests(root, arguments):
         if selected not in tests:
             raise ValueError(
                 "Choose --test=devices, deepseek, browser, pin, media, passwords, "
-                "cef, engine, agent, or codecs."
+                "cef, resources, engine, agent, or codecs."
             )
         filenames, arguments = (tests[selected],), arguments[1:]
     log_path = root / "gnome-shell.log"

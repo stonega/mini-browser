@@ -383,7 +383,7 @@ Package checks run the deterministic tests and validate the desktop entry.
 
 ## Chromium boundary
 
-`chromium.py` is the GTK engine adapter; `native/cef/bridge.cc` implements ABI 3.
+`chromium.py` is the GTK engine adapter; `native/cef/bridge.cc` implements ABI 5.
 One application-wide CEF context provides persistent cookies and storage under
 `chromium/default` in the data directory. HTTP cache is under `chromium` in the
 cache directory. Earlier WebKit data is left intact; website sessions are not
@@ -392,9 +392,27 @@ unchanged. Chromium uses its system proxy mode, including GNOME proxy and PAC
 settings. Authentication prompts are native dialogs and are not persisted.
 
 CEF runs windowless on its headless platform, while GTK owns Wayland windows,
-headers, dialogs, input methods and clipboard integration. Paint callbacks retain
-at most one pending BGRA frame per view. A GLib timer pumps CEF on the GTK main
-thread; callbacks are dispatched outside the native callback stack. The subprocess
+headers, dialogs, input methods and clipboard integration. CEF's supported
+multi-threaded message loop runs on its dedicated UI thread with a private GLib
+context. Browser operations are marshaled synchronously to that thread; caller
+strings remain valid until each operation returns. The ctypes calls release the
+Python GIL while waiting. Manual pumping on GTK's thread caused Chromium's GLib
+source to poll continuously with a zero timeout between pumps, consuming a CPU
+core even on static pages. External message pumping alone did not remove that
+source's behavior.
+
+Paint callbacks copy at most one pending BGRA frame per view under a lock and
+schedule GTK presentation on the main thread. Protocol events and results also
+reach GTK through idle callbacks. Hidden views, compact audio layouts and
+compositor-suspended windows notify CEF through `WasHidden`, stopping layout and
+painting and allowing Chromium's background throttling. They release native
+framebuffer storage, pending frames and GTK textures. Showing a view invalidates
+its surface to request fresh pixels without reloading the document. Audio stays
+alive; hiding a page does not discard its DOM or JavaScript heap, and active-site
+memory use still depends on the page. Repeated allocations at the same dimensions
+do not notify CEF of a resize. Shutdown closes browsers on CEF's UI thread and
+waits for their close callbacks before stopping CEF on the application thread.
+The subprocess
 links directly to libcef before libc, required by Chromium's Linux sandbox.
 Unprivileged user namespaces, seccomp and no-new-privileges are required. The
 setuid helper is unused; neither `--no-sandbox` nor TLS bypass flags are used.

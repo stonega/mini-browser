@@ -28,6 +28,7 @@ ruff format src tests scripts/install
 ./scripts/smoke
 ./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
 ./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
+./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
 ./scripts/build-rpm
 ```
 
@@ -49,6 +50,13 @@ rejection, both refresh actions, page Copy buttons reaching the native clipboard
 and cookies/storage across a process restart. Clipboard checks use a real pointer
 click in the disposable desktop and synthetic text only. The default
 smoke suite also tests the Chromium-backed navigation, media and password flows.
+
+`./scripts/smoke --test=resources` checks process CPU time against elapsed time
+on a static synthetic page, then verifies hidden views release frame storage,
+report `document.hidden`, stop animation callbacks and render again without
+reloading. It runs in the same isolated desktop and is part of the default suite.
+The CPU limit is deliberately loose to catch a busy loop across different
+machines; it is not a bound on arbitrary websites' CPU or memory use.
 
 ### H.264/AAC web video (x86_64)
 

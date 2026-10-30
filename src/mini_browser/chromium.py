@@ -10,6 +10,7 @@ import math
 import os
 import re
 import sysconfig
+import threading
 import time
 from dataclasses import dataclass
 from enum import IntEnum
@@ -56,6 +57,9 @@ class Bridge:
             raise ImportError(
                 "Could not load Chromium. Rebuild with ./scripts/build-cef."
             ) from error
+        self.native.mini_cef_abi_version.restype = ctypes.c_int
+        if self.native.mini_cef_abi_version() != 5:
+            raise ImportError("Chromium bridge version mismatch. Run ./scripts/build-cef again.")
         signatures = {
             "abi_version": ([], ctypes.c_int),
             "version": ([], ctypes.c_char_p),
@@ -63,7 +67,6 @@ class Bridge:
                 [ctypes.c_char_p] * 3 + [ctypes.c_int] * 2 + [PAINT, EVENT, RESULT],
                 ctypes.c_int,
             ),
-            "pump": ([], None),
             "create": ([ctypes.c_int], None),
             "close": ([ctypes.c_int], None),
             "resize": ([ctypes.c_int] * 3, None),
@@ -71,6 +74,7 @@ class Bridge:
             "stop": ([ctypes.c_int], None),
             "reload": ([ctypes.c_int] * 2, None),
             "focus": ([ctypes.c_int] * 2, None),
+            "hidden": ([ctypes.c_int] * 2, None),
             "mute": ([ctypes.c_int] * 2, None),
             "zoom": ([ctypes.c_int, ctypes.c_double], None),
             "frame_rate": ([ctypes.c_int] * 2, None),
@@ -89,8 +93,6 @@ class Bridge:
             function = getattr(self.native, "mini_cef_" + name)
             function.argtypes, function.restype = arguments, result
             setattr(self, name, function)
-        if self.abi_version() != 4:
-            raise ImportError("Chromium bridge version mismatch. Run ./scripts/build-cef again.")
 
 
 class Session(GObject.Object):
@@ -120,13 +122,11 @@ class Session(GObject.Object):
             raise RuntimeError(
                 "Chromium could not start. Check the runtime and Linux namespace sandbox."
             )
-        self.source = GLib.timeout_add(10, self._pump)
+        self.source = GLib.timeout_add(250, self._expire_commands)
 
-    def _pump(self):
-        self.bridge.pump()
-        expired = [
-            key for key, (_, deadline) in self.pending.items() if deadline < time.monotonic()
-        ]
+    def _expire_commands(self):
+        now = time.monotonic()
+        expired = [key for key, (_, deadline) in self.pending.items() if deadline < now]
         for key in expired:
             callback, _ = self.pending.pop(key)
             callback(None, engine_error("The page operation timed out."))
@@ -134,7 +134,12 @@ class Session(GObject.Object):
 
     def _paint(self, identifier, pointer, width, height):
         view = self.views.get(identifier)
-        if view and not view.closed and 0 < width <= 4096 and 0 < height <= 4096:
+        if not view or not (0 < width <= 4096 and 0 < height <= 4096):
+            return
+        # Paint arrives on CEF's UI thread. Only the idle callback touches GTK.
+        with view.frame_lock:
+            if view.closed or view.rendering_hidden:
+                return
             view.pending_frame = (ctypes.string_at(pointer, width * height * 4), width, height)
             if not view.frame_source:
                 view.frame_source = GLib.idle_add(view._present_frame)
@@ -371,6 +376,10 @@ class View(Gtk.Widget):
         self.contexts, self.audio_contexts = {}, {}
         self.texture = self.pending_frame = None
         self.frame_source = 0
+        self.frame_lock = threading.Lock()
+        self.rendering_hidden = True
+        self._visibility_root = None
+        self._suspended_handler = 0
         self.zoom_factor = 1.0
         self.position = (0, 0)
         self.dialogs = set()
@@ -380,6 +389,8 @@ class View(Gtk.Widget):
         self.page_clipboard = page_clipboard.PageClipboard(self)
         self._input()
         self.bridge.create(self.identifier)
+        self.connect("map", self._visibility_changed)
+        self.connect("unmap", self._visibility_changed)
 
     def command(self, method, parameters=None, callback=None):
         self.session.command(self, method, parameters, callback)
@@ -462,6 +473,7 @@ class View(Gtk.Widget):
     def _event(self, kind, data):
         if kind == "ready":
             self.ready = True
+            self.bridge.hidden(self.identifier, self.rendering_hidden)
             self.bridge.resize(self.identifier, max(1, self.get_width()), max(1, self.get_height()))
             self._prepare()
         elif kind == "uri" and self.prepared and data["uri"] != "about:blank":
@@ -795,10 +807,39 @@ class View(Gtk.Widget):
                 self.texture, Graphene.Rect().init(0, 0, self.get_width(), self.get_height())
             )
 
+    def _visibility_changed(self, *_):
+        if self.closed:
+            return
+        root = self.get_root()
+        if root is not self._visibility_root:
+            if self._suspended_handler:
+                self._visibility_root.disconnect(self._suspended_handler)
+            self._visibility_root = root
+            self._suspended_handler = (
+                root.connect("notify::suspended", self._visibility_changed)
+                if isinstance(root, Gtk.Window)
+                else 0
+            )
+        hidden = not self.get_mapped() or (isinstance(root, Gtk.Window) and root.is_suspended())
+        if hidden == self.rendering_hidden:
+            return
+        self.rendering_hidden = hidden
+        self.bridge.hidden(self.identifier, hidden)
+        if hidden:
+            self._clear_frames()
+
+    def _clear_frames(self):
+        with self.frame_lock:
+            if self.frame_source:
+                GLib.source_remove(self.frame_source)
+                self.frame_source = 0
+            self.pending_frame = self.texture = None
+
     def _present_frame(self):
-        self.frame_source = 0
-        frame, self.pending_frame = self.pending_frame, None
-        if frame and not self.closed:
+        with self.frame_lock:
+            self.frame_source = 0
+            frame, self.pending_frame = self.pending_frame, None
+        if frame and not self.closed and not self.rendering_hidden:
             pixels, width, height = frame
             self.texture = Gdk.MemoryTexture.new(
                 width,
@@ -1065,15 +1106,16 @@ class View(Gtk.Widget):
         self.loading = False
         self.generation += 1
         GLib.source_remove(self._media_source)
-        if self.frame_source:
-            GLib.source_remove(self.frame_source)
-            self.frame_source = 0
+        self._clear_frames()
+        if self._suspended_handler:
+            self._visibility_root.disconnect(self._suspended_handler)
+            self._suspended_handler = 0
+        self._visibility_root = None
         for request in tuple(self.permission_requests.values()):
             request.cancelled = True
         self.permission_requests.clear()
         for dialog in tuple(self.dialogs):
             dialog.force_close()
-        self.pending_frame = self.texture = None
         self.im.set_client_widget(None)
         self.bridge.close(self.identifier)
 
