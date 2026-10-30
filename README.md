@@ -29,8 +29,8 @@ See [agent commands, Codex setup and UI testing](docs/user/agents.md).
 Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-Version 0.4.2 adds an Agent tab, per-site permissions, a native loading indicator,
-Google search, and separate windows for cross-origin new-tab links.
+Version 0.4.3 reduces idle CPU use, releases hidden-page rendering buffers, and
+centers Home content within a shared responsive 600-pixel width.
 H.264/AAC playback remains available on Fedora 45+ x86_64.
 
 ## Fedora RPM
@@ -49,7 +49,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.2-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.3-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 

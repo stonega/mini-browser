@@ -1,5 +1,26 @@
 # Release notes
 
+## 0.4.3 — October 30, 2026
+
+- Fix a CEF/GTK event-loop busy loop that consumed a full CPU core even on a
+  static page. Run Chromium's message loop on its dedicated UI thread and keep
+  GTK presentation on the main thread. Isolated synthetic-page tests reduced
+  host CPU from roughly 104% to 3–5% of one core; website activity can vary.
+- Stop layout and painting for hidden views and compositor-suspended windows,
+  including compact audio layouts. Release retained native framebuffers,
+  pending image data and GTK textures, then repaint when shown without
+  reloading the page. Audio playback continues. Page DOM and JavaScript heap
+  memory remain loaded, so this does not cap an individual website's RAM use.
+- Center Home's Apps, History and Agent tabs, search field and content within
+  one responsive 600-pixel width, using the available space in narrow windows.
+- Add an isolated resource regression check for idle CPU, hidden-frame cleanup,
+  stopped animation callbacks and rendering after showing the page again.
+
+Close all Mini Browser windows and reopen the app after upgrading. The native
+bridge and Python adapter must be updated together. Bookmarks, history, website
+sessions and the encrypted vault are preserved. H.264/AAC remains available on
+Fedora 45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the stock engine.
+
 ## 0.4.2 — October 29, 2026
 
 - Add an **Agent** tab beside Apps and History, with a three-line prompt preview

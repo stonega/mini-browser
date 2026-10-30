@@ -220,7 +220,7 @@ To build a local package instead:
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff cmake ninja-build gcc-c++
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.2-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.3-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
@@ -239,7 +239,7 @@ enabled target succeeds before announcing repository availability:
 
 ```sh
 ./scripts/build-rpm --source-only
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.2-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.3-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 

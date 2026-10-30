@@ -1,6 +1,6 @@
 [project]
 name = "mini-browser"
-version = "0.4.2"
+version = "0.4.3"
 description = "A small, native GNOME browser. One page, one portrait window."
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
