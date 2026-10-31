@@ -35,6 +35,10 @@ def running(pid):
 
 
 class Handler(BaseHTTPRequestHandler):
+    def do_HEAD(self):
+        self.send_response(200)
+        self.end_headers()
+
     def do_GET(self):
         if urlsplit(self.path).query:
             self.send_response(303)
@@ -61,7 +65,13 @@ def main():
         while True:
             time.sleep(1)
     config = json.loads((root / "config.json").read_text())
-    record = {"pid": os.getpid(), "group": os.getpgrp(), "args": sys.argv[1:], "cwd": os.getcwd()}
+    record = {
+        "pid": os.getpid(),
+        "group": os.getpgrp(),
+        "args": sys.argv[1:],
+        "cwd": os.getcwd(),
+        "port_env": os.environ.get("PORT"),
+    }
     temporary = root / f"run-{os.getpid()}.tmp"
     temporary.write_text(json.dumps(record))
     temporary.replace(root / f"run-{os.getpid()}.json")
@@ -76,7 +86,8 @@ def main():
     if config.get("mode") == "silent":
         while True:
             time.sleep(1)
-    server = HTTPServer(("127.0.0.1", 0), Handler)
+    port = int(os.environ["PORT"]) if config.get("use_env_port") else config.get("port", 0)
+    server = HTTPServer(("127.0.0.1", port), Handler)
     # Include a long diagnostic, unrelated URL and split, colored readiness line.
     print("x" * 50000, flush=True)
     print("Download: https://example.invalid/package", flush=True)

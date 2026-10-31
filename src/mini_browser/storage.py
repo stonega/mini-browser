@@ -63,6 +63,9 @@ class Library:
                     title TEXT NOT NULL,
                     created_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS hidden_bookmark_apps (
+                    url TEXT PRIMARY KEY
+                );
                 CREATE TABLE IF NOT EXISTS window_sizes (
                     kind TEXT NOT NULL,
                     app_key TEXT NOT NULL,
@@ -199,7 +202,13 @@ class Library:
 
     def add_bookmark_app(self, url: str):
         url = bookmark_app_url(url)
-        self.add_bookmark(url, urlsplit(url).hostname)
+        with self.connect() as db:
+            db.execute(
+                """INSERT INTO bookmarks VALUES (?, ?, '', ?)
+                   ON CONFLICT(url) DO UPDATE SET title=excluded.title""",
+                (url, urlsplit(url).hostname, time.time()),
+            )
+            db.execute("DELETE FROM hidden_bookmark_apps WHERE url=?", (url,))
 
     def bookmarked_apps(self) -> list[dict]:
         """Project bookmarks into one launcher per origin, with built-in presets."""
@@ -218,7 +227,9 @@ class Library:
                 url,
                 {"url": url, "site": url.rstrip("/"), "title": urlsplit(url).hostname},
             )
-        return list(apps.values())
+        with self.connect() as db:
+            hidden = {row["url"] for row in db.execute("SELECT url FROM hidden_bookmark_apps")}
+        return [app for url, app in apps.items() if url not in hidden]
 
     def record_visit(self, url: str, title: str):
         visited = time.time()
@@ -279,6 +290,14 @@ class Library:
         url = home_app_url(url)
         with self.connect() as db:
             return db.execute("DELETE FROM home_apps WHERE url=?", (url,)).rowcount > 0
+
+    def uninstall_web_app(self, url: str):
+        """Remove a launcher and suppress its bookmark/preset fallback, keeping site data."""
+        url = home_app_url(url)
+        root = bookmark_app_url(url)
+        with self.connect() as db:
+            db.execute("DELETE FROM home_apps WHERE url=?", (url,))
+            db.execute("INSERT OR IGNORE INTO hidden_bookmark_apps VALUES (?)", (root,))
 
     def recent_apps(self, limit: int = 6, *, exclude_sites=()) -> list[dict]:
         """Sites actually opened here, grouped by origin, with their latest page."""

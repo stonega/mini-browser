@@ -14,6 +14,7 @@ from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
 from .gtk import Adw, Gdk, Gio, GLib, Gtk, Web
 from .navigation import address_to_uri
+from .script_apps import ScriptAppHarness, ScriptAppStore
 from .storage import Library
 from .vault import PasswordVault
 from .window import BrowserWindow
@@ -49,6 +50,7 @@ class BrowserApplication(Adw.Application):
             None,
         )
         self.deepseek = DeepSeekHarness()
+        self.script_runners = {}
         self.data_dir = Path(
             data_dir
             or Path(
@@ -87,6 +89,7 @@ class BrowserApplication(Adw.Application):
         self.data_dir.chmod(0o700)
         self.cache_dir.chmod(0o700)
         self.library = Library(self.data_dir / "library.sqlite3")
+        self.script_apps = ScriptAppStore(self.library)
         self.devices = DeviceStore(self.library)
         self.connected_android = ()
         self.discovery_error = None
@@ -225,6 +228,8 @@ class BrowserApplication(Adw.Application):
             if hasattr(window, "window_size"):
                 window.window_size.close()
         self.deepseek.close()
+        for runner in self.script_runners.values():
+            runner.close()
         if self.discovery:
             self.discovery.stop()
             self.discovery.thread.join(timeout=3)
@@ -280,6 +285,16 @@ class BrowserApplication(Adw.Application):
             window.load_uri(uri)
         window.present()
         return window
+
+    def script_runner(self, record):
+        if record["id"] not in self.script_runners:
+            self.script_runners[record["id"]] = ScriptAppHarness(record)
+        return self.script_runners[record["id"]]
+
+    def owns_script_uri(self, uri):
+        return self.deepseek.owns_uri(uri) or any(
+            runner.owns_uri(uri) for runner in self.script_runners.values()
+        )
 
     def return_home(self, source):
         if source._closing:

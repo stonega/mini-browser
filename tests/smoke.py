@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -14,7 +15,7 @@ from unittest.mock import patch
 from mini_browser import APP_ID, APP_NAME, VERSION
 from mini_browser.application import BrowserApplication
 from mini_browser.dialogs import address_dialog, library_dialog, shortcuts_dialog
-from mini_browser.gtk import Adw, GLib, Gtk, Pango
+from mini_browser.gtk import Adw, Gdk, Gio, GLib, Gtk, Pango
 from mini_browser.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
 
 
@@ -67,6 +68,108 @@ def widgets(widget):
     while child:
         yield from widgets(child)
         child = child.get_next_sibling()
+
+
+def app_menu_scenario(window, base):
+    app = window.get_application()
+
+    def wait(predicate):
+        deadline = time.monotonic() + 5
+        while not predicate():
+            assert time.monotonic() < deadline, "App menu interaction timed out"
+            yield
+
+    def right_click(tile):
+        valid, bounds = tile.compute_bounds(window)
+        assert valid
+        completed = []
+
+        def finished(connection, result):
+            connection.call_finish(result)
+            completed.append(True)
+
+        app.get_dbus_connection().call(
+            "io.github.stone.MiniBrowser.TestPointer",
+            "/io/github/stone/MiniBrowser/TestPointer",
+            "io.github.stone.MiniBrowser.TestPointer",
+            "Click",
+            GLib.Variant(
+                "(oddu)",
+                (
+                    window.pin.path,
+                    bounds.get_x() + bounds.get_width() / 2,
+                    bounds.get_y() + bounds.get_height() / 2,
+                    3,
+                ),
+            ),
+            None,
+            Gio.DBusCallFlags.NONE,
+            3000,
+            None,
+            finished,
+        )
+        yield from wait(lambda: bool(completed))
+        yield from wait(lambda: window._app_menu and window._app_menu.get_visible())
+        assert window.stack.get_visible_child_name() == "home"
+        assert not app.library.search("history")
+
+    # Built-in website tiles support removal and explicit bookmarking restores them.
+    preset = window.app_tiles.get_child_at_index(1).get_child()
+    yield from right_click(preset)
+    menu = window._app_menu
+    assert (
+        menu.get_menu_model().get_item_attribute_value(0, "label", None).get_string() == "Uninstall"
+    )
+    if len(sys.argv) > 1:
+        paintable = Gtk.WidgetPaintable.new(menu)
+        yield
+        shot = Gtk.Snapshot.new()
+        paintable.snapshot(shot, menu.get_width(), menu.get_height())
+        texture = menu.get_renderer().render_texture(shot.to_node(), None)
+        path = Path(sys.argv[1])
+        assert texture.save_to_png(str(path.with_name(path.stem + "-app-menu.png")))
+    menu.popdown()
+    yield from wait(lambda: not menu.get_visible())
+    assert len(app.library.bookmarked_apps()) == 2
+    yield from right_click(preset)
+    window._app_menu.activate_action("app.uninstall", None)
+    assert window._app_menu is None
+    assert len(app.library.bookmarked_apps()) == 1
+    app.library.add_bookmark_app("https://www.youtube.com/")
+    # Keep the fixture library's original bookmark count for the remaining smoke phases.
+    with app.library.connect() as db:
+        db.execute("DELETE FROM bookmarks WHERE url=?", ("https://www.youtube.com/",))
+
+    app.library.add_bookmark_app(base)
+    saved = app.library.add_home_app(base + "/installed", "Installed web app")
+    window.refresh_recents()
+    other = app.new_window()
+    window.present()
+    yield from wait(lambda: window.app_tiles.get_child_at_index(1).get_child().get_width() > 0)
+    tile = window.app_tiles.get_child_at_index(1).get_child()
+    yield from right_click(tile)
+    with (
+        patch.object(app.library, "uninstall_web_app", side_effect=sqlite3.OperationalError),
+        patch.object(window, "toast") as notified,
+    ):
+        window._app_menu.activate_action("app.uninstall", None)
+        assert "library is writable" in notified.call_args.args[0]
+    assert app.library.home_apps() == [saved]
+    yield from right_click(tile)
+    window._app_menu.activate_action("app.uninstall", None)
+    assert app.library.home_apps() == []
+    assert app.library.search("bookmarks")[0]["url"] == base + "/"
+    for home in (window, other):
+        assert home.app_tiles.get_child_at_index(2) is not None
+        assert home.app_tiles.get_child_at_index(3) is None
+    other.close()
+    # Keyboard access uses the same menu, and a refresh dismisses it safely.
+    tile = window.app_tiles.get_child_at_index(1).get_child()
+    keys = next(c for c in tile.observe_controllers() if isinstance(c, Gtk.EventControllerKey))
+    assert keys.emit("key-pressed", Gdk.KEY_F10, 0, Gdk.ModifierType.SHIFT_MASK)
+    assert window._app_menu.get_visible()
+    window.refresh_recents()
+    assert window._app_menu is None
 
 
 def run():
@@ -142,6 +245,7 @@ def run():
                     assert not window.layout_button.get_visible()
                     state["paintable"] = Gtk.WidgetPaintable.new(window)
                     assert window.home_sections.get_visible_child_name() == "apps"
+                    assert window.add_app_button.get_visible()
                     window.activate_action("win.home", None)
                     assert app.get_windows() == [window]
                     pages = window.home_sections.get_pages()
@@ -158,6 +262,7 @@ def run():
                     )
                     assert not window.lookup_action("bookmark").get_enabled()
                     window.home_sections.set_visible_child_name("history")
+                    assert not window.add_app_button.get_visible()
                     assert not window.home_button.get_visible()
                     assert not window.layout_button.get_visible()
                     assert window.history_stack.get_visible_child_name() == "empty"
@@ -166,6 +271,7 @@ def run():
                     assert not window.back_button.get_sensitive()
                     assert window.agent_prompt not in widgets(window.app_tiles.get_parent())
                     window.home_sections.set_visible_child_name("agent")
+                    assert not window.add_app_button.get_visible()
                     assert window.agent_actions_stack.get_visible_child_name() == "empty"
                     assert window.agent_prompt_text.get_lines() == 3
                     assert window.agent_prompt_text.get_ellipsize() == Pango.EllipsizeMode.END
@@ -195,6 +301,13 @@ def run():
                         path = Path(sys.argv[1])
                         snapshot(window, str(path.with_name(path.stem + "-agent-prompt.png")))
                     window.home_sections.set_visible_child_name("apps")
+                    state["apps_window"] = window
+                    state["apps_scenario"] = app_menu_scenario(window, base)
+                    state["phase"] = "app-menu"
+                elif state["phase"] == "app-menu":
+                    if next(state["apps_scenario"], False) is not False:
+                        return GLib.SOURCE_CONTINUE
+                    window = state["apps_window"]
                     window.home_entry.set_text(base)
                     window.home_entry.emit("activate")
                     assert window.loading_spinner.get_visible()
@@ -816,7 +929,8 @@ def run():
                     print(
                         f"PASS: native window, page load, viewport {state['viewport']}, "
                         "complete history list, 600-pixel Home width, URL app bookmarks, "
-                        "Apps/History/Agent tabs, "
+                        "Apps/History/Agent tabs, real right-click app menu, uninstall across "
+                        "Home windows, uninstall write failure and keyboard menu, "
                         "settings imports, site permission manager, home entry, "
                         "same-origin links/popups, external links in separate windows, POST, "
                         "Back for links/typed URLs/History API/"

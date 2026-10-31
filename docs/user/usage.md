@@ -30,6 +30,37 @@ Open the address
 dialog with Ctrl+L to inspect the
 current URL or navigate elsewhere. Use F1 to see all keyboard shortcuts.
 
+On **Apps**, click **+** beside the search bar to add an app. Choose **Web app**,
+enter a full HTTP(S) URL and an optional name, then click **Add**. The tile opens
+that exact URL, including its path. Adding an app saves it without opening it.
+The button is hidden on History and Agent.
+
+Choose **Script app** to save a name, launch command, working folder, and optional
+port. Leave **Port** empty (or enter `0`) to choose a free port each time the server
+starts. Enter **1–65535** to use a fixed custom port. The command receives that
+number in its `PORT` environment variable, and Mini Browser opens
+`http://127.0.0.1:PORT/`. Your server must read `PORT` and listen on that port;
+no launch arguments are added automatically. The selected value overrides any
+inherited `PORT` for this command without changing your desktop environment.
+
+Use the folder containing your web app. Commands accept quoted arguments; use a
+shell script when you need pipes, environment assignments, or shell expansion.
+For example, a wrapper script can run `python3 -m http.server "$PORT" --bind 127.0.0.1`.
+The working folder defaults to your home directory and accepts an absolute path
+or `~`.
+
+Script commands start only when you open their tiles. Use a foreground server
+that keeps running and serves the managed local URL. Mini Browser shows the startup
+log and waits up to 60 seconds for an HTTP response before opening the page. An
+already occupied custom port produces an error; choose another port or stop the other
+server. Multiple windows of the same script app share one server. Returning
+Home, navigating to another origin, or closing its last window stops the command
+and its child processes. Closing Mini Browser also stops its servers. Saved
+script tiles survive restarts; their pages do not add history or website tiles.
+Apps saved with a local URL by earlier versions retain that URL and use its port
+for `PORT`; their HTTPS certificate checks remain enabled. Re-add an app with an
+empty Port field to switch it to automatic allocation.
+
 Choose **Bookmark App** from the three-line menu, or press Ctrl+D, to add the
 current website to Apps. Bookmarks use URL apps: bookmarking
 `https://apc.example.com/sdacsd/sdca` saves and opens `https://apc.example.com/`.
@@ -38,6 +69,17 @@ ports are retained. Repeated bookmarks of that site share one tile. Imported
 bookmarks also appear grouped by site, while their original page links stay in
 the library. Visiting a site adds history rather than an app tile.
 Return home with Alt+Home. Other home windows refresh as you visit or bookmark sites.
+
+Right-click a website or saved script tile in **Apps** and choose **Uninstall** to remove it.
+With the tile focused, Shift+F10 or the Menu key opens the same menu. This works
+for saved apps, bookmarked sites, and the YouTube/Bilibili presets. Removal
+updates every Home window and survives restarts, without deleting bookmarks,
+history, passwords, cookies, or website data. A bookmark or preset tile for the
+same origin stays hidden; other saved URLs at that origin remain available.
+Use **Bookmark App** on the website, or save it again through agent control, to
+restore a tile. Uninstalling a script tile leaves its open instances running
+until their windows close; it does not delete the script's files. Phone and
+DeepSeek Harness tiles keep their existing management.
 
 Home's **Agent** tab shows a three-line preview of the monospace **Agent prompt**
 for controlling the browser, adding apps and testing the UI. Choose **Copy prompt**

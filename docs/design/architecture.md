@@ -38,7 +38,11 @@ An `Adw.ToolbarView` places a native
 `Adw.HeaderBar` with Home, Back, the page title, a site-permissions button, pin toggle,
 layout menu, main menu, and close
 control above the content. The home body contains a native `Gtk.StackSwitcher`
-with Apps, History and Agent tabs above a shared search/address entry. A shared
+with Apps, History and Agent tabs above a shared search/address entry. Apps adds
+a native plus button after the entry; History and Agent hide it so the entry
+uses the full row. `app_dialogs.py` provides an adaptive, scrollable `Adw.Dialog`
+for web and script apps with validation and inline errors. Saving never launches
+the app, and refreshes every browser window. A shared
 `Adw.Clamp` centers all Home content at a maximum width of 600 logical pixels,
 with 10-pixel side margins on narrower windows. Tabs, the search entry, app tiles,
 history and Agent cards share this width constraint. Apps uses one
@@ -47,6 +51,42 @@ launchers, and bookmark origins, including YouTube and Bilibili presets. The gri
 uses the available Home content width, adding columns as the window grows up to
 six tiles per row. Tiles share continuous rows without group headings or an
 empty-device placeholder.
+`script_apps.py` stores custom script tiles independently in `script_apps`,
+deduplicated by normalized command arguments, port configuration and working folder.
+They are rendered after the built-in DeepSeek tile and before website apps.
+New script apps use managed HTTP URLs at `127.0.0.1`. An empty Port field (or zero)
+selects a free TCP port per launch; a custom port is an ASCII integer from 1–65535.
+The existing URL column stores an empty string for automatic allocation and the
+generated loopback URL for a custom port. A derived `port` field keeps the store
+interface explicit without rewriting earlier URL-based records. Those records
+retain their address, path/query, scheme and fixed port. Commands use `shlex`
+argument parsing without an implicit shell; a working folder is explicit and defaults to Home.
+`ScriptAppHarness` extends the existing supervised server lifecycle with a
+managed URL rather than trusting readiness URLs in subprocess output. Port
+selection binds a temporary IPv4 socket; a process-local claim also prevents
+concurrent launches from choosing a port reserved by another app's startup.
+Claims are released after process cleanup, including failures and cancellation.
+Only the child environment overrides `PORT`; the parent and other apps keep their
+own environment. The foreground server must consume `PORT` itself. The runner
+rejects occupied custom ports before launching and polls HTTP HEAD responses with
+bounded timeouts, no proxy and normal HTTPS verification. Servers stay in the
+foreground and have a 60-second startup deadline. Startup logs use the same
+bounded in-memory redaction as DeepSeek. `BrowserApplication` caches one runner
+per script ID. Window leases keep it alive until the last window leaves, and
+shutdown closes every runner. Managed script pages are excluded from browsing
+history and Bookmark App. Window dimensions use the working folder and argument
+list as their script key. Uninstall removes the saved script record and refreshes
+Home windows; open leases keep running until released, without deleting files.
+Website tiles have a secondary-click gesture and keyboard context menu
+(Shift+F10/Menu) exposing **Uninstall** through a native `Gtk.PopoverMenu`.
+The window owns one temporary popover and detaches it before rebuilding the
+grid or closing. Uninstall atomically deletes the selected exact `home_apps`
+URL and records its normalized origin root in `hidden_bookmark_apps`, suppressing
+bookmark/preset fallback tiles across restarts without changing source bookmarks,
+history, credentials, or Chromium data. Other saved URLs remain installed.
+Explicit **Bookmark App** clears the origin's suppression; adding a saved Home
+app shows that URL again. All browser windows refresh after uninstall. The
+agent's existing `remove_home_app` operation still removes only a saved record.
 History uses a `Gtk.ListView` directly
 inside a scroller, backed by `Gio.ListStore` and a list-item factory so only
 visible rows need widgets. It shows all stored history addresses, including

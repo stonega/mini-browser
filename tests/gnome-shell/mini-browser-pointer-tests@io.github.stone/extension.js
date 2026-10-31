@@ -23,6 +23,11 @@ const XML = `<node><interface name="${NAME}">
         <arg type="d" direction="in"/><arg type="d" direction="in"/>
         <arg type="u" direction="in"/>
     </method>
+    <method name="Click">
+        <arg type="o" direction="in"/>
+        <arg type="d" direction="in"/><arg type="d" direction="in"/>
+        <arg type="u" direction="in"/>
+    </method>
     <method name="Flags">
         <arg type="o" direction="in"/>
         <arg type="b" direction="out"/><arg type="b" direction="out"/>
@@ -52,7 +57,7 @@ export default class PointerTests extends Extension {
 
     _window(path, invocation) {
         const window = global.get_window_actors().map(actor => actor.meta_window).find(w =>
-            ['MediaSmoke', 'PinSmoke', 'EngineSmoke'].some(kind =>
+            ['MediaSmoke', 'PinSmoke', 'EngineSmoke', 'Smoke', 'AppsSmoke'].some(kind =>
                 w.get_gtk_application_id()?.startsWith(`io.github.stone.MiniBrowser.${kind}.`)) &&
             w.get_gtk_unique_bus_name() === invocation.get_sender() &&
             w.get_gtk_window_object_path() === path);
@@ -98,12 +103,16 @@ export default class PointerTests extends Extension {
         this._interact(path, x, y, 0, 0, duration, invocation);
     }
 
-    _interact(path, x, y, dx, dy, hold, invocation) {
+    ClickAsync([path, x, y, button], invocation) {
+        this._interact(path, x, y, 0, 0, 0, invocation, button);
+    }
+
+    _interact(path, x, y, dx, dy, hold, invocation, button = 1) {
         const window = this._window(path, invocation);
         if (!window)
             return;
         const rect = window.get_frame_rect();
-        if (this._timer || ![x, y, dx, dy].every(Number.isFinite) ||
+        if (this._timer || ![1, 3].includes(button) || ![x, y, dx, dy].every(Number.isFinite) ||
             x < 0 || y < 0 || x >= rect.width || y >= rect.height ||
             Math.abs(dx) > 150 || Math.abs(dy) > 150 || hold > 2000) {
             invocation.return_dbus_error('org.freedesktop.DBus.Error.InvalidArgs', 'Invalid test interaction.');
@@ -125,14 +134,14 @@ export default class PointerTests extends Extension {
             if (step < 4)
                 motion(0);
             else if (step === 4) {
-                this._pressed = true;
-                this._pointer.notify_button(GLib.get_monotonic_time(), 1, Clutter.ButtonState.PRESSED);
+                this._pressed = button;
+                this._pointer.notify_button(GLib.get_monotonic_time(), button, Clutter.ButtonState.PRESSED);
             }
             else if (step < 8)
                 motion((step - 4) / 3);
             else if (step === 8) {
                 this._pressed = false;
-                this._pointer.notify_button(GLib.get_monotonic_time(), 1, Clutter.ButtonState.RELEASED);
+                this._pointer.notify_button(GLib.get_monotonic_time(), button, Clutter.ButtonState.RELEASED);
             }
             else {
                 this._timer = 0;
@@ -147,7 +156,7 @@ export default class PointerTests extends Extension {
         if (this._timer)
             GLib.source_remove(this._timer);
         if (this._pressed)
-            this._pointer.notify_button(GLib.get_monotonic_time(), 1, Clutter.ButtonState.RELEASED);
+            this._pointer.notify_button(GLib.get_monotonic_time(), this._pressed, Clutter.ButtonState.RELEASED);
         Gio.bus_unown_name(this._name);
         this._export.unexport();
         this._keyboard = this._pointer = this._export = null;

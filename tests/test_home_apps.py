@@ -107,6 +107,66 @@ class HomeAppTests(unittest.TestCase):
         upgraded.add_home_app("https://example.org", "Saved after upgrade")
         self.assertEqual(upgraded.search("history"), before)
 
+    def test_uninstall_presets_and_imported_sites_persists_without_losing_data(self):
+        bookmarks = [("https://example.org/docs", "Docs", "Imported", 1)]
+        self.library.import_records(bookmarks, [])
+        self.library.record_visit("https://example.org/docs", "Docs")
+        before = (self.library.search("bookmarks"), self.library.search("history"))
+        for url in ("https://www.youtube.com/", "https://example.org/"):
+            self.library.uninstall_web_app(url)
+            self.library.uninstall_web_app(url)
+        reopened = Library(self.path)
+        reopened.import_records(bookmarks, [])
+        self.assertEqual(
+            [app["url"] for app in reopened.bookmarked_apps()], ["https://www.bilibili.com/"]
+        )
+        self.assertEqual(before, (reopened.search("bookmarks"), reopened.search("history")))
+        reopened.record_visit("https://example.org/another", "Another visit")
+        self.assertEqual(len(reopened.bookmarked_apps()), 1)
+
+    def test_uninstall_saved_url_keeps_other_apps_and_hides_bookmark_fallback(self):
+        self.library.add_bookmark_app("https://example.org/")
+        self.library.add_home_app("https://example.org/first", "First")
+        second = self.library.add_home_app("https://example.org/second", "Second")
+        self.library.add_bookmark_app("http://example.org/")
+        self.library.add_bookmark_app("https://sub.example.org/")
+        self.library.uninstall_web_app("https://EXAMPLE.org:443/first")
+        self.assertEqual(Library(self.path).home_apps(), [second])
+        roots = {app["url"] for app in self.library.bookmarked_apps()}
+        self.assertNotIn("https://example.org/", roots)
+        self.assertIn("http://example.org/", roots)
+        self.assertIn("https://sub.example.org/", roots)
+
+    def test_explicit_bookmark_or_saved_app_restores_uninstalled_tile(self):
+        self.library.uninstall_web_app("https://www.youtube.com/")
+        self.library.add_bookmark_app("https://www.youtube.com/watch?v=fixture")
+        self.assertIn(
+            "https://www.youtube.com/", [app["url"] for app in self.library.bookmarked_apps()]
+        )
+        self.library.uninstall_web_app("https://example.org/docs")
+        restored = self.library.add_home_app("https://example.org/docs", "Restored")
+        self.assertEqual(Library(self.path).home_apps(), [restored])
+
+    def test_failed_uninstall_rolls_back_saved_tile_removal(self):
+        saved = self.library.add_home_app("https://example.org/docs", "Saved")
+        with self.library.connect() as database:
+            database.execute("""CREATE TRIGGER fail_uninstall
+                BEFORE INSERT ON hidden_bookmark_apps
+                BEGIN SELECT RAISE(ABORT, 'synthetic write failure'); END""")
+        with self.assertRaises(sqlite3.Error):
+            self.library.uninstall_web_app(saved["url"])
+        self.assertEqual(self.library.home_apps(), [saved])
+
+    def test_existing_library_gains_uninstall_state_without_changing_apps(self):
+        saved = self.library.add_home_app("https://example.org/docs", "Saved")
+        with self.library.connect() as database:
+            database.execute("DROP TABLE hidden_bookmark_apps")
+        upgraded = Library(self.path)
+        self.assertEqual(upgraded.home_apps(), [saved])
+        self.assertEqual(len(upgraded.bookmarked_apps()), 2)
+        upgraded.uninstall_web_app(saved["url"])
+        self.assertEqual(upgraded.home_apps(), [])
+
     def test_bookmarked_apps_open_site_roots_and_preserve_subdomains(self):
         for address, expected in (
             ("https://APC.example.com:443/sdacsd/sdca?q=1#part", "https://apc.example.com/"),

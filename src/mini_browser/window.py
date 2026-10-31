@@ -1,8 +1,10 @@
 """One WebView per portrait window with a native GNOME header bar."""
 
 from datetime import datetime
+from sqlite3 import Error as DatabaseError
 
 from . import APP_NAME, autofill, permissions
+from .app_dialogs import AddAppDialog
 from .audio_player import AudioPlayer
 from .deepseek import COMMAND as DEEPSEEK_COMMAND
 from .deepseek import ICON as DEEPSEEK_ICON
@@ -14,7 +16,7 @@ from .dialogs import (
     settings_dialog,
     shortcuts_dialog,
 )
-from .gtk import Adw, Gio, GLib, GObject, Gtk, Pango, Web
+from .gtk import Adw, Gdk, Gio, GLib, GObject, Gtk, Pango, Web
 from .media import video_window_size
 from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
@@ -67,9 +69,12 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.failed = False
         self.failed_uri = None
         self._closing = False
-        self._deepseek_owner = None
-        self._deepseek_pending = False
-        self._deepseek_log_source = 0
+        self._app_menu = None
+        self._script_owner = None
+        self._script_runner = None
+        self._script_key = None
+        self._script_pending = False
+        self._script_log_source = 0
         self.script_loading = None
         self.audio_mode = False
         self.video_mode = False
@@ -249,8 +254,8 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _select_window_size(self, uri):
         key = (
-            script_app_key(DEEPSEEK_COMMAND)
-            if self.get_application().deepseek.owns_uri(uri)
+            self._script_key
+            if self._script_runner and self._script_runner.owns_uri(uri)
             else web_app_key(uri)
         )
         if key is not None:
@@ -272,10 +277,22 @@ class BrowserWindow(Adw.ApplicationWindow):
             primary_icon_name="system-search-symbolic",
             secondary_icon_name="go-next-symbolic",
             height_request=48,
+            hexpand=True,
         )
         self.home_entry.set_icon_activatable(Gtk.EntryIconPosition.PRIMARY, False)
         self.home_entry.set_icon_tooltip_text(Gtk.EntryIconPosition.SECONDARY, "Open website")
-        home.append(self.home_entry)
+        self.home_search = Gtk.Box(spacing=8)
+        self.home_search.append(self.home_entry)
+        self.add_app_button = Gtk.Button(
+            icon_name="list-add-symbolic",
+            tooltip_text="Add app",
+            width_request=48,
+            height_request=48,
+            valign=Gtk.Align.CENTER,
+        )
+        self.add_app_button.connect("clicked", lambda *_: AddAppDialog(self).present(self))
+        self.home_search.append(self.add_app_button)
+        home.append(self.home_search)
 
         def open_address(*_):
             try:
@@ -473,6 +490,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         item.get_child().set_tooltip_text(f"{record['title']}\n{record['url']}\n{visited}")
 
     def _home_section_changed(self, *_):
+        self.add_app_button.set_visible(self.home_sections.get_visible_child_name() == "apps")
         if self.home_sections.get_visible_child_name() == "history":
             self._refresh_history()
 
@@ -499,6 +517,7 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def refresh_recents(self):
         """Refresh app launchers and the history tab when it is visible."""
+        self._dismiss_app_menu()
         self.app_tiles.remove_all()
         saved = self.library.home_apps()
         saved_sites = {app["site"] for app in saved}
@@ -508,13 +527,16 @@ class BrowserWindow(Adw.ApplicationWindow):
         devices = self.get_application().device_tiles()
         icon = Gtk.Image.new_from_file(str(DEEPSEEK_ICON))
         icon.set_pixel_size(44)
+        deepseek_pending = (
+            self._script_pending and self._script_runner is self.get_application().deepseek
+        )
         self.deepseek_button = self._app_tile(
             "DeepSeek Harness",
-            "Starting…" if self._deepseek_pending else "Local app",
+            "Starting…" if deepseek_pending else "Local app",
             icon,
             self._open_deepseek,
         )
-        self.deepseek_button.set_sensitive(not self._deepseek_pending)
+        self.deepseek_button.set_sensitive(not deepseek_pending)
         for device, subtitle in devices:
             body = Gtk.Box(
                 orientation=Gtk.Orientation.VERTICAL,
@@ -555,6 +577,17 @@ class BrowserWindow(Adw.ApplicationWindow):
             )
             self.app_tiles.append(button)
         self.app_tiles.append(self.deepseek_button)
+        for script in self.get_application().script_apps.all():
+            button = self._app_tile(
+                script["title"],
+                "Script app",
+                Gtk.Image(icon_name="utilities-terminal-symbolic", pixel_size=44),
+                lambda _button, record=script: self._open_script_app(record),
+            )
+            self._app_context(
+                button, lambda app_id=script["id"]: self._uninstall_script_app(app_id)
+            )
+            self.app_tiles.append(button)
         for record in records:
             host = record["site"].split("://", 1)[1].removeprefix("www.")
             title = " ".join((record["title"] or host).split())
@@ -565,8 +598,80 @@ class BrowserWindow(Adw.ApplicationWindow):
                 lambda _button, url=record["url"]: self.load_uri(url),
             )
             button.set_tooltip_text(f"{title}\n{record['url']}")
+            self._app_context(button, lambda url=record["url"]: self._uninstall_web_app(url))
             self.app_tiles.append(button)
         self._home_section_changed()
+
+    def _app_context(self, button, uninstall):
+        click = Gtk.GestureClick(
+            button=Gdk.BUTTON_SECONDARY, propagation_phase=Gtk.PropagationPhase.CAPTURE
+        )
+        click.connect("pressed", self._app_context_pressed, uninstall)
+        button.add_controller(click)
+        keys = Gtk.EventControllerKey()
+        keys.connect("key-pressed", self._app_context_key, uninstall)
+        button.add_controller(keys)
+
+    def _app_context_pressed(self, gesture, _count, x, y, uninstall):
+        gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+        self._show_app_menu(gesture.get_widget(), uninstall, x, y)
+
+    def _app_context_key(self, controller, keyval, _keycode, modifiers, uninstall):
+        if keyval == Gdk.KEY_Menu or (
+            keyval == Gdk.KEY_F10 and modifiers & Gdk.ModifierType.SHIFT_MASK
+        ):
+            button = controller.get_widget()
+            self._show_app_menu(button, uninstall, button.get_width() / 2, button.get_height() / 2)
+            return True
+        return False
+
+    def _show_app_menu(self, button, callback, x, y):
+        self._dismiss_app_menu()
+        actions = Gio.SimpleActionGroup()
+        uninstall = Gio.SimpleAction.new("uninstall", None)
+        uninstall.connect("activate", lambda *_: callback())
+        actions.add_action(uninstall)
+        model = Gio.Menu()
+        model.append("Uninstall", "app.uninstall")
+        menu = Gtk.PopoverMenu.new_from_model(model)
+        menu.insert_action_group("app", actions)
+        menu.set_parent(button)
+        rect = Gdk.Rectangle()
+        rect.x, rect.y, rect.width, rect.height = int(x), int(y), 1, 1
+        menu.set_pointing_to(rect)
+        self._app_menu = menu
+        menu.popup()
+
+    def _dismiss_app_menu(self):
+        menu, self._app_menu = self._app_menu, None
+        if menu:
+            menu.popdown()
+            menu.unparent()
+
+    def _uninstall_web_app(self, url):
+        self._dismiss_app_menu()
+        try:
+            self.library.uninstall_web_app(url)
+        except DatabaseError:
+            self.toast("Could not uninstall this app. Check that the library is writable.")
+            return
+        self.refresh_app_windows()
+        self.toast("App uninstalled")
+
+    def _uninstall_script_app(self, app_id):
+        self._dismiss_app_menu()
+        try:
+            self.get_application().script_apps.remove(app_id)
+        except DatabaseError:
+            self.toast("Could not uninstall this app. Check that the library is writable.")
+            return
+        self.refresh_app_windows()
+        self.toast("App uninstalled")
+
+    def refresh_app_windows(self):
+        for window in self.get_application().get_windows():
+            if isinstance(window, BrowserWindow) and not window._closing:
+                window.refresh_recents()
 
     @staticmethod
     def _app_tile(title, subtitle, icon, callback):
@@ -614,45 +719,63 @@ class BrowserWindow(Adw.ApplicationWindow):
             return window
 
     def _start_deepseek(self):
-        if self._closing or self._deepseek_pending:
+        self._start_script(
+            self.get_application().deepseek, "DeepSeek Harness", script_app_key(DEEPSEEK_COMMAND)
+        )
+
+    def _open_script_app(self, record):
+        app = self.get_application()
+        runner = app.script_runner(record)
+        window = app.new_window()
+        window._start_script(
+            runner, record["title"], script_app_key([record["directory"], *runner.arguments])
+        )
+        return window
+
+    def _start_script(self, runner, title, size_key):
+        if self._closing or self._script_pending:
             return
-        self._release_deepseek()
-        owner = self._deepseek_owner = object()
-        self._deepseek_pending = True
+        self._release_script()
+        self._script_runner, self._script_key = runner, size_key
+        owner = self._script_owner = object()
+        self._script_pending = True
         self._restore_page()
-        self.window_size.select(script_app_key(DEEPSEEK_COMMAND))
+        self.window_size.select(size_key)
         self.refresh_recents()
         if self.script_loading is None:
             self.script_loading = ScriptLoading()
             self.stack.add_named(self.script_loading, "script-loading")
         self.script_loading.start()
         self.stack.set_visible_child_name("script-loading")
-        self.set_title("DeepSeek Harness")
+        self.set_title(title)
 
         def update_log():
-            if self._closing or self._deepseek_owner is not owner or not self._deepseek_pending:
-                self._deepseek_log_source = 0
+            if self._closing or self._script_owner is not owner or not self._script_pending:
+                self._script_log_source = 0
                 return GLib.SOURCE_REMOVE
-            self.script_loading.set_log(self.get_application().deepseek.startup_log(owner))
+            self.script_loading.set_log(runner.startup_log(owner))
             return GLib.SOURCE_CONTINUE
 
-        self._deepseek_log_source = GLib.timeout_add(100, update_log)
+        self._script_log_source = GLib.timeout_add(100, update_log)
 
         def changed(uri, error):
             def update():
-                if self._closing or self._deepseek_owner is not owner:
+                if self._closing or self._script_owner is not owner:
                     return GLib.SOURCE_REMOVE
-                self._deepseek_pending = False
-                self._stop_deepseek_loading()
+                self._script_pending = False
+                self._stop_script_loading()
                 if error:
                     self.show_home()
-                    dialog = Adw.AlertDialog(heading="DeepSeek Harness stopped", body=error)
+                    dialog = Adw.AlertDialog(heading=f"{title} stopped", body=error)
                     dialog.add_response("close", "Close")
                     dialog.add_response("retry", "Try again")
                     dialog.set_default_response("retry")
                     dialog.set_close_response("close")
                     dialog.connect(
-                        "response", lambda _d, answer: answer == "retry" and self._start_deepseek()
+                        "response",
+                        lambda _d, answer: (
+                            answer == "retry" and self._start_script(runner, title, size_key)
+                        ),
                     )
                     dialog.present(self)
                 else:
@@ -661,24 +784,26 @@ class BrowserWindow(Adw.ApplicationWindow):
 
             GLib.idle_add(update)
 
-        self.get_application().deepseek.acquire(owner, changed)
+        runner.acquire(owner, changed)
 
-    def _stop_deepseek_loading(self):
-        if self._deepseek_log_source:
-            GLib.source_remove(self._deepseek_log_source)
-            self._deepseek_log_source = 0
+    def _stop_script_loading(self):
+        if self._script_log_source:
+            GLib.source_remove(self._script_log_source)
+            self._script_log_source = 0
         if self.script_loading is not None:
             self.script_loading.stop()
 
-    def _release_deepseek(self):
-        owner, self._deepseek_owner = self._deepseek_owner, None
-        self._deepseek_pending = False
-        self._stop_deepseek_loading()
-        if owner is not None:
-            self.get_application().deepseek.release(owner)
+    def _release_script(self):
+        owner, self._script_owner = self._script_owner, None
+        runner, self._script_runner = self._script_runner, None
+        self._script_key = None
+        self._script_pending = False
+        self._stop_script_loading()
+        if owner is not None and runner is not None:
+            runner.release(owner)
 
     def show_home(self):
-        self._release_deepseek()
+        self._release_script()
         self._restore_page()
         self.window_size.select(None)
         self.webview.stop_loading()
@@ -750,7 +875,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         uri = self.webview.get_uri() or ""
         self.permissions_button.set_visible(browsing and is_web_url(uri))
         self.lookup_action("bookmark").set_enabled(
-            browsing and is_web_url(uri) and not self.get_application().deepseek.owns_uri(uri)
+            browsing and is_web_url(uri) and not self.get_application().owns_script_uri(uri)
         )
 
     def _back(self):
@@ -839,11 +964,11 @@ class BrowserWindow(Adw.ApplicationWindow):
 
     def _uri_changed(self, *_):
         if (
-            self._deepseek_owner is not None
-            and not self._deepseek_pending
-            and not self.get_application().deepseek.owns_uri(self.webview.get_uri() or "")
+            self._script_owner is not None
+            and not self._script_pending
+            and not self._script_runner.owns_uri(self.webview.get_uri() or "")
         ):
-            self._release_deepseek()
+            self._release_script()
         if self._closing:
             return
         # History API and fragment navigation do not emit load-changed.
@@ -1158,8 +1283,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         if not is_web_url(uri):
             self.toast("Mini Browser opens http:// and https:// websites.")
             return
-        if not self.get_application().deepseek.owns_uri(uri):
-            self._release_deepseek()
+        if self._script_runner and not self._script_runner.owns_uri(uri):
+            self._release_script()
         self.failed_uri = None
         self._restore_page()
         self._select_window_size(uri)
@@ -1184,7 +1309,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         elif event == Web.LoadEvent.FINISHED and not self.failed:
             self._probe_video()
             uri = view.get_uri() or ""
-            if is_web_url(uri) and not self.get_application().deepseek.owns_uri(uri):
+            if is_web_url(uri) and not self.get_application().owns_script_uri(uri):
                 try:
                     self.library.record_visit(uri, view.get_title())
                     for window in self.get_application().get_windows():
@@ -1404,11 +1529,12 @@ class BrowserWindow(Adw.ApplicationWindow):
     def _close_requested(self, *_):
         self.window_size.close()
         self._closing = True
+        self._dismiss_app_menu()
         self.loading_spinner.set_visible(False)
         if isinstance(self.loading_spinner, Gtk.Spinner):
             self.loading_spinner.stop()
         self._dismiss_permission_prompts()
-        self._release_deepseek()
+        self._release_script()
         self.back_history.popdown()
         self.back_history.unparent()
         self.pin.close()

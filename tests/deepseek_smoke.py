@@ -26,7 +26,7 @@ def widgets(widget):
 def loaded(window):
     return (
         window.stack.get_visible_child_name() == "web"
-        and not window._deepseek_pending
+        and not window._script_pending
         and window.webview.get_title() == "Harness fixture"
         and not window.webview.is_loading()
     )
@@ -94,7 +94,7 @@ def run():
                     first.deepseek_button.emit("clicked")
                     launched = state["first"] = (set(app.get_windows()) - before).pop()
                     assert launched.stack.get_visible_child_name() == "script-loading"
-                    assert launched._deepseek_pending
+                    assert launched._script_pending
                     loading = launched.script_loading
                     assert loading.output.get_text() == "▌"
                     assert loading.output.has_css_class("monospace")
@@ -150,7 +150,7 @@ def run():
                     for window in (state["first"], state["second"]):
                         assert window.script_loading._animation_source == 0
                         assert window.script_loading.output.get_text() == ""
-                        assert window._deepseek_log_source == 0
+                        assert window._script_log_source == 0
                     assert len(runs(helpers)) == 1, "DeepSeek windows must share one server"
                     assert app.library.search("history") == []
                     assert app.library.recent_apps() == []
@@ -175,7 +175,7 @@ def run():
                 elif phase == 4 and len(runs(helpers)) >= 2:
                     second = state["second"]
                     second.home_button.emit("clicked")
-                    assert second._deepseek_owner is None
+                    assert second._script_owner is None
                     assert second._closing and app.get_windows() == [state["home"]]
                     state["second"] = state["home"]._open_deepseek()
                     state["phase"] = 5
@@ -212,10 +212,10 @@ def run():
                     state["phase"] = 8
                 elif phase == 8 and len(runs(helpers)) > state["previous_runs"]:
                     cancelled = state["cancelled"]
-                    assert cancelled._deepseek_pending
+                    assert cancelled._script_pending
                     cancelled.close()
-                    assert cancelled._deepseek_owner is None
-                    assert cancelled._deepseek_log_source == 0
+                    assert cancelled._script_owner is None
+                    assert cancelled._script_log_source == 0
                     assert cancelled.script_loading.output.get_text() == ""
                     assert cancelled.script_loading._animation_source == 0
                     state["phase"] = 9

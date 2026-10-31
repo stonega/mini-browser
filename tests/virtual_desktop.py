@@ -127,6 +127,7 @@ def run_tests(root, arguments):
     tests = {
         "devices": "device_smoke.py",
         "deepseek": "deepseek_smoke.py",
+        "apps": "apps_smoke.py",
         "browser": "smoke.py",
         "pin": "pin_smoke.py",
         "media": "media_smoke.py",
@@ -142,7 +143,7 @@ def run_tests(root, arguments):
         selected = arguments[0].split("=", 1)[1]
         if selected not in tests:
             raise ValueError(
-                "Choose --test=devices, deepseek, browser, pin, media, passwords, "
+                "Choose --test=devices, deepseek, apps, browser, pin, media, passwords, "
                 "cef, resources, engine, agent, or codecs."
             )
         filenames, arguments = (tests[selected],), arguments[1:]

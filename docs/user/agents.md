@@ -99,6 +99,11 @@ screenshot tool returns an image directly instead of writing a file.
 
 ## Saved Home apps
 
+The **+** button beside Home's search bar on the Apps tab adds web apps and local
+script apps through a native form. The following CLI/MCP commands manage web
+apps; script commands, working folders and automatic/custom `PORT` are configured
+in the native form.
+
 ```sh
 mini-browser --agent
 mini-browser agent add-app https://example.com/dashboard --title 'My dashboard'
@@ -122,6 +127,9 @@ Removing a saved tile leaves bookmarks and browsing history intact; the website
 may still appear as a bookmarked app or in History. DeepSeek keeps its built-in
 tile in Apps. The menu's **Bookmark App** action saves a website root;
 agent-saved Home apps continue to open their explicit URLs.
+The tile's right-click **Uninstall** menu also hides its bookmark/preset fallback
+persistently. It preserves bookmarks, history and website data. Re-adding a saved
+app shows it again; **Bookmark App** restores a hidden origin tile.
 
 The same operations are available as MCP tools `add_home_app`, `list_home_apps`
 and `remove_home_app`, or through `agent call`. They do not require a page ID.

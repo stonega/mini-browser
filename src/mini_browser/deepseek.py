@@ -116,6 +116,12 @@ class DeepSeekHarness:
     before starting another, including during rapid close/reopen sequences.
     """
 
+    failed_message = FAILED
+    timeout_message = (
+        "DeepSeek Harness took too long to start. Check your network and "
+        "Node.js installation, then open its tile to try again."
+    )
+
     def __init__(self, *, startup_timeout=300):
         self.startup_timeout = startup_timeout
         self._condition = threading.Condition()
@@ -197,7 +203,7 @@ class DeepSeekHarness:
             except (OSError, RuntimeError) as error:
                 if not cancel.is_set():
                     # Never forward subprocess output, which can contain credentials.
-                    message = str(error) if isinstance(error, HarnessError) else FAILED
+                    message = str(error) if isinstance(error, HarnessError) else self.failed_message
                     self._notify(None, message, cancel)
             finally:
                 with self._condition:
@@ -220,13 +226,26 @@ class DeepSeekHarness:
         for callback in callbacks:
             callback(uri, error)
 
-    def _serve(self, cancel):
+    def _launch(self):
         executable = shutil.which(COMMAND[0])
         if not executable:
             raise HarnessError(
                 "Install Node.js and npm so npx is available on your desktop's PATH, "
                 "then try again."
             )
+        return (executable, *COMMAND[1:]), Path.home()
+
+    def _ready_uri(self, line):
+        return startup_uri(line)
+
+    def _poll_ready(self):
+        return None
+
+    def _process_environment(self):
+        return None
+
+    def _serve(self, cancel):
+        arguments, directory = self._launch()
         if cancel.is_set():
             return
         reader, writer = os.pipe()
@@ -237,10 +256,10 @@ class DeepSeekHarness:
                     "-I",
                     str(Path(__file__).with_name("process_supervisor.py")),
                     str(reader),
-                    executable,
-                    *COMMAND[1:],
+                    *arguments,
                 ],
-                cwd=Path.home(),
+                cwd=directory,
+                env=self._process_environment(),
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
@@ -261,10 +280,7 @@ class DeepSeekHarness:
                 selector.register(process.stdout, selectors.EVENT_READ)
                 while not cancel.is_set():
                     if not ready and time.monotonic() >= deadline:
-                        raise HarnessError(
-                            "DeepSeek Harness took too long to start. Check your network and "
-                            "Node.js installation, then open its tile to try again."
-                        )
+                        raise HarnessError(self.timeout_message)
                     for _key, _events in selector.select(timeout=0.1):
                         chunk = os.read(process.stdout.fileno(), 16384)
                         if not chunk:
@@ -274,7 +290,7 @@ class DeepSeekHarness:
                             if index:
                                 if not ready:
                                     line = pending.decode("utf-8", errors="replace")
-                                    uri = None if discarding else startup_uri(line)
+                                    uri = None if discarding else self._ready_uri(line)
                                     if uri:
                                         ready = True
                                         self._notify(uri, None, cancel)
@@ -291,7 +307,10 @@ class DeepSeekHarness:
                                 if len(pending) > 16384:
                                     pending, discarding = b"", True
                     if process.poll() is not None:
-                        raise HarnessError(FAILED)
+                        raise HarnessError(self.failed_message)
+                    if not ready and (uri := self._poll_ready()):
+                        ready = True
+                        self._notify(uri, None, cancel)
         finally:
             os.close(writer)
             terminate(process)

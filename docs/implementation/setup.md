@@ -32,11 +32,17 @@ ruff format src tests scripts/install
 ./scripts/smoke
 ./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
 ./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
+./scripts/smoke --test=apps     # native Add forms and synthetic custom script apps
 ./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
 ./scripts/build-rpm
 ```
 
 The main app uses Chromium through CEF, while its UI remains native GTK.
+Custom script servers must honor the `PORT` environment variable. Mini Browser
+selects a free port by default, or passes the custom port saved in the Add form,
+then waits for `http://127.0.0.1:PORT/`. Commands needing a port flag can use a
+wrapper script to pass `"$PORT"`; arguments are not evaluated by an implicit shell.
+
 `./scripts/build-cef` downloads and verifies the pinned official Linux SDK, then
 builds the small C++ bridge and subprocess. It supports x86_64 and aarch64; the
 latter needs a native ARM build. Allow roughly 2 GiB for SDK and build files.
