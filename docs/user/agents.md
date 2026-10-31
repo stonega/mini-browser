@@ -42,7 +42,8 @@ status 1; argument syntax errors return status 2. Page IDs come from `list` or
 `open`; never assume a particular number. A page ID remains stable until its
 window closes. Navigation and resizing return when requested, before completion.
 The native `home` action closes an app window and focuses an existing Home window,
-or creates a fresh one. Run `list` again to find the Home page ID before continuing.
+or creates a fresh one. Placement finishes asynchronously; poll `list` until the
+source page ID disappears, then use the Home page ID before continuing.
 Poll `list` for the desired URL/title, `loading: false` and `ready: true`, then take
 a fresh snapshot. Errors and failed loads may also finish loading, so check the
 reported layout and expected title/content as well.

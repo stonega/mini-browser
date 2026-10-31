@@ -633,7 +633,9 @@ def run():
             window.player.mute_button.emit("clicked")
             assert window.webview.get_is_muted()
             window.player.mute_button.emit("clicked")
+            home_position = frame(window)[:2]
             window.home_button.emit("clicked")
+            yield from wait("Home placement completes", lambda: window._closing)
             assert window._closing
             assert original_view.get_is_muted()
             yield from wait(
@@ -642,6 +644,7 @@ def run():
             )
             assert not original_view.is_playing_audio()
             window = app.get_windows()[0]
+            assert frame(window)[:2] == home_position
             state["paintable"] = Gtk.WidgetPaintable.new(window)
             original_view = window.webview
             assert not window.audio_mode

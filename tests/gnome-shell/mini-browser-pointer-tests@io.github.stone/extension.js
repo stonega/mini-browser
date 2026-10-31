@@ -13,6 +13,12 @@ const XML = `<node><interface name="${NAME}">
         <arg type="i" direction="out"/><arg type="i" direction="out"/>
         <arg type="i" direction="out"/><arg type="i" direction="out"/>
     </method>
+    <method name="Move">
+        <arg type="o" direction="in"/>
+        <arg type="i" direction="in"/><arg type="i" direction="in"/>
+        <arg type="i" direction="out"/><arg type="i" direction="out"/>
+        <arg type="i" direction="out"/><arg type="i" direction="out"/>
+    </method>
     <method name="Pointer">
         <arg type="o" direction="in"/>
         <arg type="d" direction="in"/><arg type="d" direction="in"/>
@@ -72,6 +78,14 @@ export default class PointerTests extends Extension {
             return;
         const rect = window.get_frame_rect();
         invocation.return_value(new GLib.Variant('(iiii)', [rect.x, rect.y, rect.width, rect.height]));
+    }
+
+    MoveAsync([path, x, y], invocation) {
+        const window = this._window(path, invocation);
+        if (!window)
+            return;
+        window.move_frame(true, x, y);
+        this.FrameAsync([path], invocation);
     }
 
     FlagsAsync([path], invocation) {

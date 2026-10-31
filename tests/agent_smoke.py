@@ -130,6 +130,15 @@ def run():
                 time.sleep(0.1)
             raise AssertionError(f"Title did not become {title}")
 
+        def wait_home(previous):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                pages = cli("list")["pages"]
+                if pages and all(page["pageId"] != previous for page in pages):
+                    return pages
+                time.sleep(0.05)
+            raise AssertionError("Home did not finish closing the app window")
+
         def worker():
             try:
                 deadline = time.monotonic() + 10
@@ -153,7 +162,7 @@ def run():
                 wait_title(initial, "Agent fixture")
                 assert cli("apps")["apps"][0]["title"] == saved_title
                 cli("action", initial, "home")
-                homes = cli("list")["pages"]
+                homes = wait_home(initial)
                 assert len(homes) == 1 and homes[0]["layout"] == "home"
                 assert homes[0]["pageId"] != initial
                 initial = homes[0]["pageId"]
@@ -212,7 +221,7 @@ def run():
                 cli("native-click", page, close)
                 time.sleep(0.2)
                 cli("action", page, "home")
-                homes = cli("list")["pages"]
+                homes = wait_home(page)
                 assert len(homes) == 1
                 assert homes[0]["pageId"] == initial and homes[0]["layout"] == "home"
                 page = initial

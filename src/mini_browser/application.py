@@ -22,6 +22,7 @@ from .script_apps import ScriptAppHarness, ScriptAppStore
 from .storage import Library
 from .vault import PasswordVault
 from .window import BrowserWindow
+from .window_pin import BUS_NAME, INTERFACE, OBJECT_PATH
 
 
 class BrowserApplication(Adw.Application):
@@ -358,6 +359,8 @@ class BrowserApplication(Adw.Application):
     def return_home(self, source):
         if source._closing:
             return None
+        if home := getattr(source, "_returning_home", None):
+            return home
         if isinstance(source, BrowserWindow) and source.stack.get_visible_child_name() == "home":
             source.present()
             return source
@@ -375,10 +378,51 @@ class BrowserApplication(Adw.Application):
         if home is None:
             home = self.new_window()
         else:
+            home.unmaximize()
+            home.unfullscreen()
             home.present()
-        if source is not home:
-            source.close()
+        source._returning_home = home
+        self._position_home(source, home)
         return home
+
+    def _position_home(self, source, home, attempt=0):
+        if source._closing or home._closing or self._shutting_down:
+            source._returning_home = None
+            return GLib.SOURCE_REMOVE
+        if attempt < 10 and (home.is_maximized() or home.is_fullscreen()):
+            GLib.timeout_add(100, self._position_home, source, home, attempt + 1)
+            return GLib.SOURCE_REMOVE
+
+        def finished(connection, result):
+            try:
+                connection.call_finish(result)
+            except GLib.Error as error:
+                if (
+                    Gio.DBusError.get_remote_error(error)
+                    == "org.freedesktop.DBus.Error.UnknownObject"
+                    and attempt < 10
+                ):
+                    # GTK's window identity can reach Mutter shortly after map.
+                    GLib.timeout_add(100, self._position_home, source, home, attempt + 1)
+                    return
+                # Older or disabled companions still allow returning Home.
+            source._returning_home = None
+            if not source._closing and not home._closing and not self._shutting_down:
+                source.close()
+
+        self.get_dbus_connection().call(
+            BUS_NAME,
+            OBJECT_PATH,
+            INTERFACE,
+            "MoveToWindow",
+            GLib.Variant("(oo)", (source.pin.path, home.pin.path)),
+            GLib.VariantType.new("()"),
+            Gio.DBusCallFlags.NO_AUTO_START,
+            1500,
+            None,
+            finished,
+        )
+        return GLib.SOURCE_REMOVE
 
     def open_device(self, device_id):
         from .device_window import DeviceWindow

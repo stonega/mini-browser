@@ -135,8 +135,14 @@ locked aspect ratio. Back/Forward actions track Chromium's back-forward list and
 are disabled on the home page, where the Home, Back, site-permissions and page layout buttons are hidden.
 The Home, site-permissions, and layout buttons appear when an app is opened. The `win.home` action
 calls `BrowserApplication.return_home` to present an existing Home window or create
-a clean one before closing the source
-app window. A source already on Home stays open. Closing uses the normal cleanup
+a clean one before closing the source app window. The companion's scoped
+`MoveToWindow` D-Bus method copies the source frame position, monitor and workspace
+to Home before the source closes. Both windows must belong to the caller.
+Placement is asynchronous, with bounded retries for GTK/Mutter mapping races;
+repeated Home actions share the pending target. An absent or older companion
+falls back to compositor placement. A source already on Home stays open.
+Reused Home windows leave maximized/fullscreen state before placement.
+Closing uses the normal cleanup
 for Chromium, script leases, media playback and phone transports; new Home windows
 start on Apps with an empty entry and fresh WebView. Internal script-error recovery
 can still show Home in place to retain its retry dialog.

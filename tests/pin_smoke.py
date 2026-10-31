@@ -119,25 +119,33 @@ def run():
                 None,
             )
             try:
-                try:
-                    outsider.call_sync(
-                        BUS_NAME,
-                        OBJECT_PATH,
-                        INTERFACE,
-                        "SetPinned",
-                        GLib.Variant("(ob)", (window.pin.path, False)),
-                        GLib.VariantType.new("(b)"),
-                        Gio.DBusCallFlags.NONE,
-                        1500,
-                        None,
-                    )
-                except GLib.Error as error:
-                    assert (
-                        Gio.DBusError.get_remote_error(error)
-                        == "org.freedesktop.DBus.Error.UnknownObject"
-                    )
-                else:
-                    raise AssertionError("Pin service accepted an unrelated bus caller")
+                for method, parameters, reply in (
+                    ("SetPinned", GLib.Variant("(ob)", (window.pin.path, False)), "(b)"),
+                    (
+                        "MoveToWindow",
+                        GLib.Variant("(oo)", (window.pin.path, other.pin.path)),
+                        "()",
+                    ),
+                ):
+                    try:
+                        outsider.call_sync(
+                            BUS_NAME,
+                            OBJECT_PATH,
+                            INTERFACE,
+                            method,
+                            parameters,
+                            GLib.VariantType.new(reply),
+                            Gio.DBusCallFlags.NONE,
+                            1500,
+                            None,
+                        )
+                    except GLib.Error as error:
+                        assert (
+                            Gio.DBusError.get_remote_error(error)
+                            == "org.freedesktop.DBus.Error.UnknownObject"
+                        )
+                    else:
+                        raise AssertionError(f"{method} accepted an unrelated bus caller")
             finally:
                 outsider.close_sync(None)
 
@@ -217,14 +225,28 @@ def run():
             sticky_only.close()
             extension(True)
             yield lambda: ready(window) and ready(other)
-            window.close()
+            # Returning Home remains usable with an older or disabled companion.
+            window.stack.set_visible_child_name("error")
+            with patch("mini_browser.application.INTERFACE", INTERFACE + ".Old"):
+                window.home_button.emit("clicked")
+            yield lambda: window._closing
+            assert app.get_windows() == [other]
+            extension(False)
+            yield lambda: not other.pin.available
+            fallback = app.new_window()
+            fallback.stack.set_visible_child_name("error")
+            fallback.home_button.emit("clicked")
+            yield lambda: fallback._closing
+            assert app.get_windows() == [other]
+            extension(True)
+            yield lambda: ready(other)
             other.close()
             state["completed"] = True
             print(
                 "PASS: above/all-workspace pins, independent windows, caller ownership, "
                 "independent compositor signals, mixed-state restoration, "
                 "rapid requests, extension disable/re-enable, missing-extension guidance, "
-                "enable from pin button"
+                "enable from pin button, Home fallback without placement support"
             )
 
         def tick():

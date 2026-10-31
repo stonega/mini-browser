@@ -166,6 +166,11 @@ def run():
                     window = state["android_window"]
                     assert window.get_default_size() == (550, 740)
                     window.home_button.emit("clicked")
+                    state["phase"] = "home"
+                elif phase == "home":
+                    window = state["android_window"]
+                    if not window._closing:
+                        return GLib.SOURCE_CONTINUE
                     assert window._closing and window not in app.get_windows()
                     assert app.get_windows() == [state["home"]]
                     window = state["android_window"] = app.open_device(state["android"].id)

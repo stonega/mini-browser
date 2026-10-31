@@ -1,7 +1,7 @@
 {
     "uuid": "mini-browser-pin@io.github.stone",
     "name": "Mini Browser Pin",
-    "description": "Keep Mini Browser windows on top and visible on all workspaces, including audio and video players.",
+    "description": "Keep Mini Browser windows on top and visible on all workspaces, and return Home at the app window's position.",
     "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
-    "version": 2
+    "version": 3
 }

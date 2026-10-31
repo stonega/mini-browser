@@ -70,6 +70,28 @@ def widgets(widget):
         child = child.get_next_sibling()
 
 
+def window_frame(window, position=None):
+    interface = "io.github.stone.MiniBrowser.TestPointer"
+    return (
+        window.get_application()
+        .get_dbus_connection()
+        .call_sync(
+            interface,
+            "/io/github/stone/MiniBrowser/TestPointer",
+            interface,
+            "Frame" if position is None else "Move",
+            GLib.Variant("(o)", (window.pin.path,))
+            if position is None
+            else GLib.Variant("(oii)", (window.pin.path, *position)),
+            GLib.VariantType.new("(iiii)"),
+            Gio.DBusCallFlags.NONE,
+            1500,
+            None,
+        )
+        .unpack()
+    )
+
+
 def app_menu_scenario(window, base):
     app = window.get_application()
 
@@ -516,11 +538,21 @@ def run():
                     assert not window.back_button.get_visible()
                     assert not window.back_button.get_sensitive()
                     assert window.lookup_action("forward").get_enabled()
+                    state["home_position"] = window_frame(window, (143, 111))[:2]
+                    state["previous"] = window
                     window.home_button.emit("clicked")
-                    assert window._closing and window not in app.get_windows()
-                    previous = window
+                    # Repeated Home actions while placement is pending reuse one target.
+                    assert app.return_home(window) is window._returning_home
+                    state["phase"] = "new-home"
+                elif state["phase"] == "new-home":
+                    previous = state["previous"]
+                    if not previous._closing:
+                        return GLib.SOURCE_CONTINUE
+                    assert previous not in app.get_windows()
                     window = app.get_windows()[0]
                     assert window is not previous
+                    actual = window_frame(window)[:2]
+                    assert actual == state["home_position"], (actual, state["home_position"])
                     assert window.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     assert window.home_entry.get_text() == ""
                     assert window.home_sections.get_visible_child_name() == "apps"
@@ -665,9 +697,12 @@ def run():
                     assert other.get_default_size() == (DEFAULT_WIDTH, DEFAULT_HEIGHT)
                     other.home_entry.set_text("Keep this Home search")
                     other.home_sections.set_visible_child_name("history")
+                    other.maximize()
                     state["existing_home"] = other
                     state["phase"] = 3
                 elif state["phase"] == 3:
+                    if not state["existing_home"].is_maximized():
+                        return GLib.SOURCE_CONTINUE
                     window = next(w for w in windows if w is not state["existing_home"])
                     # Imported addresses and separate paths must all appear in History.
                     app.library.import_records(
@@ -677,10 +712,20 @@ def run():
                     for name in ["Notes", "Calendar", "Mail", "Projects", "Music"]:
                         app.library.record_visit(f"https://{name.lower()}.example", name)
                     app.library.record_visit(base + "/second", "Local app")
+                    state["home_position"] = window_frame(window, (221, 137))[:2]
+                    state["previous"] = window
                     window.home_button.emit("clicked")
-                    assert window._closing and window not in app.get_windows()
+                    state["phase"] = "existing-home"
+                elif state["phase"] == "existing-home":
+                    previous = state["previous"]
+                    if not previous._closing:
+                        return GLib.SOURCE_CONTINUE
+                    assert previous not in app.get_windows()
                     window = state["existing_home"]
                     assert app.get_windows() == [window]
+                    assert not window.is_maximized()
+                    actual = window_frame(window)[:2]
+                    assert actual == state["home_position"], (actual, state["home_position"])
                     assert not window.layout_button.get_visible()
                     assert window.home_entry.get_text() == "Keep this Home search"
                     assert window.home_sections.get_visible_child_name() == "history"
@@ -938,7 +983,8 @@ def run():
                         "settings imports, site permission manager, home entry, "
                         "same-origin links/popups, external links in separate windows, POST, "
                         "Back for links/typed URLs/History API/"
-                        "fragments, Home closes apps and creates or focuses Home, "
+                        "fragments, Home closes apps and creates or focuses Home at the same "
+                        "position, maximized Home restoration, repeated Home actions, "
                         "header restored on media "
                         "URL change, explicit new window, remembered per-host sizes, "
                         "loading indicator and Back restoration after completion/stop/failure, "

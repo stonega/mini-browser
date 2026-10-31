@@ -15,6 +15,10 @@ const INTERFACE = `<node><interface name="${BUS_NAME}">
         <arg type="b" direction="in" name="pinned"/>
         <arg type="b" direction="out" name="actual"/>
     </method>
+    <method name="MoveToWindow">
+        <arg type="o" direction="in" name="source"/>
+        <arg type="o" direction="in" name="target"/>
+    </method>
     <signal name="PinnedChanged"><arg type="o"/><arg type="b"/></signal>
 </interface></node>`;
 
@@ -71,6 +75,25 @@ export default class MiniBrowserPin extends Extension {
         this._windows.get(window).managed = true;
         this._apply(window, pinned, pinned);
         invocation.return_value(new GLib.Variant('(b)', [this._pinned(window)]));
+    }
+
+    MoveToWindowAsync([sourcePath, targetPath], invocation) {
+        const source = this._find(sourcePath, invocation);
+        if (!source)
+            return;
+        const target = this._find(targetPath, invocation);
+        if (!target)
+            return;
+        if (!target.get_compositor_private()?.is_mapped()) {
+            invocation.return_dbus_error('org.freedesktop.DBus.Error.UnknownObject',
+                'The Home window is not mapped yet.');
+            return;
+        }
+        const rect = source.get_frame_rect();
+        target.move_to_monitor(source.get_monitor());
+        target.change_workspace(source.get_workspace());
+        target.move_frame(true, rect.x, rect.y);
+        invocation.return_value(new GLib.Variant('()', []));
     }
 
     _pinned(window) {

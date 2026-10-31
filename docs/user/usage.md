@@ -22,6 +22,10 @@ stay hidden on Home, including its History tab.
 Home (or Alt+Home) closes the current app window and activates an existing Home
 window. If none is open, it creates a fresh Home window with an empty search bar
 and the Apps tab selected. Using Home while already on Home keeps that window.
+With the bundled Mini Browser Pin GNOME extension enabled, Home appears at the
+app window's position on the same monitor and workspace, including when reusing
+an existing Home window. A reused Home leaves maximized or fullscreen mode so it
+can move. Without the updated extension, GNOME chooses its position.
 This also applies to phone windows; Phone Home in their menu controls the phone.
 Back returns to the previous page and is hidden when there is no previous page.
 While a page loads, a spinner replaces Back, including on the first page. When
