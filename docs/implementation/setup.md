@@ -6,8 +6,12 @@ A pip-only virtual environment will
 not usually see native GI bindings. No JavaScript build pipeline is needed for
 this native desktop app. The optional DeepSeek Harness tile runs the upstream
 CLI using Node.js and npm's `npx` from the desktop session's PATH. The first
-launch downloads `@deepseek-ai/dsh`; it is not bundled in the RPM. Mini Browser
-uses `--no-open`, an explicit loopback bind and an OS-assigned port, then opens
+launch downloads `@deepseek-ai/dsh`; it is not bundled in the RPM. Later launches
+prefer npm's cached package and metadata so a slow or unavailable registry does
+not block an already installed app. Missing packages are still downloaded.
+To refresh the cached version explicitly, run
+`npx --yes --prefer-online @deepseek-ai/dsh web --no-open` in a terminal.
+Mini Browser uses `--no-open`, an explicit loopback bind and an OS-assigned port, then opens
 the CLI's authenticated readiness URL. See the
 [official CLI reference](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/cli-help.md).
 

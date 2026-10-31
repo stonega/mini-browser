@@ -18,6 +18,7 @@ ICON = Path(__file__).with_name("icons") / "deepseek.svg"
 COMMAND = (
     "npx",
     "--yes",
+    "--prefer-offline",
     "@deepseek-ai/dsh",
     "web",
     "--no-open",

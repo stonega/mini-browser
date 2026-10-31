@@ -236,8 +236,10 @@ Card buttons draw their own rounded hover and pressed states; the surrounding
 FlowBox children remain transparent to avoid a second outline around each tile.
 
 `deepseek.py` owns the built-in local app independently of GTK. Window tokens
-lease one shared server. Its worker invokes `npx --yes @deepseek-ai/dsh web
---no-open --host 127.0.0.1 --port 0` from the user's home directory. The official
+lease one shared server. Its worker invokes `npx --yes --prefer-offline @deepseek-ai/dsh web
+--no-open --host 127.0.0.1 --port 0` from the user's home directory. The
+CLI package and metadata are reused from npm's cache when available, avoiding a
+registry check on every launch; npm still downloads missing dependencies. The official
 `dsh web:` announcement provides the authenticated startup URL; only loopback
 root URLs are accepted. Output is continuously drained. Each tile click opens
 a separate browser window immediately, displaying only a centered monospace startup
