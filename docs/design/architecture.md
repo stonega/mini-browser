@@ -39,7 +39,7 @@ An `Adw.ToolbarView` places a native
 layout menu, main menu, and close
 control above the content. The home body contains a native `Gtk.StackSwitcher`
 with Apps, History and Agent tabs above a shared search/address entry. Apps adds
-a native plus button after the entry; History and Agent hide it so the entry
+a native plus button after the entry; the other tabs hide it so the entry
 uses the full row. `app_dialogs.py` provides an adaptive, scrollable `Adw.Dialog`
 for web and script apps with validation and inline errors. Saving never launches
 the app, and refreshes every browser window. A shared
@@ -522,6 +522,53 @@ Send to Agent copies CLI/MCP read instructions plus JSON page context to the
 clipboard; it neither enables control nor sends a message. Page-provided text
 never becomes shell command text.
 
+`extensions.py` owns a GTK-independent `chrome_extensions` registry in the library
+database. Paths are canonical and unique; names, versions and enabled choices
+persist independently of history and bookmarks. Registration reads bounded MV3
+manifest metadata on a worker thread without modifying or copying source files.
+`extension_page.py` provides a separate `ExtensionsWindow` with native folder
+selection, switches, removal and a restart notice. The browser's three-line main
+menu invokes `win.extensions`; `BrowserApplication.open_extensions` creates or
+focuses one shared manager. It owns no WebView, remains open when browsing windows
+close, and supports Ctrl+W. Closing it clears the application's reference so it can
+be reopened. Registration callbacks refresh whichever manager is currently open,
+including when the original manager closed while work was in progress.
+Invalid/unavailable enabled folders
+are reported and skipped at startup. Chromium validates the complete manifest.
+Before initializing CEF, the application passes validated enabled paths through
+bridge ABI 8. The browser process uses `load-extension` and
+`disable-extensions-except` with that list; with no enabled extensions it keeps
+`disable-extensions`. Changes require a complete application restart. No debugging
+port, unsafe extension debugging flag or browser-session CDP channel is exposed.
+CEF's Chrome bootstrap supports extension content scripts, service workers,
+runtime messaging, storage and declarative network rules with the shared context;
+the Alloy windowless views do not provide Chrome's toolbar or full tab/window UI.
+At startup, `extension_ui` resolves IDs from the canonical Linux path or manifest
+public key using Chromium's SHA-256/a–p ID algorithm. Declared action popup paths
+must resolve to files inside the selected extension directory. The application
+retains a startup snapshot of extension origins and popup URLs. The manager's
+Open popup action is available only for loaded, enabled extensions with a popup.
+`extension_popup.py` renders each extension page in an independent native window
+and reuses open windows by URL. It uses a `chromium.View` restricted at creation
+to that extension origin, without BrowserWindow scripts, vault filling, history,
+or an agent-visible webview. Ordinary browsing views still reject extension URLs.
+Native navigation checks also block cross-extension popup navigation and route
+HTTP(S) links to normal browser windows. Chromium owns the extension scheme and
+its privileged runtime/storage APIs; no host file server or API emulation is used.
+The default CEF client captures extension URLs requested by Chrome windows and
+forwards them to GTK, then closes the unrendered Chrome window. A bounded delayed
+close handles empty windows; shutdown drains all close callbacks. GTK opens only
+origins from the startup snapshot whose registry entries remain enabled. These
+are recreated pages, so Chrome window IDs, opener handles, active-tab association
+and dynamic toolbar actions are not preserved. The adapter also propagates engine
+close events to the native popup window and releases its framebuffers and input.
+The app does not offer Web Store/CRX installation. Source
+folders remain in place; removing a registry entry does not erase extension data.
+The isolated extension smoke test verifies execution and independent disabling
+across real process restarts using two generated extensions and a loopback site.
+It also covers popup rendering, background messaging, native input, notification
+window requests, reuse/reopening, engine-initiated close and extension-origin guards.
+
 `page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
 Windowless Chromium's clipboard does not provide that desktop integration.
 A main-world `writeText` adapter passes text to an isolated world, which checks
@@ -532,7 +579,10 @@ generation, mapped/focused view, active window and a recent native mouse/key
 event. Writes are limited to 1 MiB of UTF-8 text. Replies use typed protocol
 arguments, and clipboard contents are never logged or inserted into script
 source. No desktop clipboard reads are exposed to pages.
-HTTPS and loopback HTTP support this path: loopback is already a
+Popup views additionally permit their exact extension origin, explicitly bound
+when the view is created. Ordinary web views cannot opt into extension origins.
+The same main-frame, document, focus and recent-user-input checks still apply;
+only text writes cross into GTK. HTTPS and loopback HTTP support this path: loopback is already a
 [potentially trustworthy origin](https://www.w3.org/TR/secure-contexts/#is-origin-trustworthy),
 so the local DeepSeek server needs no certificate or security override.
 

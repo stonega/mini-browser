@@ -138,3 +138,30 @@ class ClipboardTests(unittest.TestCase):
             "https://u:p@a",
         ):
             self.assertIsNone(secure_origin(uri))
+
+    def test_only_the_views_trusted_extension_origin_can_copy(self):
+        origin = "chrome-extension://" + "a" * 32
+        self.assertIsNone(secure_origin(origin))
+        self.assertEqual(
+            secure_origin(origin + "/popup.html", extension_origin=origin),
+            ("chrome-extension", "a" * 32, None),
+        )
+        for uri in (
+            "chrome-extension://" + "b" * 32,
+            origin + ":80",
+            origin + ".",
+            "chrome-extension://user@" + "a" * 32,
+        ):
+            self.assertIsNone(secure_origin(uri, extension_origin=origin))
+        for context_origin in (origin, "chrome-extension://" + "b" * 32):
+            with self.subTest(origin=context_origin):
+                self.setUp()
+                self.view.extension_origin = origin
+                self.view.get_uri.return_value = origin + "/popup.html"
+                self.context["origin"] = context_origin
+                self.request()
+                self.confirm()
+                if context_origin == origin:
+                    self.clipboard.set.assert_called_once_with("Synthetic\n剪貼簿")
+                else:
+                    self.assert_denied()

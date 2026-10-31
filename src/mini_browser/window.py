@@ -209,6 +209,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         menu.append("Refresh Page", "win.reload")
         menu.append("Reload Without Cache", "win.reload-bypass-cache")
         menu.append("Bookmark App", "win.bookmark")
+        menu.append("Extensions", "win.extensions")
         menu.append("Settings", "win.settings")
         menu.append(f"About {APP_NAME}", "win.about")
         self.menu_button = Gtk.MenuButton(
@@ -1230,6 +1231,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             "address": lambda: address_dialog(self),
             "home": lambda: self.get_application().return_home(self),
             "settings": lambda: settings_dialog(self),
+            "extensions": self.get_application().open_extensions,
             "devices": self._devices_dialog,
             "about": lambda: about_dialog(self),
             "show-header": self._show_header,

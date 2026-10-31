@@ -249,7 +249,11 @@ def run():
                     window.activate_action("win.home", None)
                     assert app.get_windows() == [window]
                     pages = window.home_sections.get_pages()
-                    assert [pages[i].get_title() for i in range(3)] == ["Apps", "History", "Agent"]
+                    assert [pages[i].get_title() for i in range(pages.get_n_items())] == [
+                        "Apps",
+                        "History",
+                        "Agent",
+                    ]
                     assert (
                         window.app_tiles.get_child_at_index(0).get_child() == window.deepseek_button
                     )

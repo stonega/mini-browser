@@ -33,6 +33,7 @@ ruff format src tests scripts/install
 ./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
 ./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
 ./scripts/smoke --test=apps     # native Add forms and synthetic custom script apps
+./scripts/smoke --test=extensions # unpacked MV3 extensions and process restarts
 ./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
 ./scripts/smoke --test=context   # contextual page menus, agent prompts and page saving
 ./scripts/build-rpm
@@ -52,6 +53,15 @@ for an offline, checksum-verified build. Runtime output is `build/cef/runtime`.
 `MINI_BROWSER_CEF_RUNTIME` can select an alternate compatible runtime. The
 bridge ABI must match the Python adapter; rebuild it after changing
 `native/cef/bridge.cc`.
+Extension popup support uses bridge ABI 8; rebuild the runtime before launching an
+updated Python checkout. The Extensions window, opened from the three-line main
+menu, registers unpacked Manifest V3
+folders and applies changes on a full application restart. This uses CEF's
+Chrome bootstrap while retaining the existing Alloy windowless GTK surface;
+Extension popups and requested extension pages use standalone GTK windows with
+origin-restricted views. Chrome toolbar actions and full Chrome tab/window
+identities are not provided. See the
+[extension usage and limitations](../user/usage.md#chrome-extensions).
 Linux must permit unprivileged user namespaces. The app keeps Chromium's sandbox
 and TLS verification enabled; it has no insecure fallback.
 
@@ -68,6 +78,19 @@ report `document.hidden`, stop animation callbacks and render again without
 reloading. It runs in the same isolated desktop and is part of the default suite.
 The CPU limit is deliberately loose to catch a busy loop across different
 machines; it is not a bound on arbitrary websites' CPU or memory use.
+
+`./scripts/smoke --test=extensions` creates two temporary unpacked MV3 extensions,
+then restarts the app with a temporary profile. It tests the main-menu entry,
+the separate manager's reuse, closure and reopening, duplicate
+registration, content scripts, background service-worker messaging, local storage
+and declarative network blocking. It disables one extension while leaving the
+other enabled, restarts again, and verifies the disabled content script is absent
+and the remaining network rule still works. Popup checks exercise runtime APIs,
+native clicks and clipboard copying, reuse/reopening, notification windows, engine close and origin
+restrictions. Removal preserves the fixture files.
+No Chrome profile or real extension data is used. An optional PNG path captures
+the native Extensions window and an additional `-popup.png` image. This check is
+included in the default smoke suite.
 
 `./scripts/smoke --test=context` uses real secondary pointer clicks on synthetic
 pages to verify page, link, image, selection, editable-field and iframe menus;

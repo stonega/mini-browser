@@ -33,6 +33,7 @@ bool context_ready = false;
 bool allow_autoplay = false;
 bool silent = false;
 std::string disk_cache;
+std::string extension_paths;
 
 class UiTask final : public CefTask {
 public:
@@ -81,6 +82,19 @@ bool navigable(const CefString &url) {
     return false;
   const auto scheme = CefString(&parts.scheme).ToString();
   return scheme == "http" || scheme == "https";
+}
+std::string ExtensionHost(const CefString &url) {
+  CefURLParts parts;
+  if (!CefParseURL(url, parts) ||
+      CefString(&parts.scheme) != "chrome-extension" ||
+      !CefString(&parts.username).empty() || !CefString(&parts.password).empty() ||
+      !CefString(&parts.port).empty())
+    return {};
+  const auto host = CefString(&parts.host).ToString();
+  if (host.size() != 32 ||
+      !std::all_of(host.begin(), host.end(), [](char c) { return c >= 'a' && c <= 'p'; }))
+    return {};
+  return host;
 }
 
 struct Reply {
@@ -162,6 +176,40 @@ private:
   CefRefPtr<CefBrowser> browser_;
   IMPLEMENT_REFCOUNTING(CloseTask);
 };
+// Extensions may request Chrome windows (for example, onboarding tabs). Those
+// are not GTK views and would otherwise be unmanaged, blocking CefShutdown.
+std::map<int, CefRefPtr<CefBrowser>> unsupported_windows;
+class UnsupportedWindowClient final : public CefClient,
+                                      public CefLifeSpanHandler,
+                                      public CefRequestHandler {
+public:
+  CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
+  CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
+  void OnAfterCreated(CefRefPtr<CefBrowser> browser) override {
+    unsupported_windows[browser->GetIdentifier()] = browser;
+    // Allow the initial navigation to identify extension-created UI, with a
+    // bounded fallback for empty windows. These Chrome windows never render.
+    CefPostDelayedTask(TID_UI, new CloseTask(browser), 100);
+  }
+  bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                      CefRefPtr<CefRequest> request, bool, bool) override {
+    if (!frame->IsMain() || request->GetURL() == "about:blank")
+      return false;
+    if (!ExtensionHost(request->GetURL()).empty()) {
+      auto data = dict();
+      data->SetString("uri", request->GetURL());
+      emit(0, "extension-window", data);
+    }
+    CefPostTask(TID_UI, new CloseTask(browser));
+    return true;
+  }
+  void OnBeforeClose(CefRefPtr<CefBrowser> browser) override {
+    unsupported_windows.erase(browser->GetIdentifier());
+  }
+
+private:
+  IMPLEMENT_REFCOUNTING(UnsupportedWindowClient);
+};
 class Client;
 std::map<int, CefRefPtr<Client>> views;
 std::map<int, CefRefPtr<CefBeforeDownloadCallback>> destinations;
@@ -180,8 +228,16 @@ class Client final : public CefClient,
                      public CefContextMenuHandler,
                      public CefPermissionHandler {
 public:
-  explicit Client(int identifier) : id(identifier) {}
+  explicit Client(int identifier, const std::string &extension = {})
+      : id(identifier), extension_host(extension) {}
   int id;
+  std::string extension_host;
+  bool Allows(const CefString &url) const {
+    if (url == "about:blank")
+      return true;
+    return extension_host.empty() ? navigable(url)
+                                  : ExtensionHost(url) == extension_host;
+  }
   int width = 420;
   int height = 734;
   int paint_width = 0;
@@ -316,7 +372,7 @@ public:
   }
   void OnAddressChange(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
                        const CefString &url) override {
-    if (!frame->IsMain() || !navigable(url))
+    if (!frame->IsMain() || !Allows(url))
       return;
     auto data = dict();
     data->SetString("uri", url);
@@ -354,15 +410,19 @@ public:
     DismissContextMenu();
     if (frame->IsMain()) {
       dismiss_media_replies(id);
-      if (!navigable(request->GetURL())) {
-        emit(id, "unsupported-uri");
+      if (!Allows(request->GetURL())) {
+        if (!extension_host.empty() && navigable(request->GetURL()))
+          RequestNewWindow(request->GetURL());
+        else
+          emit(id, "unsupported-uri");
         return true;
       }
     }
     return false;
   }
   void RequestNewWindow(const CefString &url) {
-    if (closing || !browser || url == "about:blank" || !navigable(url))
+    if (closing || !browser || url == "about:blank" ||
+        (!navigable(url) && !(Allows(url) && !extension_host.empty())))
       return;
     auto data = dict();
     data->SetString("uri", url);
@@ -652,6 +712,9 @@ public:
   CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override {
     return this;
   }
+  CefRefPtr<CefClient> GetDefaultClient() override {
+    return new UnsupportedWindowClient;
+  }
   void
   OnBeforeCommandLineProcessing(const CefString &process_type,
                                 CefRefPtr<CefCommandLine> command) override {
@@ -663,7 +726,12 @@ public:
                                    allow_autoplay ? "no-user-gesture-required"
                                                   : "user-gesture-required");
     command->AppendSwitchWithValue("disk-cache-dir", disk_cache);
-    command->AppendSwitch("disable-extensions");
+    if (!extension_paths.empty()) {
+      command->AppendSwitchWithValue("load-extension", extension_paths);
+      command->AppendSwitchWithValue("disable-extensions-except", extension_paths);
+    } else {
+      command->AppendSwitch("disable-extensions");
+    }
     command->AppendSwitch("disable-setuid-sandbox");
     if (silent)
       command->AppendSwitch("mute-audio");
@@ -706,15 +774,17 @@ CefRefPtr<CefBrowser> page(int id) {
 } // namespace
 
 extern "C" {
-int mini_cef_abi_version() { return 6; }
+int mini_cef_abi_version() { return 8; }
 const char *mini_cef_version() { return CEF_VERSION; }
 int mini_cef_initialize(const char *runtime, const char *profile,
-                        const char *cache, int autoplay, int mute,
+                        const char *cache, const char *extensions,
+                        int autoplay, int mute,
                         PaintCallback paint, EventCallback event,
                         ResultCallback result) {
   if (initialized)
     return 0;
   disk_cache = cache;
+  extension_paths = extensions;
   allow_autoplay = autoplay != 0;
   silent = mute != 0;
   paint_callback = paint;
@@ -741,11 +811,14 @@ int mini_cef_initialize(const char *runtime, const char *profile,
   initialized = CefInitialize(arguments, settings, new App, nullptr);
   return initialized;
 }
-void mini_cef_create(int id) {
+void mini_cef_create(int id, const char *origin) {
   on_ui([=]() mutable {
     if (views.count(id))
       return;
-    views[id] = new Client(id);
+    const auto host = ExtensionHost(origin);
+    if (*origin && host.empty())
+      return;
+    views[id] = new Client(id, host);
     if (context_ready)
       views[id]->Create();
   });
@@ -785,7 +858,8 @@ void mini_cef_resize(int id, int width, int height) {
 void mini_cef_load(int id, const char *url) {
   on_ui([=]() mutable {
     auto browser = page(id);
-    if (browser && navigable(url))
+    auto *client = view(id);
+    if (browser && client && client->Allows(url))
       browser->GetMainFrame()->LoadURL(url);
   });
 }
@@ -1039,11 +1113,11 @@ int mini_cef_shutdown() {
   });
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(5);
-  while (!on_ui([] { return views.empty(); }) &&
+  while (!on_ui([] { return views.empty() && unsupported_windows.empty(); }) &&
          std::chrono::steady_clock::now() < deadline) {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
-  if (!on_ui([] { return views.empty(); }))
+  if (!on_ui([] { return views.empty() && unsupported_windows.empty(); }))
     return 0;
   on_ui([] {
     downloads.clear();

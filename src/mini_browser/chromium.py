@@ -59,16 +59,16 @@ class Bridge:
                 "Could not load Chromium. Rebuild with ./scripts/build-cef."
             ) from error
         self.native.mini_cef_abi_version.restype = ctypes.c_int
-        if self.native.mini_cef_abi_version() != 6:
+        if self.native.mini_cef_abi_version() != 8:
             raise ImportError("Chromium bridge version mismatch. Run ./scripts/build-cef again.")
         signatures = {
             "abi_version": ([], ctypes.c_int),
             "version": ([], ctypes.c_char_p),
             "initialize": (
-                [ctypes.c_char_p] * 3 + [ctypes.c_int] * 2 + [PAINT, EVENT, RESULT],
+                [ctypes.c_char_p] * 4 + [ctypes.c_int] * 2 + [PAINT, EVENT, RESULT],
                 ctypes.c_int,
             ),
-            "create": ([ctypes.c_int], None),
+            "create": ([ctypes.c_int, ctypes.c_char_p], None),
             "close": ([ctypes.c_int], None),
             "resize": ([ctypes.c_int] * 3, None),
             "load": ([ctypes.c_int, ctypes.c_char_p], None),
@@ -98,9 +98,12 @@ class Bridge:
 
 
 class Session(GObject.Object):
-    __gsignals__ = {"download-started": (GObject.SignalFlags.RUN_LAST, None, (object,))}
+    __gsignals__ = {
+        "download-started": (GObject.SignalFlags.RUN_LAST, None, (object,)),
+        "extension-window": (GObject.SignalFlags.RUN_LAST, None, (str,)),
+    }
 
-    def __init__(self, profile, cache, *, allow_autoplay=False, silent=False):
+    def __init__(self, profile, cache, *, allow_autoplay=False, silent=False, extensions=()):
         super().__init__()
         self.bridge = Bridge()
         self.views, self.pending, self.downloads = {}, {}, {}
@@ -115,6 +118,7 @@ class Session(GObject.Object):
             os.fsencode(self.bridge.runtime),
             os.fsencode(profile),
             os.fsencode(cache),
+            os.fsencode(",".join(str(path) for path in extensions)),
             allow_autoplay,
             silent,
             self.paint_callback,
@@ -152,6 +156,9 @@ class Session(GObject.Object):
         GLib.idle_add(self._dispatch, identifier, kind.decode(), json.loads(data))
 
     def _dispatch(self, identifier, kind, data):
+        if kind == "extension-window" and not self.closed:
+            self.emit("extension-window", data["uri"])
+            return GLib.SOURCE_REMOVE
         if kind == "download":
             download = Download(self, data["id"])
             self.downloads[data["id"]] = download
@@ -169,6 +176,9 @@ class Session(GObject.Object):
         if view and not view.closed and kind not in ("download", "download-update"):
             view._event(kind, data)
         if kind == "closed":
+            if view and not view.closed:
+                view.emit("close")
+                view.close()
             self.views.pop(identifier, None)
         return GLib.SOURCE_REMOVE
 
@@ -365,9 +375,12 @@ class View(Gtk.Widget):
     is_muted = GObject.Property(type=bool, default=False)
     playing_audio = GObject.Property(type=bool, default=False)
 
-    def __init__(self, *, network_session):
+    def __init__(self, *, network_session, extension_origin=""):
         super().__init__(hexpand=True, vexpand=True, focusable=True)
         self.session, self.bridge = network_session, network_session.bridge
+        if extension_origin and not re.fullmatch(r"chrome-extension://[a-p]{32}", extension_origin):
+            raise ValueError("Invalid extension origin.")
+        self.extension_origin = extension_origin
         self.session.next_view += 1
         self.identifier = self.session.next_view
         self.session.views[self.identifier] = self
@@ -391,7 +404,7 @@ class View(Gtk.Widget):
         self._media_source = GLib.timeout_add(400, self._poll_audio)
         self.page_clipboard = page_clipboard.PageClipboard(self)
         self._input()
-        self.bridge.create(self.identifier)
+        self.bridge.create(self.identifier, extension_origin.encode())
         self.connect("map", self._visibility_changed)
         self.connect("unmap", self._visibility_changed)
 

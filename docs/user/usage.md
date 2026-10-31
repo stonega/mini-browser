@@ -118,6 +118,58 @@ URL and current page ID, plus selected text, a link address or an image URL when
 applicable. Paste the prompt into your agent chat. Copying it does not enable
 agent control or contact an agent. Password-field text is excluded.
 
+## Chrome extensions
+
+Choose **Extensions** in the three-line main menu to open its separate management
+window, then choose **Load unpacked…**. Opening Extensions again focuses the existing
+manager. Its window stays open independently of browsing windows; Ctrl+W closes it.
+Select a local extension
+folder containing `manifest.json`, using **Manifest V3**. Extract ZIP files first;
+Chrome Web Store installation, CRX packages and Manifest V2 are not supported.
+The extension appears with its name, version, an enable switch and a Remove button.
+Selecting the same folder again updates its entry without creating duplicates.
+
+After restarting, extensions that declare a popup have an **Open popup** button.
+It opens the extension's interface in its own native window, with the extension
+name in the header. Opening the same popup again focuses its existing window.
+Use the close button, Ctrl+W or Escape to close it. The popup can communicate with
+its extension's background worker and use its extension storage. Closing and
+reopening the popup keeps that storage. Extension-requested pages, such as welcome
+or notification pages, also open in standalone windows.
+Copy buttons can write text to the native clipboard after a click in the active
+popup. Background clipboard writes and native clipboard reads are not exposed.
+
+Each popup stays within its own extension origin. Website links open in ordinary
+browser windows, and pages from another extension are blocked. Popup pages are
+excluded from browsing history, saved website tiles, password filling and agent
+page lists.
+
+Close **every Mini Browser window** and reopen the app after adding, enabling,
+disabling or removing an extension. If agent control keeps the browser running,
+choose Quit as well. Changes are saved for the next browser process; an extension
+already running keeps working until that process exits. Keep the selected folder
+in place: Mini Browser reads its files directly, without copying or changing them.
+Removing an entry leaves the original files and extension storage intact. Extension
+code changes also require a restart; there are no automatic extension updates.
+Folder paths cannot contain commas because Chromium uses commas to separate them.
+
+Support is experimental. Synthetic integration checks cover content scripts,
+background service workers, runtime messaging, local extension storage and
+declarative network blocking, popup interfaces and extension-requested windows.
+Full Chrome tab/window identities, opener handles, active-tab integration and
+dynamic toolbar actions are not implemented. Recreated extension windows do not
+retain the original Chrome window ID. Other Chrome APIs may have limitations; compatibility
+with every Chrome extension is not guaranteed. Only load extensions you trust
+with the websites and data their manifest permits them to access.
+MetaMask and other wallet extensions have not been validated.
+
+Missing folders and invalid basic manifest metadata are shown in Extensions and
+skipped at startup so they do not prevent browsing. Chromium performs further
+manifest/API validation when it starts; an entry records your enabled choice,
+not a guarantee that Chromium accepted every feature in that extension.
+Extensions are registered separately from Chrome imports and never read the
+user's Chrome extension folders automatically.
+
 ## Site permissions
 
 While a website is open, the shield button before the pin button opens **Site

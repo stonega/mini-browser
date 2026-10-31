@@ -6,12 +6,16 @@ import sys
 import time
 import weakref
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import APP_ID
 from .agent_activity import AgentActivity
 from .deepseek import DeepSeekHarness
 from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
+from .extension_page import ExtensionsWindow
+from .extension_popup import ExtensionPopupWindow
+from .extensions import ExtensionStore, extension_ui
 from .gtk import Adw, Gdk, Gio, GLib, Gtk, Web
 from .navigation import address_to_uri
 from .script_apps import ScriptAppHarness, ScriptAppStore
@@ -40,6 +44,8 @@ class BrowserApplication(Adw.Application):
         self._shutting_down = False
         self.discovery = None
         self.agent_control = None
+        self.extensions_window = None
+        self.extension_popup_windows = {}
         self.agent_activity = AgentActivity(self._agent_activity_changed)
         self.add_main_option(
             "agent",
@@ -90,6 +96,15 @@ class BrowserApplication(Adw.Application):
         self.cache_dir.chmod(0o700)
         self.library = Library(self.data_dir / "library.sqlite3")
         self.script_apps = ScriptAppStore(self.library)
+        self.extensions = ExtensionStore(self.library)
+        extension_paths, self.extension_errors = self.extensions.startup()
+        self.extension_launchers = {}
+        for path in extension_paths:
+            try:
+                self.extension_launchers[path] = extension_ui(path)
+            except ValueError as error:
+                self.extension_errors[path] = str(error)
+        self.extensions_changed = False
         self.devices = DeviceStore(self.library)
         self.connected_android = ()
         self.discovery_error = None
@@ -108,8 +123,12 @@ class BrowserApplication(Adw.Application):
             self.cache_dir / "chromium",
             allow_autoplay=self.allow_autoplay,
             silent=self.silent,
+            extensions=extension_paths,
         )
         self.network_session.connect("download-started", self._download_started)
+        self.network_session.connect(
+            "extension-window", lambda _session, uri: self.open_extension_uri(uri)
+        )
         for name, callback in [("new-window", self.new_window), ("quit", self.quit)]:
             action = Gio.SimpleAction.new(name, None)
             action.connect("activate", lambda _a, _p, cb=callback: cb())
@@ -283,6 +302,46 @@ class BrowserApplication(Adw.Application):
         window = BrowserWindow(self)
         if uri:
             window.load_uri(uri)
+        window.present()
+        return window
+
+    def open_extensions(self):
+        if self.extensions_window is None:
+            self.extensions_window = ExtensionsWindow(self)
+        self.extensions_window.present()
+        return self.extensions_window
+
+    def open_extension_popup(self, path):
+        extension = self.extension_launchers.get(path)
+        if not extension:
+            raise ValueError("Enable this extension and restart Mini Browser to open its popup.")
+        if not extension["popup"]:
+            raise ValueError("This extension does not declare a popup.")
+        window = self.open_extension_uri(extension["popup"])
+        if window is None:
+            raise ValueError("Enable this extension and restart Mini Browser to open its popup.")
+        return window
+
+    def open_extension_uri(self, uri):
+        if self._shutting_down:
+            return None
+        parts = urlsplit(uri)
+        origin = f"{parts.scheme}://{parts.netloc}"
+        enabled = {record["path"] for record in self.extensions.all() if record["enabled"]}
+        extension = next(
+            (
+                item
+                for path, item in self.extension_launchers.items()
+                if path in enabled and item["origin"] == origin
+            ),
+            None,
+        )
+        if extension is None:
+            return None
+        window = self.extension_popup_windows.get(uri)
+        if window is None:
+            window = ExtensionPopupWindow(self, extension, uri)
+            self.extension_popup_windows[uri] = window
         window.present()
         return window
 

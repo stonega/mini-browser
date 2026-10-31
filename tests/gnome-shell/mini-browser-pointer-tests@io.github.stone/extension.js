@@ -57,7 +57,7 @@ export default class PointerTests extends Extension {
 
     _window(path, invocation) {
         const window = global.get_window_actors().map(actor => actor.meta_window).find(w =>
-            ['MediaSmoke', 'PinSmoke', 'EngineSmoke', 'Smoke', 'AppsSmoke'].some(kind =>
+            ['MediaSmoke', 'PinSmoke', 'EngineSmoke', 'Smoke', 'AppsSmoke', 'ExtensionSmoke'].some(kind =>
                 w.get_gtk_application_id()?.startsWith(`io.github.stone.MiniBrowser.${kind}.`)) &&
             w.get_gtk_unique_bus_name() === invocation.get_sender() &&
             w.get_gtk_window_object_path() === path);

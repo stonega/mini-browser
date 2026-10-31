@@ -77,11 +77,23 @@ ISOLATED_SCRIPT = r"""
 """
 
 
-def secure_origin(uri):
-    """Normalize HTTPS or trustworthy loopback HTTP, including default ports."""
+def secure_origin(uri, *, extension_origin=""):
+    """Normalize secure web origins or the view's explicitly trusted extension."""
     try:
         parts = urlsplit(uri)
         host = (parts.hostname or "").rstrip(".")
+        if (
+            extension_origin
+            and parts.scheme == "chrome-extension"
+            and len(host) == 32
+            and all("a" <= char <= "p" for char in host)
+            and parts.netloc == host
+            and f"chrome-extension://{host}" == extension_origin
+            and parts.username is None
+            and parts.password is None
+            and parts.port is None
+        ):
+            return parts.scheme, host, None
         local = host == "localhost" or host.endswith(".localhost")
         try:
             local |= ipaddress.ip_address(host).is_loopback
@@ -142,12 +154,14 @@ class PageClipboard:
                 return
             frame = (result or {}).get("frameTree", {}).get("frame", {})
             root = view.get_root()
-            origin = secure_origin(view.get_uri() or "")
+            extension_origin = getattr(view, "extension_origin", "")
+            origin = secure_origin(view.get_uri() or "", extension_origin=extension_origin)
             allowed = (
                 not error
                 and context.get("auxData", {}).get("frameId") == frame.get("id")
                 and origin is not None
-                and secure_origin(context.get("origin", "")) == origin
+                and secure_origin(context.get("origin", ""), extension_origin=extension_origin)
+                == origin
                 and view.get_mapped()
                 and view.has_focus()
                 and root is not None

@@ -219,7 +219,7 @@ def run(root, origin):
             yield from wait(
                 "page saved", lambda: destination.is_file() and destination.stat().st_size
             )
-            assert "multipart/related" in destination.read_text()
+            assert b"multipart/related" in destination.read_bytes()
             destination = root / "page.pdf"
             page = yield from menu(view, 320, 25)
             choose(page, "save-pdf")
