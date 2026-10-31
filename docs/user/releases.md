@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.4.4 — October 31, 2026
+
+- Fix DeepSeek Harness startup stalls caused by npm checking a slow or
+  unavailable registry on every launch. Prefer cached packages and metadata;
+  missing packages are still downloaded on demand.
+- Document how to explicitly refresh the cached DeepSeek CLI version.
+
+Close all Mini Browser windows and reopen the app after upgrading. Bookmarks,
+history, website sessions and the encrypted vault are preserved. The first
+DeepSeek launch still needs Node.js, npm and network access to download the CLI.
+
 ## 0.4.3 — October 30, 2026
 
 - Fix a CEF/GTK event-loop busy loop that consumed a full CPU core even on a

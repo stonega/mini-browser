@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.3
+Version:        0.4.4
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -154,6 +154,9 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Sat Oct 31 2026 Mini Browser contributors - 0.4.4-1
+- Reuse cached npm packages and metadata to avoid DeepSeek Harness startup stalls.
+
 * Fri Oct 30 2026 Mini Browser contributors - 0.4.3-1
 - Run CEF on its dedicated UI thread to eliminate the GTK idle busy loop.
 - Stop hidden-view painting and release retained framebuffers while keeping audio alive.
