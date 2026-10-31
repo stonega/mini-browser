@@ -5,6 +5,14 @@ three-line preview, and a **Copy prompt** button that copies the complete text.
 Paste it into an agent chat for CLI discovery, page/native inspection, saving
 Home apps and screenshot verification. Copying it does not enable agent control.
 
+Every page context menu also has **Send to Agent**. It copies instructions to
+enable control, find the matching open page with `list`, and read it with
+`snapshot` or `eval`. The prompt includes the page title, URL and current page ID;
+agents should confirm the ID with `list`. Selected text and image/link URLs are
+included when present, with a frame URL for embedded documents. These values are
+JSON context, separate from the instructions and CLI commands. Password-field
+selections are excluded. This action only writes to the desktop clipboard.
+
 **Agent actions** below the prompt shows the latest 100 CLI/MCP requests, newest
 first. Each record includes the command name, start time, page ID when available,
 and Running, Succeeded, Failed or Timed out status. Succeeded means the request

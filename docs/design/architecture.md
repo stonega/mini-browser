@@ -504,6 +504,24 @@ private OpenH264 included so decoding does not depend on a system codec stub.
 Older Fedora builds and ARM retain the stock SDK. Source RPMs contain every
 pinned input; native-library loading is checked in each buildroot before packaging.
 
+`page_context.py` builds contextual choices and agent prompts without GTK.
+CEF's context-menu handler supplies hit-test URLs, selected text, edit flags and
+native command IDs to `page_menu.py`, which presents a scrollable GTK popover.
+CEF retains only its custom-menu continuation, not context parameter/model
+references. Commands return through that continuation to preserve the originating
+frame for editing; desktop Copy/Cut use the permitted selection snapshot and
+Paste uses GTK's clipboard with the adapter's navigation guard. Password fields
+cannot contribute selection text. Dismissal, navigation, renderer termination
+and window closure release the continuation and popover. Page archives and PDFs
+use typed DevTools calls and asynchronous private GIO writes through a native
+destination picker. Printing hands a private temporary PDF to GTK's system print
+dialog (GTK 4.14+) and removes it after completion or cancellation. Source viewing
+uses the current main document's HTML. Explicit context-menu window actions
+bypass the automatic same-origin popup retargeting policy.
+Send to Agent copies CLI/MCP read instructions plus JSON page context to the
+clipboard; it neither enables control nor sends a message. Page-provided text
+never becomes shell command text.
+
 `page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
 Windowless Chromium's clipboard does not provide that desktop integration.
 A main-world `writeText` adapter passes text to an isolated world, which checks

@@ -99,6 +99,25 @@ Ctrl+F5) to fetch its resources again. This keeps cookies and saved sign-ins;
 it does not reset the website's stored data.
 Choose **About Mini Browser** in the same menu to see the app version and license.
 
+Right-click a page to open its native context menu. It includes Back, Forward,
+Reload, Reload Without Cache, Select All, Copy Page Address, Bookmark App, page
+saving, printing, PDF export, page source, zoom and site permissions. Unavailable
+navigation and editing actions are disabled. Links and images/audio/video add their own
+open-in-new-window, copy-address and Save As actions. Selected text adds Copy and
+Search Selected Text; editable fields offer Undo, Redo, Cut, Copy, Paste, Delete
+and Select All according to Chromium's edit state. Clipboard Paste inserts plain
+text. Page saving creates a self-contained `.mhtml` archive; PDF export uses the
+page's print layout. Print opens the system print dialog on GTK 4.14 or newer;
+older GTK versions can use Save as PDF. Page Source shows the current document's
+HTML in a read-only native dialog. Opening and saving addresses supports HTTP and
+HTTPS.
+
+**Send to Agent** copies a prompt explaining how an agent can read the current
+page through Mini Browser's CLI or native MCP tools. It includes the page title,
+URL and current page ID, plus selected text, a link address or an image URL when
+applicable. Paste the prompt into your agent chat. Copying it does not enable
+agent control or contact an agent. Password-field text is excluded.
+
 ## Site permissions
 
 While a website is open, the shield button before the pin button opens **Site

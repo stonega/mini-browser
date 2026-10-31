@@ -92,6 +92,7 @@ struct Reply {
   CefRefPtr<CefFileDialogCallback> file;
   CefRefPtr<CefMediaAccessCallback> media;
   CefRefPtr<CefPermissionPromptCallback> permission;
+  CefRefPtr<CefRunContextMenuCallback> context_menu;
 };
 struct PendingMedia {
   int request = 0;
@@ -127,6 +128,8 @@ void cancel_replies(int view) {
       reply.file->Cancel();
     if (reply.media)
       reply.media->Cancel();
+    if (reply.context_menu)
+      reply.context_menu->Cancel();
     // CEF dismisses a permission prompt itself when its browser closes.
   }
 }
@@ -189,6 +192,7 @@ public:
   bool creation_pending = false;
   bool popup_visible = false;
   bool hidden = true;
+  int context_request = 0;
   CefRect popup_rect;
   int popup_width = 0;
   int popup_height = 0;
@@ -347,6 +351,7 @@ public:
   }
   bool OnBeforeBrowse(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
                       CefRefPtr<CefRequest> request, bool, bool) override {
+    DismissContextMenu();
     if (frame->IsMain()) {
       dismiss_media_replies(id);
       if (!navigable(request->GetURL())) {
@@ -514,14 +519,98 @@ public:
       emit(id, "permission-dismissed", data);
     }
   }
-  void OnBeforeContextMenu(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+  void DismissContextMenu() {
+    CefRefPtr<CefRunContextMenuCallback> callback;
+    {
+      std::lock_guard<std::mutex> guard(reply_mutex);
+      auto iterator = replies.find(context_request);
+      if (iterator != replies.end()) {
+        callback = iterator->second.context_menu;
+        replies.erase(iterator);
+      }
+    }
+    if (callback)
+      callback->Cancel();
+  }
+  void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame>,
                            CefRefPtr<CefContextMenuParams> parameters,
                            CefRefPtr<CefMenuModel> model) override {
     model->Clear();
+    const int flags = parameters->GetEditStateFlags();
+    auto edit = [&](int command, const char *label, int flag) {
+      model->AddItem(command, label);
+      model->SetEnabled(command, (flags & flag) != 0);
+    };
+    if (parameters->IsEditable()) {
+      edit(MENU_ID_UNDO, "Undo", CM_EDITFLAG_CAN_UNDO);
+      edit(MENU_ID_REDO, "Redo", CM_EDITFLAG_CAN_REDO);
+      model->AddSeparator();
+      edit(MENU_ID_CUT, "Cut", CM_EDITFLAG_CAN_CUT);
+      edit(MENU_ID_COPY, "Copy", CM_EDITFLAG_CAN_COPY);
+      edit(MENU_ID_PASTE, "Paste", CM_EDITFLAG_CAN_PASTE);
+      edit(MENU_ID_DELETE, "Delete", CM_EDITFLAG_CAN_DELETE);
+      model->AddSeparator();
+    } else {
+      if (!parameters->GetSelectionText().empty()) {
+        edit(MENU_ID_COPY, "Copy", CM_EDITFLAG_CAN_COPY);
+        model->AddSeparator();
+      }
+      model->AddItem(MENU_ID_BACK, "Back");
+      model->SetEnabled(MENU_ID_BACK, browser->CanGoBack());
+      model->AddItem(MENU_ID_FORWARD, "Forward");
+      model->SetEnabled(MENU_ID_FORWARD, browser->CanGoForward());
+      model->AddItem(MENU_ID_RELOAD, "Reload");
+      model->AddItem(MENU_ID_RELOAD_NOCACHE, "Reload Without Cache");
+      if (browser->IsLoading())
+        model->AddItem(MENU_ID_STOPLOAD, "Stop Loading");
+      model->AddSeparator();
+    }
+    edit(MENU_ID_SELECT_ALL, "Select All", CM_EDITFLAG_CAN_SELECT_ALL);
+  }
+  bool RunContextMenu(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame>,
+                      CefRefPtr<CefContextMenuParams> parameters,
+                      CefRefPtr<CefMenuModel> model,
+                      CefRefPtr<CefRunContextMenuCallback> callback) override {
+    Reply reply;
+    reply.view = id;
+    reply.context_menu = callback;
+    context_request = remember(reply);
     auto data = dict();
+    data->SetInt("request", context_request);
     data->SetInt("x", parameters->GetXCoord());
     data->SetInt("y", parameters->GetYCoord());
+    data->SetBool("editable", parameters->IsEditable());
+    data->SetString("page_url", parameters->GetPageUrl());
+    data->SetString("frame_url", parameters->GetFrameUrl());
+    data->SetString("link_url", parameters->GetLinkUrl());
+    data->SetString("source_url", parameters->GetSourceUrl());
+    data->SetInt("media_type", parameters->GetMediaType());
+    // Password fields must never contribute selected text to a prompt or copy.
+    if (parameters->GetEditStateFlags() & CM_EDITFLAG_CAN_COPY)
+      data->SetString("selection", parameters->GetSelectionText());
+    auto items = CefListValue::Create();
+    for (size_t i = 0; i < model->GetCount(); ++i) {
+      auto item = dict();
+      item->SetInt("id", model->GetCommandIdAt(i));
+      item->SetString("label", model->GetLabelAt(i));
+      item->SetBool("enabled", model->IsEnabledAt(i));
+      item->SetBool("separator", model->GetTypeAt(i) == MENUITEMTYPE_SEPARATOR);
+      items->SetDictionary(i, item);
+    }
+    data->SetList("items", items);
     emit(id, "context-menu", data);
+    return true;
+  }
+  void OnContextMenuDismissed(CefRefPtr<CefBrowser>,
+                              CefRefPtr<CefFrame>) override {
+    auto data = dict();
+    data->SetInt("request", context_request);
+    {
+      std::lock_guard<std::mutex> guard(reply_mutex);
+      replies.erase(context_request);
+    }
+    context_request = 0;
+    emit(id, "context-menu-dismissed", data);
   }
   bool
   OnBeforeDownload(CefRefPtr<CefBrowser>, CefRefPtr<CefDownloadItem> item,
@@ -617,7 +706,7 @@ CefRefPtr<CefBrowser> page(int id) {
 } // namespace
 
 extern "C" {
-int mini_cef_abi_version() { return 5; }
+int mini_cef_abi_version() { return 6; }
 const char *mini_cef_version() { return CEF_VERSION; }
 int mini_cef_initialize(const char *runtime, const char *profile,
                         const char *cache, int autoplay, int mute,
@@ -705,6 +794,13 @@ void mini_cef_stop(int id) {
     auto browser = page(id);
     if (browser)
       browser->StopLoad();
+  });
+}
+void mini_cef_start_download(int id, const char *url) {
+  on_ui([=]() mutable {
+    auto browser = page(id);
+    if (browser && navigable(url))
+      browser->GetHost()->StartDownload(url);
   });
 }
 void mini_cef_reload(int id, int fresh) {
@@ -923,6 +1019,12 @@ void mini_cef_reply(int id, int accepted, const char *json) {
     if (reply.permission)
       reply.permission->Continue(accepted ? CEF_PERMISSION_RESULT_ACCEPT
                                           : CEF_PERMISSION_RESULT_DENY);
+    if (reply.context_menu) {
+      if (accepted)
+        reply.context_menu->Continue(data->GetInt("command"), EVENTFLAG_NONE);
+      else
+        reply.context_menu->Cancel();
+    }
   });
 }
 int mini_cef_shutdown() {

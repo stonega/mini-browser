@@ -19,6 +19,7 @@ from pathlib import Path
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Graphene, Gtk
 
 from . import page_clipboard, permissions
+from .page_menu import PageMenu
 
 PAINT = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int)
 EVENT = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p)
@@ -58,7 +59,7 @@ class Bridge:
                 "Could not load Chromium. Rebuild with ./scripts/build-cef."
             ) from error
         self.native.mini_cef_abi_version.restype = ctypes.c_int
-        if self.native.mini_cef_abi_version() != 5:
+        if self.native.mini_cef_abi_version() != 6:
             raise ImportError("Chromium bridge version mismatch. Run ./scripts/build-cef again.")
         signatures = {
             "abi_version": ([], ctypes.c_int),
@@ -72,6 +73,7 @@ class Bridge:
             "resize": ([ctypes.c_int] * 3, None),
             "load": ([ctypes.c_int, ctypes.c_char_p], None),
             "stop": ([ctypes.c_int], None),
+            "start_download": ([ctypes.c_int, ctypes.c_char_p], None),
             "reload": ([ctypes.c_int] * 2, None),
             "focus": ([ctypes.c_int] * 2, None),
             "hidden": ([ctypes.c_int] * 2, None),
@@ -383,6 +385,7 @@ class View(Gtk.Widget):
         self.zoom_factor = 1.0
         self.position = (0, 0)
         self.dialogs = set()
+        self.context_menu = None
         self.permission_requests = {}
         self._media_busy = False
         self._media_source = GLib.timeout_add(400, self._poll_audio)
@@ -493,6 +496,7 @@ class View(Gtk.Widget):
             else:
                 self.emit("load-failed", LoadEvent.STARTED, data["uri"], engine_error())
         elif kind == "terminated":
+            self._dismiss_context_menu()
             self.loading = False
             self.contexts.clear()
             self.emit("web-process-terminated", 0)
@@ -530,6 +534,9 @@ class View(Gtk.Widget):
             self._permission_dismissed(data)
         elif kind == "context-menu":
             self._context_menu(data)
+        elif kind == "context-menu-dismissed":
+            if self.context_menu and self.context_menu.context["request"] == data["request"]:
+                self._dismiss_context_menu()
         elif kind == "caret":
             rect = Gdk.Rectangle()
             rect.x, rect.y = data["x"], data["y"]
@@ -537,6 +544,7 @@ class View(Gtk.Widget):
             self.im.set_cursor_location(rect)
 
     def _start_load(self):
+        self._dismiss_context_menu()
         if self.loading:
             return
         self.loading = True
@@ -1022,21 +1030,20 @@ class View(Gtk.Widget):
             )
 
     def _context_menu(self, data):
-        popover = Gtk.Popover()
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        for label, action in (("Copy", "copy"), ("Cut", "cut"), ("Paste", "paste")):
-            button = Gtk.Button(label=label, css_classes=["flat"])
-            button.connect(
-                "clicked", lambda _b, action=action: (self._clipboard(action), popover.popdown())
-            )
-            box.append(button)
-        popover.set_child(box)
-        popover.set_parent(self)
-        rect = Gdk.Rectangle()
-        rect.x, rect.y, rect.width, rect.height = data["x"], data["y"], 1, 1
-        popover.set_pointing_to(rect)
-        popover.connect("closed", lambda *_: popover.unparent())
-        popover.popup()
+        self._dismiss_context_menu()
+        data["can_print"] = hasattr(Gtk.PrintDialog, "print_file")
+        # The adapter deliberately omits CEF's initial about:blank entry.
+        for item in data["items"]:
+            if item["id"] == 100:
+                item["enabled"] = self.can_go_back()
+            elif item["id"] == 101:
+                item["enabled"] = self.can_go_forward()
+        self.context_menu = PageMenu(self, data)
+
+    def _dismiss_context_menu(self):
+        if self.context_menu:
+            menu, self.context_menu = self.context_menu, None
+            menu.close()
 
     def _dialog(self, kind, data):
         identifier = data["request"]
@@ -1101,6 +1108,7 @@ class View(Gtk.Widget):
     def close(self):
         if self.closed:
             return
+        self._dismiss_context_menu()
         self.closed = True
         self._set_audio(False)
         self.loading = False

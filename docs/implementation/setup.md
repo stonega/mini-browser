@@ -34,6 +34,7 @@ ruff format src tests scripts/install
 ./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
 ./scripts/smoke --test=apps     # native Add forms and synthetic custom script apps
 ./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
+./scripts/smoke --test=context   # contextual page menus, agent prompts and page saving
 ./scripts/build-rpm
 ```
 
@@ -67,6 +68,12 @@ report `document.hidden`, stop animation callbacks and render again without
 reloading. It runs in the same isolated desktop and is part of the default suite.
 The CPU limit is deliberately loose to catch a busy loop across different
 machines; it is not a bound on arbitrary websites' CPU or memory use.
+
+`./scripts/smoke --test=context` uses real secondary pointer clicks on synthetic
+pages to verify page, link, image, selection, editable-field and iframe menus;
+agent clipboard prompts; password-field exclusion; page/PDF export; native
+printing handoff (with a synthetic printer); downloads; and menu cleanup across
+navigation and window closure. It is included in the default smoke suite.
 
 ### H.264/AAC web video (x86_64)
 
