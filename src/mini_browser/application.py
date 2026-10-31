@@ -16,7 +16,7 @@ from .devices import DeviceStore
 from .extension_page import ExtensionsWindow
 from .extension_popup import ExtensionPopupWindow
 from .extensions import ExtensionStore, extension_ui
-from .gtk import Adw, Gdk, Gio, GLib, Gtk, Web
+from .gtk import Adw, Gdk, Gio, GLib, GObject, Gtk, Web
 from .navigation import address_to_uri
 from .script_apps import ScriptAppHarness, ScriptAppStore
 from .storage import Library
@@ -26,6 +26,8 @@ from .window_pin import BUS_NAME, INTERFACE, OBJECT_PATH
 
 
 class BrowserApplication(Adw.Application):
+    show_home_button = GObject.Property(type=bool, default=True)
+
     def __init__(
         self,
         *,
@@ -96,6 +98,7 @@ class BrowserApplication(Adw.Application):
         self.data_dir.chmod(0o700)
         self.cache_dir.chmod(0o700)
         self.library = Library(self.data_dir / "library.sqlite3")
+        self.show_home_button = self.library.show_home_button()
         self.script_apps = ScriptAppStore(self.library)
         self.extensions = ExtensionStore(self.library)
         extension_paths, self.extension_errors = self.extensions.startup()
@@ -163,6 +166,15 @@ class BrowserApplication(Adw.Application):
         if self._discover_devices:
             self.discovery = AndroidDiscovery(self._devices_detected)
             self.discovery.start()
+
+    def set_show_home_button(self, visible):
+        if visible == self.show_home_button:
+            return
+        self.library.set_show_home_button(visible)
+        self.show_home_button = visible
+        for window in self.get_windows():
+            if isinstance(window, BrowserWindow):
+                window._navigation_changed()
 
     def _agent_activity_changed(self):
         for window in self.get_windows():

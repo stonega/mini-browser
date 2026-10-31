@@ -14,8 +14,9 @@ from unittest.mock import patch
 
 from mini_browser import APP_ID, APP_NAME, VERSION
 from mini_browser.application import BrowserApplication
-from mini_browser.dialogs import address_dialog, library_dialog, shortcuts_dialog
+from mini_browser.dialogs import address_dialog, library_dialog, settings_dialog, shortcuts_dialog
 from mini_browser.gtk import Adw, Gdk, Gio, GLib, Gtk, Pango
+from mini_browser.storage import Library
 from mini_browser.window import DEFAULT_HEIGHT, DEFAULT_WIDTH
 
 
@@ -257,7 +258,7 @@ def run():
                     return GLib.SOURCE_CONTINUE
                 window = windows[-1]
                 assert window.home_button.get_visible() == (
-                    window.stack.get_visible_child_name() != "home"
+                    window.stack.get_visible_child_name() != "home" and app.show_home_button
                 )
                 assert window.home_button.get_sensitive()
                 if state["phase"] == 0:
@@ -345,7 +346,7 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     assert window.stack.get_visible_child_name() == "web"
                     assert not window.loading_spinner.get_visible()
-                    assert window.layout_button.get_visible()
+                    assert not window.layout_button.get_visible()
                     assert len(app.library.search("history")) == 1
                     assert len(app.library.recent_apps()) == 1
                     if len(sys.argv) > 1:
@@ -413,6 +414,45 @@ def run():
                         window.activate_action("win.settings", None)
                         settings = window.get_visible_dialog()
                         assert settings.get_title() == "Settings"
+                        home_switch = next(
+                            widget
+                            for widget in widgets(settings)
+                            if isinstance(widget, Adw.SwitchRow)
+                            and widget.get_title() == "Show Home button"
+                        )
+                        assert home_switch.get_active()
+                        home_switch.set_active(False)
+                        assert not app.show_home_button and not window.home_button.get_visible()
+                        assert not Library(app.library.path).show_home_button()
+                        other = app.new_window(base)
+                        assert not other.home_button.get_visible()
+                        other_settings = settings_dialog(other)
+                        other_switch = next(
+                            widget
+                            for widget in widgets(other_settings)
+                            if isinstance(widget, Adw.SwitchRow)
+                            and widget.get_title() == "Show Home button"
+                        )
+                        assert not other_switch.get_active()
+                        other_switch.set_active(True)
+                        assert home_switch.get_active()
+                        assert window.home_button.get_visible() and other.home_button.get_visible()
+                        assert Library(app.library.path).show_home_button()
+                        with (
+                            patch.object(
+                                app.library,
+                                "set_show_home_button",
+                                side_effect=sqlite3.OperationalError,
+                            ),
+                            patch.object(window, "toast") as notified,
+                        ):
+                            home_switch.set_active(False)
+                            assert home_switch.get_active() and other_switch.get_active()
+                            assert window.home_button.get_visible()
+                            assert other.home_button.get_visible()
+                            notified.assert_called_once()
+                        other_settings.force_close()
+                        other.close()
                         row = next(
                             widget
                             for widget in widgets(settings)
@@ -458,7 +498,8 @@ def run():
                     )
                     state["phase"] = 10
                 elif state["phase"] == 11 and window.webview.get_uri() == base + "/spa":
-                    assert window.webview.can_go_back()
+                    if not window.webview.can_go_back():
+                        return GLib.SOURCE_CONTINUE
                     assert window.back_button.get_visible() and window.back_button.get_mapped()
                     assert window.back_button.get_sensitive()
                     assert window.back_button.get_icon_name() == "go-previous-symbolic"
@@ -980,7 +1021,8 @@ def run():
                         "complete history list, 600-pixel Home width, URL app bookmarks, "
                         "Apps/History/Agent tabs, real right-click app menu, uninstall across "
                         "Home windows, uninstall write failure and keyboard menu, "
-                        "settings imports, site permission manager, home entry, "
+                        "settings imports, saved Home button toggle across windows, "
+                        "site permission manager, home entry, "
                         "same-origin links/popups, external links in separate windows, POST, "
                         "Back for links/typed URLs/History API/"
                         "fragments, Home closes apps and creates or focuses Home at the same "

@@ -268,17 +268,20 @@ def run():
                 for index in range(menu.get_n_items())
             ] == ["Full page", "Audio player", "Video player"]
             assert not window.lookup_action("audio-player").get_enabled()
+            assert not window.layout_button.get_visible()
             window.activate_action("win.audio-player", None)
             assert not window.audio_mode
             window.load_uri(origin)
             yield from wait("audio page load", lambda: not window.webview.is_loading())
             assert not window.lookup_action("audio-player").get_enabled()
+            assert not window.layout_button.get_visible()
             yield from javascript(
                 window, "await document.querySelector('audio').play(); return true;"
             )
             yield from wait(
                 "audio detected", lambda: window.lookup_action("audio-player").get_enabled()
             )
+            assert window.layout_button.get_visible()
             window.set_default_size(480, 700)
             yield from wait("custom page size", lambda: window.get_height() == 700)
             original_view = window.webview
@@ -493,6 +496,7 @@ def run():
             paused = yield from javascript(window, "return document.querySelector('audio').paused;")
             assert paused
             assert window.audio_mode and window.lookup_action("page-layout").get_enabled()
+            assert window.layout_button.get_visible()
             window.player.play_button.emit("clicked")
             yield from wait(
                 "resumed",
@@ -578,6 +582,7 @@ def run():
             toggle_audio(window)
             assert not window.audio_mode
             assert not window.lookup_action("audio-player").get_enabled()
+            assert not window.layout_button.get_visible()
             yield from wait("page mapped after pausing", window.webview.get_mapped)
             yield from javascript(
                 window,
@@ -614,6 +619,7 @@ def run():
             assert window.player.cover.get_paintable() is None
             assert window.stack.get_visible_child_name() == "web"
             assert not window.lookup_action("audio-player").get_enabled()
+            assert not window.layout_button.get_visible()
 
             # Exercise the fallback for audio without main-document HTML media.
             yield from javascript(
@@ -659,6 +665,7 @@ def run():
                     and window.lookup_action("video-player").get_enabled()
                 ),
             )
+            assert window.layout_button.get_visible()
             original_style = yield from javascript(
                 window, "return document.querySelector('video').style.cssText;"
             )

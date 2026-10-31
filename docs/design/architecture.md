@@ -108,6 +108,12 @@ the launcher. Search text opens Google with a URL-encoded query.
 Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, site
 permissions, and shortcuts.
+An Appearance switch controls the Home button. The shared application's
+`show-home-button` property defaults to true, loads from the library's
+`preferences` table, and updates browser headers and open Settings switches
+after a successful save. Phone Home buttons bind to the same property. New windows
+use the same preference; Alt+Home remains
+available when the button is hidden.
 Site choices live in the library's `permissions` table, keyed by a normalized
 origin and one of `camera`, `microphone`, `geolocation`, or
 `notifications`. Origins retain their scheme and non-default port, normalize
@@ -133,7 +139,9 @@ Address, library, import, and help controls live in temporary adaptive libadwait
 dialogs. Window dimensions are defaults, not a
 locked aspect ratio. Back/Forward actions track Chromium's back-forward list and
 are disabled on the home page, where the Home, Back, site-permissions and page layout buttons are hidden.
-The Home, site-permissions, and layout buttons appear when an app is opened. The `win.home` action
+The Home and site-permissions buttons appear when an app is opened. The layout
+button appears when Audio player or Video player is enabled, and stays visible
+in either media layout so Full page remains reachable. The `win.home` action
 calls `BrowserApplication.return_home` to present an existing Home window or create
 a clean one before closing the source app window. The companion's scoped
 `MoveToWindow` D-Bus method copies the source frame position, monitor and workspace

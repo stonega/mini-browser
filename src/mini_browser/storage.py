@@ -80,8 +80,29 @@ class Library:
                     updated_at REAL NOT NULL,
                     PRIMARY KEY (origin, permission)
                 );
+                CREATE TABLE IF NOT EXISTS preferences (
+                    name TEXT PRIMARY KEY,
+                    value INTEGER NOT NULL CHECK (value IN (0, 1))
+                );
             """)
         path.chmod(0o600)
+
+    def show_home_button(self) -> bool:
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT value FROM preferences WHERE name='show-home-button'"
+            ).fetchone()
+        return bool(row["value"]) if row else True
+
+    def set_show_home_button(self, visible: bool):
+        if type(visible) is not bool:
+            raise ValueError("Home button visibility must be on or off.")
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO preferences VALUES ('show-home-button', ?) "
+                "ON CONFLICT(name) DO UPDATE SET value=excluded.value",
+                (int(visible),),
+            )
 
     def permission_decision(self, origin: str, permission: str) -> str | None:
         with self.connect() as db:

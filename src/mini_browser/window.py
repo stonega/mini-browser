@@ -833,6 +833,12 @@ class BrowserWindow(Adw.ApplicationWindow):
             and self._video_available
             and not self.video_mode
         )
+        self.layout_button.set_visible(
+            any(
+                self.lookup_action(name).get_enabled()
+                for name in ("page-layout", "audio-player", "video-player")
+            )
+        )
         self.layout_button.set_icon_name(
             "audio-x-generic-symbolic"
             if self.audio_mode
@@ -858,8 +864,8 @@ class BrowserWindow(Adw.ApplicationWindow):
         if self.back_history.get_visible():
             self.back_history.popdown()
         browsing = self.stack.get_visible_child_name() != "home" and not self._closing
-        self.home_button.set_visible(browsing)
-        self.layout_button.set_visible(browsing)
+        self.home_button.set_visible(browsing and self.get_application().show_home_button)
+        self._audio_changed()
         media = self.audio_mode or self.video_mode
         can_go_back = media or self.webview.can_go_back()
         loading = browsing and not self.failed and self.webview.is_loading()

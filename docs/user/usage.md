@@ -96,6 +96,9 @@ command names and status only, without request contents, results or error detail
 Open Settings from the three-line main menu after the layout button, or press
 Ctrl+,. It contains browser data import, password CSV import, bookmarks/history,
 saved passwords, Devices, site permissions, and shortcuts.
+Under **Appearance**, turn **Show Home button** off to hide it in app windows.
+It is on by default, applies immediately to browser and phone windows, and is remembered
+after restarting. Alt+Home still opens Home when the button is hidden.
 Choose **New Window** in the same menu (or press Ctrl+N) to open another portrait window.
 Choose **Refresh Page** (or press Ctrl+R or F5) to reload the current page.
 If a page stays partly loaded, choose **Reload Without Cache** (Ctrl+Shift+R or
@@ -299,7 +302,9 @@ iPhone stream clears the old image and waits for Screen Mirroring to resume.
 ## Media layouts
 
 Click the layout icon before the main menu to choose **Full page**,
-**Audio player**, or **Video player**. Unavailable options are disabled; the menu
+**Audio player**, or **Video player**. The icon is hidden when neither media layout
+is available, and stays visible in a player layout so you can return to Full page.
+Unavailable options are disabled; the menu
 checks for videos again each time you open it. Full page uses a page-shaped icon.
 
 The pin button immediately before the layout button turns on both GNOME's
@@ -447,7 +452,7 @@ master password is never saved to disk.
 
 To reset browser data, first close every Mini Browser window and wait for any
 import or download to finish. Remove `library.sqlite3` to clear bookmarks and
-history, saved devices and remembered window sizes. Remove the `chromium` data
+history, saved devices, remembered window sizes and browser preferences. Remove the `chromium` data
 directory to reset website sessions and site storage. Keep the `app` subdirectory if you installed
 the application with `scripts/install`.
 

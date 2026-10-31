@@ -5,7 +5,7 @@ import time
 
 from .device_video import DeviceVideo
 from .devices import KINDS, AndroidTransport, DeviceError, IPhoneTransport, phone_coordinates
-from .gtk import Adw, Gdk, Gio, GLib, Gtk
+from .gtk import Adw, Gdk, Gio, GLib, GObject, Gtk
 from .window_pin import WindowPin
 from .window_size import DEFAULT_SIZE, WindowSizeMemory
 
@@ -61,6 +61,9 @@ class DeviceWindow(Adw.ApplicationWindow):
         header = Adw.HeaderBar(title_widget=self.title_widget, decoration_layout=":close")
         self.home_button = Gtk.Button(
             icon_name="go-home-symbolic", tooltip_text="Home (Alt+Home)", action_name="win.home"
+        )
+        app.bind_property(
+            "show-home-button", self.home_button, "visible", GObject.BindingFlags.SYNC_CREATE
         )
         header.pack_start(self.home_button)
         self.pin_button = Gtk.ToggleButton(icon_name="view-pin-symbolic", tooltip_text="Pin on top")

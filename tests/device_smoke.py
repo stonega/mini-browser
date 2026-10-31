@@ -165,6 +165,11 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     window = state["android_window"]
                     assert window.get_default_size() == (550, 740)
+                    assert window.home_button.get_visible()
+                    app.set_show_home_button(False)
+                    assert not window.home_button.get_visible()
+                    app.set_show_home_button(True)
+                    assert window.home_button.get_visible()
                     window.home_button.emit("clicked")
                     state["phase"] = "home"
                 elif phase == "home":
@@ -173,7 +178,11 @@ def run():
                         return GLib.SOURCE_CONTINUE
                     assert window._closing and window not in app.get_windows()
                     assert app.get_windows() == [state["home"]]
+                    app.set_show_home_button(False)
                     window = state["android_window"] = app.open_device(state["android"].id)
+                    assert not window.home_button.get_visible()
+                    app.set_show_home_button(True)
+                    assert window.home_button.get_visible()
                     window._test_paintable = Gtk.WidgetPaintable.new(window)
                     assert window.get_default_size() == (550, 740)
                     state["phase"] = 6

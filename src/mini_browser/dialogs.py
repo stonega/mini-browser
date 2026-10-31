@@ -1,11 +1,12 @@
 """Temporary native controls; none take space from the browsing surface."""
 
+import sqlite3
 import threading
 from pathlib import Path
 
 from . import APP_ID, APP_NAME, VERSION
 from .chrome import ChromeProfile, discover_profiles, import_html, import_profile
-from .gtk import Adw, Gio, GLib, Gtk
+from .gtk import Adw, Gio, GLib, GObject, Gtk
 from .navigation import address_to_uri
 
 
@@ -318,6 +319,27 @@ def settings_dialog(window):
         search_enabled=False,
     )
     page = Adw.PreferencesPage()
+    appearance = Adw.PreferencesGroup(title="Appearance")
+    home_button = Adw.SwitchRow(
+        title="Show Home button",
+        subtitle="Show the Home button in app windows. Alt+Home always opens Home.",
+        use_markup=False,
+    )
+    app = window.get_application()
+    app.bind_property("show-home-button", home_button, "active", GObject.BindingFlags.SYNC_CREATE)
+
+    def home_button_changed(row, *_):
+        try:
+            app.set_show_home_button(row.get_active())
+        except (OSError, sqlite3.Error):
+            row.set_active(app.show_home_button)
+            window.toast(
+                "Could not save the Home button setting. Check free disk space and try again."
+            )
+
+    home_button.connect("notify::active", home_button_changed)
+    appearance.add(home_button)
+    page.add(appearance)
     for title, rows in [
         (
             "Import",
