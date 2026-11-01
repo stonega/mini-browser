@@ -541,7 +541,31 @@ database. Paths are canonical and unique; names, versions and enabled choices
 persist independently of history and bookmarks. Registration reads bounded MV3
 manifest metadata on a worker thread without modifying or copying source files.
 `extension_page.py` provides a separate `ExtensionsWindow` with native folder
-selection, switches, removal and a restart notice. The browser's three-line main
+selection, switches, removal and a restart notice. Its Home-style `Gtk.StackSwitcher`
+has Installed and Market tabs above a shared search entry. A 600-pixel `Adw.Clamp`
+and 10-pixel side margins match Home. Both tabs use responsive `Gtk.FlowBox` card
+grids; installed cards expose popup, enable and removal controls. The plus button
+beside search is visible only on Installed and opens the unpacked-folder picker.
+Case-insensitive filtering changes displayed cards without modifying the registry.
+`extension_catalog.py` pins Chrome Web Store IDs alongside publisher links and
+descriptions. Market cards offer Install, progress/errors and Installed states;
+Installed opens the management tab. Official page buttons open browsing windows.
+Every entry is labeled Not verified rather than asserting extension compatibility.
+`extension_installer.py` downloads only on an explicit Install action, over verified
+HTTPS with redirects restricted to Google's package hosts. It bounds downloads,
+CRX3 headers and expanded archives, and verifies RSA/SHA-256 or ECDSA/SHA-256
+publisher signatures over the signed identity and complete payload. The signing
+key's hash and signed ID must both match the pinned catalog ID. Extraction rejects
+traversal, links, special files, duplicates and encrypted entries. A temporary
+directory stages MV3 files; the manifest receives the verified public key to retain
+its official ID when loaded unpacked. The original signed package is retained
+beside the managed folder. Files are promoted before a transaction registers the
+extension and its `extension_market_installs` mapping; failed registration removes
+only the newly promoted files. Repeated installs reuse a valid registered copy.
+Download and verification run on a worker thread; application holds and main-thread
+progress callbacks survive manager closure/reopening. Installs require a restart
+and have no automatic updates.
+The browser's three-line main
 menu invokes `win.extensions`; `BrowserApplication.open_extensions` creates or
 focuses one shared manager. It owns no WebView, remains open when browsing windows
 close, and supports Ctrl+W. Closing it clears the application's reference so it can
@@ -576,12 +600,18 @@ origins from the startup snapshot whose registry entries remain enabled. These
 are recreated pages, so Chrome window IDs, opener handles, active-tab association
 and dynamic toolbar actions are not preserved. The adapter also propagates engine
 close events to the native popup window and releases its framebuffers and input.
-The app does not offer Web Store/CRX installation. Source
-folders remain in place; removing a registry entry does not erase extension data.
+Only pinned Market packages can be downloaded; arbitrary CRX imports are not
+offered. Source folders remain in place; removing a registry entry does not erase
+extension files or storage.
 The isolated extension smoke test verifies execution and independent disabling
 across real process restarts using two generated extensions and a loopback site.
 It also covers popup rendering, background messaging, native input, notification
 window requests, reuse/reopening, engine-initiated close and extension-origin guards.
+Manager checks cover both tabs, search and empty results, publisher-link actions
+without internet navigation, and the shared 600-pixel layout in a wider window.
+A synthetic signed Market package exercises download errors, retry, duplicate-click
+protection, progress across manager reopening, removal and loading after restart
+with its verified ID. The smoke tests never fetch or execute third-party packages.
 
 `page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
 Windowless Chromium's clipboard does not provide that desktop integration.

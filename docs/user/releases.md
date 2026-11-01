@@ -1,5 +1,32 @@
 # Release notes
 
+## 0.4.5 — November 1, 2026
+
+- Add a separate Extensions window with searchable Installed and Market tabs.
+  Load unpacked Manifest V3 folders, enable or remove extensions, and open their
+  declared popups in standalone native windows after restarting the browser.
+- Offer explicit Market installs for MetaMask, uBlock Origin Lite and Dark Reader.
+  Verify downloaded CRX3 signatures and extension identities before registering
+  app-managed files. Show progress, retry and Installed states across manager
+  closure and reopening. Catalog compatibility is not verified; there are no
+  automatic extension updates, arbitrary CRX imports or Manifest V2 support.
+- Add native page context menus for links, selections, editable text and media,
+  including Send to Agent prompts and page saving.
+- Add Home controls for saved website and script apps, persistent removal, and
+  automatic or custom local service ports with supervised process cleanup.
+- Preserve the app window's position, monitor and workspace when returning to
+  Home through the bundled GNOME Shell extension.
+- Add a remembered Show Home button preference for browser and phone windows;
+  Alt+Home remains available. Hide the layout button when no media layout is
+  available, retaining it in active player layouts.
+
+Close all Mini Browser windows and reopen the app after upgrading. The native
+bridge and Python adapter must be updated together. Bookmarks, history, website
+sessions and the encrypted vault are preserved. Extensions require another full
+restart after adding, enabling, disabling or removing them; removal retains their
+files and storage. H.264/AAC remains available on Fedora 45 and Rawhide x86_64;
+Fedora 43/44 and aarch64 retain the stock engine. Widevine/DRM is not included.
+
 ## 0.4.4 — October 31, 2026
 
 - Fix DeepSeek Harness startup stalls caused by npm checking a slow or

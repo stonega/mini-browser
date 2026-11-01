@@ -29,8 +29,8 @@ See [agent commands, Codex setup and UI testing](docs/user/agents.md).
 Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-Version 0.4.4 fixes DeepSeek Harness startup stalls by reusing cached npm
-packages and metadata when the registry is slow or unavailable.
+Version 0.4.5 adds Chrome extension management and signed Market installs,
+native page context menus, and Home app management with custom script launchers.
 H.264/AAC playback remains available on Fedora 45+ x86_64.
 
 ## Fedora RPM
@@ -49,7 +49,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.4-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.5-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 

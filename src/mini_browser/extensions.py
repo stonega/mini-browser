@@ -140,6 +140,9 @@ class ExtensionStore:
                 path TEXT PRIMARY KEY, name TEXT NOT NULL, version TEXT NOT NULL,
                 enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1))
             )""")
+            db.execute("""CREATE TABLE IF NOT EXISTS extension_market_installs (
+                extension_id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE
+            )""")
 
     def all(self):
         with self.library.connect() as db:
@@ -168,7 +171,40 @@ class ExtensionStore:
 
     def remove(self, path):
         with self.library.connect() as db:
+            db.execute("DELETE FROM extension_market_installs WHERE path=?", (path,))
             db.execute("DELETE FROM chrome_extensions WHERE path=?", (path,))
+
+    def market_installs(self):
+        with self.library.connect() as db:
+            return dict(
+                db.execute(
+                    """SELECT extension_id, path FROM extension_market_installs
+                   WHERE path IN (SELECT path FROM chrome_extensions)"""
+                ).fetchall()
+            )
+
+    def register_market(self, identifier, directory):
+        values = extension_values(directory)
+        if extension_ui(directory)["id"] != identifier:
+            raise ValueError("The installed extension does not match its catalog identity.")
+        with self.library.connect() as db:
+            previous = db.execute(
+                "SELECT path FROM extension_market_installs WHERE extension_id=?", (identifier,)
+            ).fetchone()
+            db.execute(
+                """INSERT INTO chrome_extensions (path, name, version) VALUES (?, ?, ?)
+                   ON CONFLICT(path) DO UPDATE SET
+                       name=excluded.name, version=excluded.version, enabled=1""",
+                values,
+            )
+            db.execute(
+                """INSERT INTO extension_market_installs VALUES (?, ?)
+                   ON CONFLICT(extension_id) DO UPDATE SET path=excluded.path""",
+                (identifier, values[0]),
+            )
+            if previous and previous["path"] != values[0]:
+                db.execute("DELETE FROM chrome_extensions WHERE path=?", (previous["path"],))
+        return values[0]
 
     def startup(self):
         """Skip unavailable/invalid extensions without preventing browser startup."""

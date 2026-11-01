@@ -128,13 +128,29 @@ agent control or contact an agent. Password-field text is excluded.
 ## Chrome extensions
 
 Choose **Extensions** in the three-line main menu to open its separate management
-window, then choose **Load unpacked…**. Opening Extensions again focuses the existing
+window. It uses the same centered tabs, search bar and cards as Home, with
+**Installed** and **Market** tabs. Opening Extensions again focuses the existing
 manager. Its window stays open independently of browsing windows; Ctrl+W closes it.
-Select a local extension
+
+On **Installed**, click **+** beside the search bar to load a local extension
 folder containing `manifest.json`, using **Manifest V3**. Extract ZIP files first;
-Chrome Web Store installation, CRX packages and Manifest V2 are not supported.
-The extension appears with its name, version, an enable switch and a Remove button.
+importing arbitrary CRX files and Manifest V2 are not supported.
+Each installed card shows its name, version, enabled state, an enable switch and
+a Remove button. Hover over a card to see its source folder.
 Selecting the same folder again updates its entry without creating duplicates.
+Search filters installed names, versions and source folders without changing
+saved records. The clear icon restores the full grid.
+
+**Market** lists MetaMask, uBlock Origin Lite and Dark Reader with their publisher,
+purpose and **Not verified** compatibility label. Click **Install** to download
+the selected extension from the Chrome Web Store. Mini Browser verifies the
+signed package against the catalog's extension ID before adding it to Installed.
+The button shows progress, then **Installed**; click Installed to manage it.
+If installation fails, the card shows an error and Install lets you try again.
+Installation continues if you close the manager. Restart Mini Browser to load it.
+Search filters these entries, including publisher names. **Official page** opens
+the publisher's website or project in a browsing window. The plus button is hidden
+on Market. Catalog entries do not indicate tested compatibility with Mini Browser.
 
 After restarting, extensions that declare a popup have an **Open popup** button.
 It opens the extension's interface in its own native window, with the extension
@@ -154,9 +170,10 @@ page lists.
 Close **every Mini Browser window** and reopen the app after adding, enabling,
 disabling or removing an extension. If agent control keeps the browser running,
 choose Quit as well. Changes are saved for the next browser process; an extension
-already running keeps working until that process exits. Keep the selected folder
-in place: Mini Browser reads its files directly, without copying or changing them.
-Removing an entry leaves the original files and extension storage intact. Extension
+already running keeps working until that process exits. Keep manually selected
+folders in place: Mini Browser reads their files without copying or changing them.
+Market installs use app-managed folders and retain the original signed packages.
+Removing an entry leaves its files and extension storage intact. Extension
 code changes also require a restart; there are no automatic extension updates.
 Folder paths cannot contain commas because Chromium uses commas to separate them.
 

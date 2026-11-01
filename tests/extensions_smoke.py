@@ -10,7 +10,11 @@ import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
+from extension_fixture import signed_package
+
+from mini_browser import extension_page
 from mini_browser.application import BrowserApplication
 from mini_browser.gtk import Gio, GLib, Gtk
 
@@ -141,6 +145,12 @@ def descendants(widget):
         child = child.get_next_sibling()
 
 
+def tile(grid, index):
+    child = grid.get_child_at_index(index)
+    assert child is not None
+    return child.get_child()
+
+
 def phase(root, number, screenshot=None):
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -166,29 +176,148 @@ def phase(root, number, screenshot=None):
         assert result[0][1] is None, method
         return result[0][0]
 
+    def click_widget(widget, x, y):
+        window = widget.get_root()
+        path = f"{app.get_dbus_object_path()}/window/{window.get_id()}"
+        deadline = time.monotonic() + 5
+        while True:
+            valid, bounds = widget.compute_bounds(window)
+            assert valid
+            completed = []
+
+            def finished(connection, result, replies=completed):
+                try:
+                    connection.call_finish(result)
+                    replies.append(None)
+                except GLib.Error as error:
+                    replies.append(error)
+
+            app.get_dbus_connection().call(
+                "io.github.stone.MiniBrowser.TestPointer",
+                "/io/github/stone/MiniBrowser/TestPointer",
+                "io.github.stone.MiniBrowser.TestPointer",
+                "Click",
+                GLib.Variant("(oddu)", (path, bounds.get_x() + x, bounds.get_y() + y, 1)),
+                None,
+                Gio.DBusCallFlags.NONE,
+                3000,
+                None,
+                finished,
+            )
+            yield from wait(lambda replies=completed: bool(replies))
+            if completed[0] is None:
+                return
+            # GTK may map before Mutter has committed the new window's frame.
+            if time.monotonic() >= deadline:
+                raise completed[0]
+            yield
+
     def click(popup, x, y):
-        valid, bounds = popup.view.compute_bounds(popup)
-        assert valid
-        completed = []
+        yield from click_widget(popup.view, x, y)
 
-        def finished(connection, result):
-            connection.call_finish(result)
-            completed.append(True)
-
-        path = f"{app.get_dbus_object_path()}/window/{popup.get_id()}"
-        app.get_dbus_connection().call(
-            "io.github.stone.MiniBrowser.TestPointer",
-            "/io/github/stone/MiniBrowser/TestPointer",
-            "io.github.stone.MiniBrowser.TestPointer",
-            "Click",
-            GLib.Variant("(oddu)", (path, bounds.get_x() + x, bounds.get_y() + y, 1)),
-            None,
-            Gio.DBusCallFlags.NONE,
-            3000,
-            None,
-            finished,
+    def market_tab(page):
+        label = next(
+            child
+            for child in descendants(page.tabs)
+            if isinstance(child, Gtk.Label) and child.get_label() == "Market"
         )
-        yield from wait(lambda: bool(completed))
+        button = label.get_parent()
+        while not isinstance(button, Gtk.Button):
+            button = button.get_parent()
+        yield from wait(lambda: button.get_mapped() and button.get_width() > 0)
+        for _attempt in range(3):
+            yield from click_widget(button, button.get_width() / 2, button.get_height() / 2)
+            deadline = time.monotonic() + 1
+            while (
+                page.sections.get_visible_child_name() != "market" and time.monotonic() < deadline
+            ):
+                yield
+            if page.sections.get_visible_child_name() == "market":
+                return
+        raise AssertionError("Native Market tab clicks did not switch sections")
+
+    def market_button(page, label):
+        return next(
+            child
+            for child in descendants(tile(page.market_grid, 0))
+            if isinstance(child, Gtk.Button) and child.get_label() == label
+        )
+
+    def install_market(manager, page, window):
+        identifier, package = signed_package(
+            manifest={
+                "manifest_version": 3,
+                "name": "Market fixture",
+                "version": "1.0",
+                "content_scripts": [{"matches": ["http://127.0.0.1/*"], "js": ["content.js"]}],
+                "action": {"default_popup": "popup.html"},
+            },
+            files=[
+                ("content.js", "document.title = 'Market installed active';"),
+                ("popup.html", "<!doctype html><title>Signed market popup</title>"),
+            ],
+        )
+        entry = {**extension_page.MARKET_EXTENSIONS[0], "id": identifier}
+        gate = threading.Event()
+        attempts = []
+
+        def download(_url, destination, progress, _cancelled):
+            attempts.append(True)
+            if len(attempts) == 1:
+                raise ValueError("Synthetic download failed. Try again.")
+            progress("Downloading 50%")
+            assert gate.wait(10), "Installer UI test stalled"
+            destination.write_bytes(package)
+
+        with (
+            patch.object(extension_page, "MARKET_EXTENSIONS", (entry,)),
+            patch("mini_browser.extension_installer.download_package", side_effect=download),
+        ):
+            page.sections.set_visible_child_name("market")
+            page.refresh()
+            market_button(page, "Install").emit("clicked")
+            yield from wait(lambda: not app.extension_install_state[identifier]["busy"])
+            assert app.extension_install_state[identifier]["error"]
+            assert app.extensions.all() == []
+            install = market_button(page, "Install")
+            yield from wait(lambda: install.get_mapped())
+            yield from click_widget(install, install.get_width() / 2, install.get_height() / 2)
+            yield from wait(lambda: app.extension_install_state[identifier]["busy"])
+            assert not market_button(page, "Installing…").get_sensitive()
+            # Duplicate activation cannot start a second worker.
+            page._install_market(None, entry)
+            manager.close()
+            yield from wait(lambda: app.extensions_window is None)
+            window.activate_action("win.extensions", None)
+            manager = app.extensions_window
+            page = manager.extensions_page
+            page.sections.set_visible_child_name("market")
+            assert not market_button(page, "Installing…").get_sensitive()
+            gate.set()
+            yield from wait(lambda: not app.extension_install_state[identifier]["busy"])
+            assert not app.extension_install_state[identifier]["error"]
+            assert len(attempts) == 2
+            records = app.extensions.all()
+            assert len(records) == 1 and records[0]["name"] == "Market fixture"
+            (root / "market-install.json").write_text(
+                json.dumps({"id": identifier, "path": records[0]["path"]})
+            )
+            assert page.restart_notice.get_visible()
+            market_button(page, "Installed").emit("clicked")
+            assert page.sections.get_visible_child_name() == "installed"
+            remove = next(
+                child
+                for child in descendants(tile(page.installed_grid, 0))
+                if isinstance(child, Gtk.Button) and child.get_icon_name() == "user-trash-symbolic"
+            )
+            remove.emit("clicked")
+            assert app.extensions.all() == []
+            assert Path(records[0]["path"]).is_dir()
+            page.sections.set_visible_child_name("market")
+            assert market_button(page, "Install").get_sensitive()
+        page.sections.set_visible_child_name("installed")
+        page.refresh()
+        return manager, page
 
     def scenario():
         yield from wait(lambda: bool(app.get_windows()))
@@ -225,10 +354,62 @@ def phase(root, number, screenshot=None):
         yield from wait(lambda: manager.get_mapped())
         assert manager is not window and not hasattr(manager, "webview")
         assert window.stack.get_visible_child_name() == "home"
+        sections = page.sections.get_pages()
+        assert [sections[i].get_title() for i in range(sections.get_n_items())] == [
+            "Installed",
+            "Market",
+        ]
+        assert page.sections.get_visible_child_name() == "installed"
+        assert page.load_button.get_visible()
+        yield from market_tab(page)
+        assert not page.load_button.get_visible()
+        page.search_entry.set_text("mEtAmAsK")
+        assert page.market_grid.get_child_at_index(1) is None
+        official = next(
+            child
+            for child in descendants(tile(page.market_grid, 0))
+            if isinstance(child, Gtk.Button) and child.get_label() == "Official page"
+        )
+        with patch.object(app, "new_window") as opened:
+            official.emit("clicked")
+            opened.assert_called_once_with("https://metamask.com/download")
+        page.search_entry.set_text("no-such-project")
+        assert page.market_empty.get_visible()
+        page.search_entry.emit("icon-press", Gtk.EntryIconPosition.SECONDARY)
+        assert page.search_entry.get_text() == ""
+        assert page.market_grid.get_child_at_index(2) is not None
+        assert (
+            sum(
+                isinstance(child, Gtk.Button) and child.get_label() == "Install"
+                for child in descendants(page.market_grid)
+            )
+            == 3
+        )
+        page.sections.set_visible_child_name("installed")
+        assert page.load_button.get_visible()
         content = str(root / "Content fixture")
         network = str(root / "Network fixture")
+        if number == 4:
+            record = json.loads((root / "market-install.json").read_text())
+            assert app.extension_launchers[record["path"]]["id"] == record["id"]
+            window.load_uri(f"http://127.0.0.1:{server.server_port}/")
+            yield from wait(
+                lambda: view.get_title() == "Market installed active" and not view.loading
+            )
+            popup = app.open_extension_popup(record["path"])
+            yield from wait(lambda: popup.view.get_title() == "Signed market popup")
+            result = yield from command(
+                popup.view,
+                "Runtime.evaluate",
+                {"expression": "chrome.runtime.id", "returnByValue": True},
+            )
+            assert result["result"]["value"] == record["id"]
+            app.extensions.remove(record["path"])
+            return
         if number == 1:
             assert page.empty.get_visible()
+            manager, page = yield from install_market(manager, page, window)
+            state["paintable"] = Gtk.WidgetPaintable.new(manager)
             page.add_folder(root / "missing")
             yield from wait(lambda: not page.loading)
             assert page.status.get_visible()
@@ -239,13 +420,20 @@ def phase(root, number, screenshot=None):
             assert len(app.extensions.all()) == 2
             assert page.restart_notice.get_visible()
             assert not page.empty.get_visible()
-            row = page.rows.get_row_at_index(0)
+            page.search_entry.set_text("NeTwOrK")
+            assert page.installed_grid.get_child_at_index(1) is None
+            assert not page.empty.get_visible()
+            page.search_entry.set_text("no-such-extension")
+            assert page.empty.get_visible()
+            page.search_entry.emit("icon-press", Gtk.EntryIconPosition.SECONDARY)
+            assert page.installed_grid.get_child_at_index(1) is not None
+            row = tile(page.installed_grid, 0)
             switch = next(child for child in descendants(row) if isinstance(child, Gtk.Switch))
             switch.set_active(False)
             manifest = Path(content) / "manifest.json"
             raw = manifest.read_bytes()
             manifest.unlink()
-            row = page.rows.get_row_at_index(0)
+            row = tile(page.installed_grid, 0)
             switch = next(child for child in descendants(row) if isinstance(child, Gtk.Switch))
             switch.set_active(True)
             assert not switch.get_active()
@@ -264,24 +452,44 @@ def phase(root, number, screenshot=None):
             manager = app.extensions_window
             assert manager is not None
             page = manager.extensions_page
-            assert page.rows.get_row_at_index(1) is not None
+            assert page.installed_grid.get_child_at_index(1) is not None
             assert page.restart_notice.get_visible()
             state["paintable"] = Gtk.WidgetPaintable.new(manager)
             yield from wait(lambda: manager.get_mapped())
             other.close()
             window.close()
             assert app.get_windows() == [manager]
+            manager.set_default_size(820, 780)
+            yield from wait(lambda: manager.get_width() == 820)
+            assert page.tabs.get_width() == 600
+            assert page.sections.get_width() == 600
+            manager.set_default_size(420, 780)
+            yield from wait(lambda: manager.get_width() == 420)
             if screenshot:
+                yield from click_widget(page.search_entry, 40, 20)
 
                 def snapshot_ready():
                     shot = Gtk.Snapshot.new()
                     state["paintable"].snapshot(shot, manager.get_width(), manager.get_height())
-                    state["node"] = shot.to_node()
-                    return state["node"] is not None
+                    node = shot.to_node()
+                    if node is None:
+                        return False
+                    texture = manager.get_renderer().render_texture(node, None)
+                    state["texture"] = texture
+                    return (texture.get_width(), texture.get_height()) == (
+                        manager.get_width(),
+                        manager.get_height(),
+                    )
 
                 yield from wait(snapshot_ready)
-                texture = manager.get_renderer().render_texture(state["node"], None)
-                assert texture.save_to_png(str(screenshot))
+                assert state["texture"].save_to_png(str(screenshot))
+                yield from market_tab(page)
+                yield from wait(lambda: page.market_grid.get_mapped())
+                state["paintable"] = Gtk.WidgetPaintable.new(manager)
+                yield from wait(snapshot_ready)
+                market_shot = screenshot.with_name(screenshot.stem + "-market.png")
+                assert state["texture"].save_to_png(str(market_shot))
+                page.sections.set_visible_child_name("installed")
         else:
             assert len(app.extensions.all()) == 2
             assert not page.restart_notice.get_visible()
@@ -302,7 +510,7 @@ def phase(root, number, screenshot=None):
             assert result["result"]["value"] == "blocked", "MV3 network rule did not run"
             assert Handler.blocked_requests == 0
             if number == 2:
-                row = page.rows.get_row_at_index(0)
+                row = tile(page.installed_grid, 0)
                 open_popup = next(
                     child
                     for child in descendants(row)
@@ -397,8 +605,11 @@ def phase(root, number, screenshot=None):
                     not item["url"].startswith("chrome-extension:")
                     for item in app.library.search("history")
                 )
-                row = page.rows.get_row_at_index(0)
-                assert row.get_title() == "Content fixture"
+                row = tile(page.installed_grid, 0)
+                assert any(
+                    isinstance(child, Gtk.Label) and child.get_label() == "Content fixture"
+                    for child in descendants(row)
+                )
                 switch = next(child for child in descendants(row) if isinstance(child, Gtk.Switch))
                 switch.set_active(False)
                 assert not app.extensions.all()[0]["enabled"]
@@ -407,7 +618,7 @@ def phase(root, number, screenshot=None):
                 # Keep the other extension enabled to detect Chromium reloading
                 # the disabled one from its own persisted profile preferences.
                 assert not app.extensions.all()[0]["enabled"]
-                row = page.rows.get_row_at_index(0)
+                row = tile(page.installed_grid, 0)
                 remove = next(
                     child
                     for child in descendants(row)
@@ -421,6 +632,8 @@ def phase(root, number, screenshot=None):
                 assert page.empty.get_visible()
                 assert (Path(content) / "manifest.json").is_file()
                 assert (Path(network) / "manifest.json").is_file()
+                market = json.loads((root / "market-install.json").read_text())
+                app.extensions.register_market(market["id"], market["path"])
 
     steps = scenario()
 
@@ -447,7 +660,7 @@ def run():
     with tempfile.TemporaryDirectory(prefix="mini-browser-extensions-") as temporary:
         root = Path(temporary)
         fixtures(root)
-        for number in (1, 2, 3):
+        for number in (1, 2, 3, 4):
             command = [sys.executable, __file__, "--phase", temporary, str(number)]
             if len(sys.argv) > 1 and number in (1, 2):
                 command.append(sys.argv[1])

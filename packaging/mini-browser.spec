@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.4
+Version:        0.4.5
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -154,6 +154,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Sun Nov 01 2026 Mini Browser contributors - 0.4.5-1
+- Add Chrome extension management, verified Market installs and standalone popups.
+- Add native page context menus, agent prompts and Home app management.
+- Preserve window placement on Home and add Home button visibility preferences.
+
 * Sat Oct 31 2026 Mini Browser contributors - 0.4.4-1
 - Reuse cached npm packages and metadata to avoid DeepSeek Harness startup stalls.
 

@@ -83,13 +83,22 @@ machines; it is not a bound on arbitrary websites' CPU or memory use.
 then restarts the app with a temporary profile. It tests the main-menu entry,
 the separate manager's reuse, closure and reopening, duplicate
 registration, content scripts, background service-worker messaging, local storage
-and declarative network blocking. It disables one extension while leaving the
+and declarative network blocking. Installed/Market checks cover search, empty
+results, card controls, official-link routing and the shared 600-pixel layout.
+A generated signed CRX3 fixture exercises Install, progress, failed-download retry,
+duplicate-click protection, manager reopening during installation, Installed and
+removal states. Publisher links and downloads are intercepted so the test never
+visits external sites. Unit checks cover RSA/ECDSA signatures, tampering, unsafe
+archives, cancellation, download bounds, registry persistence and failed-write rollback.
+Another process restart loads the signed fixture from its managed folder and
+verifies content-script execution, popup rendering and the preserved extension ID.
+It disables one extension while leaving the
 other enabled, restarts again, and verifies the disabled content script is absent
 and the remaining network rule still works. Popup checks exercise runtime APIs,
 native clicks and clipboard copying, reuse/reopening, notification windows, engine close and origin
 restrictions. Removal preserves the fixture files.
 No Chrome profile or real extension data is used. An optional PNG path captures
-the native Extensions window and an additional `-popup.png` image. This check is
+the native Installed tab and additional `-market.png` and `-popup.png` images. This check is
 included in the default smoke suite.
 
 `./scripts/smoke --test=context` uses real secondary pointer clicks on synthetic
@@ -260,7 +269,7 @@ To build a local package instead:
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff cmake ninja-build gcc-c++
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.4-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.5-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
@@ -279,7 +288,7 @@ enabled target succeeds before announcing repository availability:
 
 ```sh
 ./scripts/build-rpm --source-only
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.4-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.5-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 

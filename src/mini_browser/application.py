@@ -13,6 +13,7 @@ from .agent_activity import AgentActivity
 from .deepseek import DeepSeekHarness
 from .device_discovery import AndroidDiscovery, device_tiles
 from .devices import DeviceStore
+from .extension_installer import ExtensionInstaller
 from .extension_page import ExtensionsWindow
 from .extension_popup import ExtensionPopupWindow
 from .extensions import ExtensionStore, extension_ui
@@ -129,6 +130,12 @@ class BrowserApplication(Adw.Application):
             silent=self.silent,
             extensions=extension_paths,
         )
+        self.extension_installer = ExtensionInstaller(
+            self.extensions,
+            self.data_dir / "extensions",
+            self.network_session.bridge.version().decode().rsplit("chromium-", 1)[-1],
+        )
+        self.extension_install_state = {}
         self.network_session.connect("download-started", self._download_started)
         self.network_session.connect(
             "extension-window", lambda _session, uri: self.open_extension_uri(uri)
