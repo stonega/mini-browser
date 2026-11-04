@@ -81,9 +81,10 @@ The CPU limit is deliberately loose to catch a busy loop across different
 machines; it is not a bound on arbitrary websites' CPU or memory use.
 
 `./scripts/smoke --test=extensions` creates two temporary unpacked MV3 extensions,
-then restarts the app with a temporary profile. It tests the main-menu entry,
-the separate manager's reuse, closure and reopening, duplicate
-registration, content scripts, background service-worker messaging, local storage
+then restarts the app with a temporary profile. It tests suppression of startup
+welcome windows, the main-menu entry, the separate manager's reuse, closure and
+reopening, duplicate registration, content scripts, background service-worker
+messaging, local storage
 and declarative network blocking. Installed/Market checks cover search, empty
 results, card controls, official-link routing and the shared 600-pixel layout.
 A generated signed CRX3 fixture exercises Install, progress, failed-download retry,

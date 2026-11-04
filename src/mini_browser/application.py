@@ -148,7 +148,8 @@ class BrowserApplication(Adw.Application):
         self.extension_install_state = {}
         self.network_session.connect("download-started", self._download_started)
         self.network_session.connect(
-            "extension-window", lambda _session, uri: self.open_extension_uri(uri)
+            "extension-window",
+            lambda _session, uri: self.open_extension_uri(uri, require_open_popup=True),
         )
         for name, callback in [("new-window", self.new_window), ("quit", self.quit)]:
             action = Gio.SimpleAction.new(name, None)
@@ -383,7 +384,7 @@ class BrowserApplication(Adw.Application):
             raise ValueError("Enable this extension and restart Mini Browser to open its popup.")
         return window
 
-    def open_extension_uri(self, uri):
+    def open_extension_uri(self, uri, *, require_open_popup=False):
         if self._shutting_down:
             return None
         parts = urlsplit(uri)
@@ -398,6 +399,13 @@ class BrowserApplication(Adw.Application):
             None,
         )
         if extension is None:
+            return None
+        # Background startup/install hooks must not open settings or welcome
+        # windows. Follow-up pages are allowed while this extension is open.
+        if require_open_popup and not any(
+            not window._closing and window.extension["origin"] == origin
+            for window in self.extension_popup_windows.values()
+        ):
             return None
         window = self.extension_popup_windows.get(uri)
         if window is None:

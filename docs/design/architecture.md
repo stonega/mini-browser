@@ -616,17 +616,23 @@ its privileged runtime/storage APIs; no host file server or API emulation is use
 The default CEF client captures extension URLs requested by Chrome windows and
 forwards them to GTK, then closes the unrendered Chrome window. A bounded delayed
 close handles empty windows; shutdown drains all close callbacks. GTK opens only
-origins from the startup snapshot whose registry entries remain enabled. These
-are recreated pages, so Chrome window IDs, opener handles, active-tab association
-and dynamic toolbar actions are not preserved. The adapter also propagates engine
-close events to the native popup window and releases its framebuffers and input.
+origins from the startup snapshot whose registry entries remain enabled.
+Background requests additionally require an open popup from the same extension;
+startup/install hooks cannot automatically open settings or welcome windows.
+The manager's explicit Open popup action does not require an existing popup.
+These are recreated pages, so Chrome window IDs, opener handles, active-tab
+association and dynamic toolbar actions are not preserved. The adapter also
+propagates engine close events to the native popup window and releases its
+framebuffers and input.
 Only pinned Market packages can be downloaded; arbitrary CRX imports are not
 offered. Source folders remain in place; removing a registry entry does not erase
 extension files or storage.
 The isolated extension smoke test verifies execution and independent disabling
 across real process restarts using two generated extensions and a loopback site.
-It also covers popup rendering, background messaging, native input, notification
-window requests, reuse/reopening, engine-initiated close and extension-origin guards.
+It also covers suppression of real startup window requests, popup rendering,
+background messaging, native input, notification window requests, reuse/reopening,
+engine-initiated close, blocking requests after popup closure and extension-origin
+guards.
 Manager checks cover both tabs, search and empty results, publisher-link actions
 without internet navigation, and the shared 600-pixel layout in a wider window.
 A synthetic signed Market package exercises download errors, retry, duplicate-click

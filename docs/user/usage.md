@@ -175,8 +175,10 @@ It opens the extension's interface in its own native window, with the extension
 name in the header. Opening the same popup again focuses its existing window.
 Use the close button, Ctrl+W or Escape to close it. The popup can communicate with
 its extension's background worker and use its extension storage. Closing and
-reopening the popup keeps that storage. Extension-requested pages, such as welcome
-or notification pages, also open in standalone windows.
+reopening the popup keeps that storage. Extension-requested pages open in
+standalone windows while a popup from the same extension is open. Background
+settings and welcome pages are suppressed at startup; use **Open popup** to
+access an extension's interface.
 Copy buttons can write text to the native clipboard after a click in the active
 popup. Background clipboard writes and native clipboard reads are not exposed.
 

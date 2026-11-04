@@ -56,12 +56,18 @@ def fixtures(root):
             document.title = reply && reply.value === 'synthetic' ?
                 'Extension active' : 'Extension messaging failed';
         });
+        document.addEventListener('fixture-open-window', () => {
+            chrome.runtime.sendMessage({openWindow: true}, () => {
+                void chrome.runtime.lastError;
+            });
+        });
     """)
     (content / "background.js").write_text("""
         chrome.runtime.onInstalled.addListener(() => {
-            chrome.tabs.create({url: chrome.runtime.getURL('welcome.html')}, () => {
-                void chrome.runtime.lastError;
-            });
+            chrome.windows.create({url: chrome.runtime.getURL('welcome.html'),
+                type: 'popup'}, () => {
+                    void chrome.runtime.lastError;
+                });
         });
         chrome.runtime.onMessage.addListener((message, sender, reply) => {
             if (message.openWindow) {
@@ -161,7 +167,14 @@ def phase(root, number, screenshot=None):
         silent=True,
         application_id=f"io.github.stone.MiniBrowser.ExtensionSmoke.Run{os.getpid()}",
     )
-    errors, state = [], {}
+    errors, state, extension_requests = [], {}, []
+
+    def observe_extension_requests(*_):
+        app.network_session.connect(
+            "extension-window", lambda _session, uri: extension_requests.append(uri)
+        )
+
+    app.connect("startup", observe_extension_requests)
 
     def wait(predicate):
         deadline = time.monotonic() + 15
@@ -324,6 +337,15 @@ def phase(root, number, screenshot=None):
         window = next(w for w in app.get_windows() if hasattr(w, "webview"))
         view = window.webview
         yield from wait(lambda: window.get_mapped() and view.prepared)
+        if number == 2:
+            # Wait for the real onInstalled request, rather than assuming the
+            # extension worker has already started when Home becomes ready.
+            yield from wait(
+                lambda: any(uri.endswith("/welcome.html") for uri in extension_requests)
+            )
+        assert app.extensions_window is None
+        assert not app.extension_popup_windows, "An extension opened a window at startup"
+        assert app.get_windows() == [window]
         pages = window.home_sections.get_pages()
         assert [pages[i].get_title() for i in range(pages.get_n_items())] == [
             "Apps",
@@ -601,6 +623,16 @@ def phase(root, number, screenshot=None):
                 yield from wait(lambda: reopened.view.get_title() == "Extension popup ready")
                 assert reopened is not popup
                 reopened.close()
+                assert not app.extension_popup_windows
+                requests_before = len(extension_requests)
+                yield from command(
+                    view,
+                    "Runtime.evaluate",
+                    {"expression": "document.dispatchEvent(new Event('fixture-open-window'))"},
+                )
+                yield from wait(lambda: len(extension_requests) > requests_before)
+                assert extension_requests[-1] == notification_uri
+                assert not app.extension_popup_windows, "A closed extension reopened itself"
                 assert all(
                     not item["url"].startswith("chrome-extension:")
                     for item in app.library.search("history")
