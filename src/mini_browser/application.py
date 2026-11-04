@@ -18,12 +18,14 @@ from .extension_page import ExtensionsWindow
 from .extension_popup import ExtensionPopupWindow
 from .extensions import ExtensionStore, extension_ui
 from .gtk import Adw, Gdk, Gio, GLib, GObject, Gtk, Web
+from .launcher import app_catalog
 from .navigation import address_to_uri
 from .script_apps import ScriptAppHarness, ScriptAppStore
 from .storage import Library
 from .vault import PasswordVault
 from .window import BrowserWindow
 from .window_pin import BUS_NAME, INTERFACE, OBJECT_PATH
+from .window_size import script_app_key
 
 
 class BrowserApplication(Adw.Application):
@@ -58,6 +60,14 @@ class BrowserApplication(Adw.Application):
             GLib.OptionArg.NONE,
             "Enable private local agent control",
             None,
+        )
+        self.add_main_option(
+            "launch-app",
+            0,
+            GLib.OptionFlags.NONE,
+            GLib.OptionArg.STRING,
+            "Open a saved MiniApps launcher",
+            "ID",
         )
         self.deepseek = DeepSeekHarness()
         self.script_runners = {}
@@ -289,7 +299,8 @@ class BrowserApplication(Adw.Application):
         self.new_window()
 
     def do_command_line(self, command_line):
-        if command_line.get_options_dict().contains("agent") and self.agent_control is None:
+        options = command_line.get_options_dict()
+        if options.contains("agent") and self.agent_control is None:
             from .automation import Automation
             from .control import ControlError, ControlServer
 
@@ -301,6 +312,13 @@ class BrowserApplication(Adw.Application):
                 return 1
             self.connect("window-removed", automation.window_removed)
             self.hold()
+        if options.contains("launch-app"):
+            try:
+                self.launch_app(options.lookup_value("launch-app", None).get_string())
+            except ValueError as error:
+                command_line.printerr(str(error) + "\n")
+                return 2
+            return 0
         args = command_line.get_arguments()[1:]
         if args and args[0] == "--":
             args = args[1:]
@@ -317,6 +335,29 @@ class BrowserApplication(Adw.Application):
         for uri in uris:
             self.new_window(uri)
         return 0
+
+    def launch_app(self, identifier):
+        if identifier not in {record["id"] for record in app_catalog(self.library)}:
+            raise ValueError("This app is no longer installed. Reopen MiniApps and try again.")
+        if identifier.startswith("web:"):
+            return self.new_window(identifier.removeprefix("web:"))
+        if identifier == "builtin:deepseek":
+            window = self.new_window()
+            window._start_deepseek()
+            return window
+        record = next(
+            (app for app in self.script_apps.all() if "script:" + app["id"] == identifier), None
+        )
+        if record is None:
+            raise ValueError(
+                "This script app is no longer installed. Reopen MiniApps and try again."
+            )
+        runner = self.script_runner(record)
+        window = self.new_window()
+        window._start_script(
+            runner, record["title"], script_app_key([record["directory"], *runner.arguments])
+        )
+        return window
 
     def new_window(self, uri=None):
         window = BrowserWindow(self)

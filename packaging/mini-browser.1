@@ -10,6 +10,11 @@ mini-browser \- a small native GNOME web browser
 .br
 .B mini-browser mcp
 .RI [ --socket " PATH]"
+.br
+.B mini-browser list-apps
+.br
+.B mini-browser --launch-app
+.I ID
 .SH DESCRIPTION
 Mini Browser opens one page per resizable portrait window, with a native
 GNOME header bar and sandboxed Chromium web content. Each command-line argument opens a separate window.
@@ -36,6 +41,12 @@ After installation, log out and back in, then run
 .B gnome-extensions enable mini-browser-pin@io.github.stone
 once. The pin button offers Enable Pinning and setup instructions if the
 extension is unavailable.
+.PP
+MiniApps is included in Mini Browser Pin and adds a categorized top-panel menu
+for saved websites and script apps. The normal app installation also installs
+MiniApps; existing enabled installations need no separate setup. Sign out and
+back in after updating to load the new Shell code. Apps launch in Mini Browser
+even when it is closed.
 .SH OPTIONS
 .TP
 .BR \-h ", " \-\-help
@@ -47,6 +58,13 @@ Show the application version.
 .B \-\-agent
 Enable private same-user agent control and keep running after the last window
 closes. Use mini-browser agent stop or Quit to stop the application.
+.TP
+.BI \-\-launch-app " ID"
+Open a currently installed website or script launcher from the MiniApps catalog.
+.TP
+.B list-apps
+Print the MiniApps catalog as JSON without starting GTK or Chromium. This reads
+the saved library without enabling agent control or exposing history or script commands.
 .SH AGENT CONTROL
 mini-browser agent --help lists JSON control commands. Commands include list,
 open, add-app, apps, remove-app, navigate, close, snapshot, click, fill, press, eval, screenshot, resize,

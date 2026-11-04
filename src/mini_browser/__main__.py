@@ -2,6 +2,11 @@ import sys
 
 from . import VERSION
 
+if sys.argv[1:2] == ["list-apps"]:
+    from .launcher import main as launcher_main
+
+    raise SystemExit(launcher_main(sys.argv[2:]))
+
 # Route control commands before GTK imports and before the GUI's help handling.
 if sys.argv[1:2] in (["agent"], ["mcp"]):
     if sys.argv[1] == "agent":
@@ -21,6 +26,8 @@ if "--help" in sys.argv or "-h" in sys.argv:
         "--agent: enable private local agent control (keeps the app running).\n"
         "mini-browser agent --help: JSON control commands and UI testing\n"
         "mini-browser mcp: native MCP stdio server for Codex\n"
+        "mini-browser list-apps: list MiniApps launchers as JSON\n"
+        "--launch-app ID: open a saved MiniApps launcher\n"
         "Ctrl+L: address  Ctrl+N: new window  Ctrl+Shift+I: import  F1: shortcuts"
     )
     raise SystemExit(0)

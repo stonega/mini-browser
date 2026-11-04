@@ -2,6 +2,7 @@
 """Install for the current user, without root or changing browser defaults."""
 
 import hashlib
+import json
 import os
 import shlex
 import shutil
@@ -82,5 +83,11 @@ shutil.copytree(
     data / "gnome-shell/extensions" / extension,
     dirs_exist_ok=True,
 )
+(data / "gnome-shell/extensions" / extension / "launcher.json").write_text(
+    json.dumps({"command": [str(binary)]}) + "\n", encoding="utf-8"
+)
 print(f"Installed {binary}\nFind Mini Browser in the GNOME app launcher.")
-print(f"For pinning, log out and back in, then run: gnome-extensions enable {extension}")
+print(
+    "MiniApps is included in Mini Browser Pin; existing enabled installations need no extra setup."
+)
+print(f"On first installation, log out and back in, then run: gnome-extensions enable {extension}")

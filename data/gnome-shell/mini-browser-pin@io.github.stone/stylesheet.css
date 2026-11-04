@@ -1,0 +1,51 @@
+.mini-apps-content {
+    spacing: 12px;
+    padding: 8px;
+    width: 480px;
+}
+
+.mini-apps-categories {
+    width: 128px;
+    spacing: 4px;
+}
+
+.mini-apps-category {
+    padding: 10px 12px;
+    border-radius: 8px;
+}
+
+.mini-apps-category:checked {
+    background-color: rgba(128, 128, 128, 0.22);
+}
+
+.mini-apps-scroll {
+    min-height: 330px;
+    max-height: 520px;
+}
+
+.mini-apps-list {
+    spacing: 2px;
+}
+
+.mini-apps-app {
+    padding: 9px 10px;
+    border-radius: 8px;
+}
+
+.mini-apps-app-content {
+    spacing: 12px;
+}
+
+.mini-apps-initial {
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    background-color: #3584e4;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+}
+
+.mini-apps-status {
+    padding: 14px 10px;
+}

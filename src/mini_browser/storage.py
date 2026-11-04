@@ -8,6 +8,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 from .navigation import is_web_url
 
+BOOKMARK_PRESETS = (
+    ("https://www.youtube.com/", "YouTube"),
+    ("https://www.bilibili.com/", "Bilibili"),
+)
+
 
 def home_app_url(value: str) -> str:
     """Validate a launcher URL and normalize its origin without changing the page."""
@@ -34,8 +39,11 @@ def bookmark_app_url(value: str) -> str:
 
 
 class Library:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, readonly=False):
         self.path = path
+        self.readonly = readonly
+        if readonly:
+            return
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         path.parent.chmod(0o700)
         with self.connect() as db:
@@ -181,7 +189,8 @@ class Library:
 
     @contextmanager
     def connect(self):
-        db = sqlite3.connect(self.path, timeout=5)
+        target = self.path.resolve().as_uri() + "?mode=ro" if self.readonly else self.path
+        db = sqlite3.connect(target, timeout=5, uri=self.readonly)
         db.row_factory = sqlite3.Row
         try:
             with db:
@@ -234,10 +243,7 @@ class Library:
     def bookmarked_apps(self) -> list[dict]:
         """Project bookmarks into one launcher per origin, with built-in presets."""
         apps = {}
-        for url, title in (
-            ("https://www.youtube.com/", "YouTube"),
-            ("https://www.bilibili.com/", "Bilibili"),
-        ):
+        for url, title in BOOKMARK_PRESETS:
             apps[url] = {"url": url, "site": url.rstrip("/"), "title": title}
         for record in self.search("bookmarks", limit=None):
             try:
@@ -251,6 +257,12 @@ class Library:
         with self.connect() as db:
             hidden = {row["url"] for row in db.execute("SELECT url FROM hidden_bookmark_apps")}
         return [app for url, app in apps.items() if url not in hidden]
+
+    def web_apps(self) -> list[dict]:
+        """The website launchers shared by Home and the GNOME panel menu."""
+        saved = self.home_apps()
+        sites = {app["site"] for app in saved}
+        return saved + [app for app in self.bookmarked_apps() if app["site"] not in sites]
 
     def record_visit(self, url: str, title: str):
         visited = time.time()

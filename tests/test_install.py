@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import runpy
 import tempfile
@@ -85,6 +86,14 @@ class InstallTests(unittest.TestCase):
             desktop = (data / "applications/io.github.stone.MiniBrowser.desktop").read_text()
             self.assertIn(f'Exec="{executable}" %U', desktop)
             self.assertTrue((data / "mini-browser/app/mini_browser/application.py").is_file())
+            extension = data / "gnome-shell/extensions/mini-browser-pin@io.github.stone"
+            self.assertTrue((extension / "extension.js").is_file())
+            self.assertTrue((extension / "miniApps.js").is_file())
+            self.assertTrue((extension / "stylesheet.css").is_file())
+            self.assertEqual(
+                json.loads((extension / "launcher.json").read_text()),
+                {"command": [str(executable)]},
+            )
             self.assertTrue(
                 (data / "mini-browser/app/mini_browser/process_supervisor.py").is_file()
             )

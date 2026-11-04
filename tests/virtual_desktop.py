@@ -1,5 +1,6 @@
 """Run the UI smoke suite on a disposable headless GNOME Wayland desktop."""
 
+import json
 import os
 import shutil
 import signal
@@ -128,6 +129,7 @@ def run_tests(root, arguments):
         "devices": "device_smoke.py",
         "deepseek": "deepseek_smoke.py",
         "apps": "apps_smoke.py",
+        "launcher": "launcher_smoke.py",
         "extensions": "extensions_smoke.py",
         "browser": "smoke.py",
         "pin": "pin_smoke.py",
@@ -145,7 +147,7 @@ def run_tests(root, arguments):
         selected = arguments[0].split("=", 1)[1]
         if selected not in tests:
             raise ValueError(
-                "Choose --test=devices, deepseek, apps, extensions, browser, pin, media, "
+                "Choose --test=devices, deepseek, apps, launcher, extensions, browser, pin, media, "
                 "passwords, cef, resources, engine, context, agent, or codecs."
             )
         filenames, arguments = (tests[selected],), arguments[1:]
@@ -308,6 +310,18 @@ def main():
         shutil.copytree(
             PROJECT / "tests/gnome-shell" / POINTER_EXTENSION,
             root / "data/gnome-shell/extensions" / POINTER_EXTENSION,
+        )
+        launcher = root / "data/gnome-shell/extensions" / PIN_EXTENSION
+        (launcher / "launcher.json").write_text(
+            json.dumps(
+                {
+                    "command": [
+                        sys.executable,
+                        str(PROJECT / "tests/launcher_smoke.py"),
+                        "--launcher",
+                    ]
+                }
+            )
         )
         log_path = root / "session.log"
         with log_path.open("wb") as log:

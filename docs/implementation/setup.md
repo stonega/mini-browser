@@ -33,6 +33,7 @@ ruff format src tests scripts/install
 ./scripts/smoke --test=devices  # focused phone UI checks, still in the isolated desktop
 ./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
 ./scripts/smoke --test=apps     # native Add forms and synthetic custom script apps
+./scripts/smoke --test=launcher # MiniApps panel menu and synthetic app launches
 ./scripts/smoke --test=extensions # unpacked MV3 extensions and process restarts
 ./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
 ./scripts/smoke --test=context   # contextual page menus, agent prompts and page saving
@@ -106,6 +107,14 @@ pages to verify page, link, image, selection, editable-field and iframe menus;
 agent clipboard prompts; password-field exclusion; page/PDF export; native
 printing handoff (with a synthetic printer); downloads; and menu cleanup across
 navigation and window closure. It is included in the default smoke suite.
+
+`./scripts/smoke --test=launcher` uses MiniApps inside the existing pin extension
+in the disposable desktop and points it at a fixture launcher. It checks that
+enabling the pin extension automatically starts MiniApps, categories, real pointer/keyboard
+activation, closed-browser startup, shared script-server cleanup, removals, long
+lists, failed catalog reads and retry, and extension disable/re-enable. An
+optional PNG filename captures the panel menu with generated app entries. It
+uses only temporary browser data and loopback pages and is in the default suite.
 
 ### H.264/AAC web video (x86_64)
 
@@ -292,7 +301,15 @@ copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.5-1.fc45.sr
 copr-cli list-builds stonegate/mini-browser
 ```
 
-The package also installs the Mini Browser Pin extension for GNOME Shell 45–51.
+The package also installs Mini Browser Pin for GNOME Shell 45–51. **MiniApps**
+is bundled inside that same extension, adding a categorized launcher to the top
+panel automatically when the extension is enabled. Existing enabled installations
+need no additional extension setup; sign out and back in after an update to load
+the new Shell code.
+`mini-browser list-apps` reads its JSON app catalog without starting GTK or CEF;
+`mini-browser --launch-app ID` opens a catalog entry using the normal application.
+The launcher does not require opt-in agent control.
+
 Log out and back in after first installation, then run
 `gnome-extensions enable mini-browser-pin@io.github.stone` to enable always-on-top
 controls. The application detects extension availability without a restart.
@@ -309,8 +326,9 @@ directory and `passwords.vault`. Restart Mini Browser to load the installed code
 `$XDG_DATA_HOME/mini-browser/app`, adds `~/.local/bin/mini-browser`, and writes
 the desktop file and scalable icon under the usual XDG data directories.
 It copies the built Chromium runtime under `app/cef-runtimes`, selected by the `app/cef` symlink (build it first), including
-its license and third-party credits. It also copies the pin extension into the user's GNOME Shell extensions directory;
-enable it with the command above after logging out and back in.
+its license and third-party credits. It also copies the bundled GNOME Shell extension
+into the user's extensions directory, including MiniApps, and sets the menu to the
+absolute user launcher path. Enable Mini Browser Pin once as described above.
 Re-running the script updates the installed copy. The launcher uses an absolute
 executable path, so `~/.local/bin` need not be on the desktop session's PATH.
 

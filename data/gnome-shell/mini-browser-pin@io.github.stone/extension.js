@@ -1,6 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import MiniApps from './miniApps.js';
 
 const BUS_NAME = 'io.github.stone.MiniBrowser.WindowPin';
 const OBJECT_PATH = '/io/github/stone/MiniBrowser/WindowPin';
@@ -29,6 +30,8 @@ export default class MiniBrowserPin extends Extension {
         this._export.export(Gio.DBus.session, OBJECT_PATH);
         this._name = Gio.bus_own_name_on_connection(
             Gio.DBus.session, BUS_NAME, Gio.BusNameOwnerFlags.NONE, null, null);
+        this._miniApps = new MiniApps(this);
+        this._miniApps.enable();
     }
 
     _find(path, invocation) {
@@ -120,6 +123,8 @@ export default class MiniBrowserPin extends Extension {
     }
 
     disable() {
+        this._miniApps.disable();
+        this._miniApps = null;
         Gio.bus_unown_name(this._name);
         this._export.unexport();
         for (const [window, entry] of this._windows) {

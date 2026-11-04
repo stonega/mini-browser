@@ -520,11 +520,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         """Refresh app launchers and the history tab when it is visible."""
         self._dismiss_app_menu()
         self.app_tiles.remove_all()
-        saved = self.library.home_apps()
-        saved_sites = {app["site"] for app in saved}
-        records = saved + [
-            app for app in self.library.bookmarked_apps() if app["site"] not in saved_sites
-        ]
+        records = self.library.web_apps()
         devices = self.get_application().device_tiles()
         icon = Gtk.Image.new_from_file(str(DEEPSEEK_ICON))
         icon.set_pixel_size(44)

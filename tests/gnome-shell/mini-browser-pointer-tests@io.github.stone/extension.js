@@ -2,6 +2,7 @@
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
@@ -42,6 +43,10 @@ const XML = `<node><interface name="${NAME}">
         <arg type="o" direction="in"/>
         <arg type="b" direction="in"/><arg type="b" direction="in"/>
         <arg type="b" direction="out"/><arg type="b" direction="out"/>
+    </method>
+    <method name="MiniApps">
+        <arg type="o" direction="in"/><arg type="s" direction="in"/>
+        <arg type="s" direction="in"/><arg type="s" direction="out"/>
     </method>
 </interface></node>`;
 
@@ -119,6 +124,75 @@ export default class PointerTests extends Extension {
 
     ClickAsync([path, x, y, button], invocation) {
         this._interact(path, x, y, 0, 0, 0, invocation, button);
+    }
+
+    async MiniAppsAsync([path, action, value], invocation) {
+        if (!this._window(path, invocation))
+            return;
+        const indicator = Main.panel.statusArea.miniApps;
+        const descendants = actor => [actor, ...actor.get_children().flatMap(descendants)];
+        try {
+            if (action === 'open') {
+                Main.overview.hide();
+                indicator.menu.open();
+            } else if (action === 'close') {
+                indicator.menu.close();
+            } else if (action === 'click' || action === 'focus') {
+                const button = descendants(indicator.menu.box).find(actor =>
+                    actor.name === value || actor.accessible_name === value);
+                if (!button)
+                    throw new Error('No matching MiniApps button.');
+                if (action === 'focus') {
+                    button.grab_key_focus();
+                } else {
+                    const [x, y] = button.get_transformed_position();
+                    const [width, height] = button.get_transformed_size();
+                    let step = 0;
+                    await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+                        step++;
+                        if (step <= 3)
+                            this._pointer.notify_absolute_motion(GLib.get_monotonic_time(), x + width / 2, y + height / 2);
+                        else if (step === 4)
+                            this._pointer.notify_button(GLib.get_monotonic_time(), 1, Clutter.ButtonState.PRESSED);
+                        else if (step === 6)
+                            this._pointer.notify_button(GLib.get_monotonic_time(), 1, Clutter.ButtonState.RELEASED);
+                        else if (step === 7) {
+                            resolve();
+                            return GLib.SOURCE_REMOVE;
+                        }
+                        return GLib.SOURCE_CONTINUE;
+                    }));
+                }
+            } else if (action === 'key') {
+                const key = {Return: Clutter.KEY_Return, Escape: Clutter.KEY_Escape}[value];
+                if (!key)
+                    throw new Error('Unsupported test key.');
+                this._keyboard.notify_keyval(GLib.get_monotonic_time(), key, Clutter.KeyState.PRESSED);
+                this._keyboard.notify_keyval(GLib.get_monotonic_time(), key, Clutter.KeyState.RELEASED);
+            } else if (action === 'snapshot') {
+                const stream = Gio.File.new_for_path(value).replace(null, false, Gio.FileCreateFlags.NONE, null);
+                try {
+                    await new Shell.Screenshot().screenshot(false, stream);
+                } finally {
+                    stream.close(null);
+                }
+            } else if (action !== 'state') {
+                throw new Error('Unsupported MiniApps test action.');
+            }
+            const actors = indicator ? descendants(indicator.menu.box) : [];
+            const state = {
+                exists: !!indicator,
+                open: indicator?.menu.isOpen ?? false,
+                apps: actors.filter(actor => actor.has_style_class_name?.('mini-apps-app')).map(actor => actor.name),
+                selected: actors.filter(actor => actor.has_style_class_name?.('mini-apps-category') &&
+                    actor.has_style_pseudo_class('checked')).map(actor => actor.accessible_name),
+                labels: actors.filter(actor => actor.has_style_class_name?.('mini-apps-status')).map(actor => actor.text),
+                width: indicator?.menu.actor.width ?? 0,
+            };
+            invocation.return_value(new GLib.Variant('(s)', [JSON.stringify(state)]));
+        } catch (error) {
+            invocation.return_dbus_error('org.freedesktop.DBus.Error.Failed', error.message);
+        }
     }
 
     _interact(path, x, y, dx, dy, hold, invocation, button = 1) {

@@ -3,6 +3,24 @@
 Launch Mini Browser from GNOME, or run `./scripts/run` in the project. Enter a
 website or search in the home page's input bar, then press Enter or its arrow.
 Searches use Google by default, including searches from Ctrl+L and the command line.
+
+**MiniApps** is included in the app's existing **Mini Browser Pin** GNOME Shell
+extension and adds a top-panel menu beside the desktop's app controls. It uses
+a two-column launcher with **All Apps**,
+**Websites**, and **Scripts** on the left and app icons and names on the right.
+Click an app to open it in Mini Browser, including when the browser is closed.
+Websites share Home's saved apps, bookmarked sites, presets, and uninstall choices;
+Scripts includes DeepSeek Harness and saved script apps. Script servers retain
+the same managed lifetime as launches from Home. The menu refreshes each time it
+opens, and long lists scroll. Tab/arrow keys move focus, Enter activates an app,
+and Escape closes the menu. **Open Mini Browser** opens Home to manage apps.
+
+RPM and user installations install and update MiniApps together with Mini Browser
+Pin. Existing enabled installations need no separate extension installation or
+enable command. Sign out and back in once after updating so GNOME loads the new
+extension code. On a first installation, enable **Mini Browser Pin** in GNOME
+Extensions after signing back in. Disabling it removes MiniApps and pinning.
+
 The Home tabs, search bar and cards share a centered content area up to 600 pixels
 wide, shrinking to fit narrower windows.
 Home has **Apps**, **History**, and **Agent** tabs. Apps shows devices, script apps

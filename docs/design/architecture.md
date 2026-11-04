@@ -105,6 +105,26 @@ requests for transport timeout. Updates refresh every browser window, and new
 windows receive the same records. Nothing is saved to the library or disk.
 `navigation.address_to_uri` resolves input from Home, the address dialog, and
 the launcher. Search text opens Google with a URL-encoded query.
+
+`data/gnome-shell/mini-browser-pin@io.github.stone/miniApps.js` provides **MiniApps**
+inside the existing pin extension. Its `enable`/`disable` lifecycle starts and
+stops the launcher alongside window pinning, so the existing app installer and
+extension enable state cover both features. A `PanelMenu.Button` owns
+category buttons and a scrollable app list, using Shell's popup styling and
+native keyboard focus. Opening the menu asynchronously runs
+`mini-browser list-apps`; `launcher.py` routes this command before GTK/CEF imports
+and reads SQLite in read-only mode without initializing, migrating, or changing
+profile permissions. It returns app IDs, labels, categories, and bundled icons, omitting
+history, credentials, script commands, and working directories. `Library.web_apps`
+shares saved-site precedence and uninstall filtering with Home. No persistent
+catalog or polling is needed; closed-browser launches work from the saved library.
+Selecting an app passes `--launch-app ID` as an argument vector without a shell.
+The application checks that the ID is still installed and reuses the existing
+website/script launch lifecycle. Each install supplies its executable in the
+extension's `launcher.json`; user installs preserve paths containing spaces.
+Disabling the shared extension cancels pending reads, removes its panel button
+and menu, and restores managed window pin states.
+
 Settings uses a
 native `Adw.PreferencesDialog` for imports, passwords, the library, site
 permissions, and shortcuts.

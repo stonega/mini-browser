@@ -12,6 +12,7 @@ A native GNOME web browser with a small footprint on your screen.
 - A home page with Apps, History and Agent tabs, phone and script apps, bookmarks,
   complete saved history, a copyable agent prompt, and session action records.
 - A DeepSeek launcher with its official icon and managed local-server lifetime.
+- A **MiniApps** top-panel launcher included in the bundled GNOME Shell extension.
 - Native Android mirroring with basic input, and authenticated iPhone AirPlay viewing.
 - Automatic Android phone tiles, with scrcpy's phone-side helper included in the app.
 - Chrome/Chromium bookmark and history import, plus bookmark HTML exports.
