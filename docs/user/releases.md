@@ -1,5 +1,27 @@
 # Release notes
 
+## 0.4.6 — November 4, 2026
+
+- Add **MiniApps**, a native GNOME top-panel launcher with **All Apps**,
+  **Websites**, and **Scripts** categories, app icons and names, scrollable
+  lists, and mouse and keyboard activation.
+- Bundle MiniApps inside the existing **Mini Browser Pin** extension (version 4).
+  The normal RPM and user installers include it; existing enabled installations
+  need no separate extension installation or enable command.
+- Launch saved websites, bookmarked sites, presets, DeepSeek Harness, and saved
+  script apps directly from the panel, including when Mini Browser is closed.
+  Home and MiniApps share saved-app precedence and uninstall choices. Script
+  apps keep their normal managed server lifetime and cleanup.
+- Read the app catalog without starting GTK or Chromium, refreshing it each
+  time the menu opens. Launch IDs are checked against currently installed apps.
+
+Close all Mini Browser windows and reopen the app after upgrading. Sign out of
+GNOME and back in once to load the updated Shell extension. Existing Mini Browser
+Pin enable settings are retained; first-time users enable that bundled extension
+as described in the setup guide. Bookmarks, history, website sessions and the
+encrypted vault are preserved. H.264/AAC remains available on Fedora 45 and
+Rawhide x86_64; Fedora 43/44 and aarch64 retain the stock CEF engine.
+
 ## 0.4.5 — November 1, 2026
 
 - Add a separate Extensions window with searchable Installed and Market tabs.
