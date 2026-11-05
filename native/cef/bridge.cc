@@ -16,6 +16,7 @@
 #include "include/cef_browser.h"
 #include "include/cef_client.h"
 #include "include/cef_devtools_message_observer.h"
+#include "include/cef_image.h"
 #include "include/cef_parser.h"
 #include "include/cef_request_context.h"
 #include "include/cef_task.h"
@@ -83,6 +84,34 @@ bool navigable(const CefString &url) {
   const auto scheme = CefString(&parts.scheme).ToString();
   return scheme == "http" || scheme == "https";
 }
+
+class IconDownload final : public CefDownloadImageCallback {
+public:
+  IconDownload(int view, int message) : view_(view), message_(message) {}
+  void OnDownloadImageFinished(const CefString &, int status,
+                               CefRefPtr<CefImage> image) override {
+    auto data = dict();
+    int width = 0, height = 0;
+    auto png = image && status < 400
+                   ? image->GetAsPNG(1.0f, true, width, height)
+                   : nullptr;
+    if (png && width > 0 && height > 0 && width <= 256 && height <= 256 &&
+        png->GetSize() <= 1024 * 1024) {
+      std::vector<unsigned char> bytes(png->GetSize());
+      png->GetData(bytes.data(), bytes.size(), 0);
+      data->SetString("data", CefBase64Encode(bytes.data(), bytes.size()));
+    }
+    auto value = CefValue::Create();
+    value->SetDictionary(data);
+    const auto json = CefWriteJSON(value, JSON_WRITER_DEFAULT).ToString();
+    if (result_callback)
+      result_callback(view_, message_, 1, json.data(), json.size());
+  }
+
+private:
+  int view_, message_;
+  IMPLEMENT_REFCOUNTING(IconDownload);
+};
 std::string ExtensionHost(const CefString &url) {
   CefURLParts parts;
   if (!CefParseURL(url, parts) ||
@@ -774,7 +803,7 @@ CefRefPtr<CefBrowser> page(int id) {
 } // namespace
 
 extern "C" {
-int mini_cef_abi_version() { return 8; }
+int mini_cef_abi_version() { return 9; }
 const char *mini_cef_version() { return CEF_VERSION; }
 int mini_cef_initialize(const char *runtime, const char *profile,
                         const char *cache, const char *extensions,
@@ -1020,6 +1049,19 @@ int mini_cef_command(int id, int message, const char *method,
     auto value = CefParseJSON(json, JSON_PARSER_RFC);
     if (!value || value->GetType() != VTYPE_DICTIONARY)
       return 0;
+    if (std::strcmp(method, "MiniBrowser.downloadIcon") == 0) {
+      const auto params = value->GetDictionary();
+      const auto url = params->GetString("url");
+      CefURLParts parts;
+      if (!CefParseURL(url, parts) || !navigable(url) ||
+          !CefString(&parts.username).empty() ||
+          !CefString(&parts.password).empty() ||
+          browser->GetMainFrame()->GetURL() != params->GetString("document"))
+        return 0;
+      browser->GetHost()->DownloadImage(url, true, 256, false,
+                                        new IconDownload(id, message));
+      return 1;
+    }
     return browser->GetHost()->ExecuteDevToolsMethod(message, method,
                                                      value->GetDictionary());
   });

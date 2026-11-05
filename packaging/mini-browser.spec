@@ -107,7 +107,7 @@ cp -p %{SOURCE4} %{SOURCE5} %{SOURCE6} %{SOURCE7} %{SOURCE8} build/cef-codec-pac
 install -d %{buildroot}%{_datadir}/%{name}/mini_browser
 install -m 0644 src/mini_browser/*.py %{buildroot}%{_datadir}/%{name}/mini_browser/
 install -d %{buildroot}%{_datadir}/%{name}/mini_browser/icons
-install -m 0644 src/mini_browser/icons/*.svg \
+install -m 0644 src/mini_browser/icons/*.svg src/mini_browser/icons/*.png \
     %{buildroot}%{_datadir}/%{name}/mini_browser/icons/
 install -d %{buildroot}%{_datadir}/%{name}/mini_browser/vendor/scrcpy
 install -m 0644 src/mini_browser/vendor/scrcpy/* \

@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from mini_browser.launcher import app_catalog
 from mini_browser.script_apps import ScriptAppStore
@@ -19,6 +20,9 @@ class LauncherTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        environment = patch.dict(os.environ, {"XDG_CACHE_HOME": str(self.root / "cache")})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.path = self.root / "mini-browser/library.sqlite3"
         self.library = Library(self.path)
 
@@ -34,7 +38,13 @@ class LauncherTests(unittest.TestCase):
             {"web:" + app["url"] for app in self.library.web_apps()},
         )
         self.assertIn(
-            {"id": "web:" + saved["url"], "title": saved["title"], "category": "websites"}, records
+            {
+                "id": "web:" + saved["url"],
+                "title": saved["title"],
+                "category": "websites",
+                "avatar": {"text": "example.org", "initials": "E", "color": 8},
+            },
+            records,
         )
         self.assertNotIn("web:https://example.org/", {record["id"] for record in websites})
         self.library.uninstall_web_app(saved["url"])

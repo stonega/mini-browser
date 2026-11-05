@@ -36,6 +36,7 @@ export default class MiniApps {
         this._cancellable = null;
         this._launches = new Set();
         this._button = new PanelMenu.Button(0, 'MiniApps');
+        this._button.menu.setSourceAlignment(0);
         this._button.add_child(new St.Label({
             text: 'MiniApps', y_align: Clutter.ActorAlign.CENTER,
         }));
@@ -123,25 +124,18 @@ export default class MiniApps {
                 style_class: 'mini-apps-app-content', x_expand: true,
             });
             if (app.icon) {
-                const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-                const icon = St.TextureCache.get_default().load_file_async(
-                    Gio.File.new_for_path(app.icon), 32, 32, scale, 1);
-                const image = new St.Widget({
-                    layout_manager: new Clutter.BinLayout(), width: 32, height: 32,
-                });
-                const fallback = new St.Icon({icon_name: 'utilities-terminal-symbolic', icon_size: 32});
-                image.add_child(fallback);
-                image.add_child(icon);
-                const loaded = () => fallback.visible = !icon.content;
-                icon.connect('notify::content', loaded);
-                loaded();
-                body.add_child(image);
+                body.add_child(new St.Icon({
+                    gicon: new Gio.FileIcon({file: Gio.File.new_for_path(app.icon)}),
+                    icon_size: 32,
+                }));
             } else if (app.category === 'scripts') {
                 body.add_child(new St.Icon({icon_name: 'utilities-terminal-symbolic', icon_size: 32}));
             } else {
-                const badge = new St.Bin({style_class: 'mini-apps-initial'});
+                const badge = new St.Bin({
+                    style_class: `mini-apps-initial mini-apps-color${app.avatar.color}`,
+                });
                 badge.set_child(new St.Label({
-                    text: Array.from(app.title.trim())[0]?.toUpperCase() || 'W',
+                    text: app.avatar.initials,
                     x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER,
                 }));
                 body.add_child(badge);

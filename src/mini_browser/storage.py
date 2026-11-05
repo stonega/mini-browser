@@ -1,5 +1,6 @@
 """Private, local SQLite library. Connections belong to their calling thread."""
 
+import re
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -38,6 +39,31 @@ def bookmark_app_url(value: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
 
 
+def app_title(value):
+    if not isinstance(value, str) or any(ord(char) < 32 or ord(char) == 127 for char in value):
+        raise ValueError("App title must be plain text between 1 and 200 characters.")
+    value = " ".join(value.split())
+    if not 1 <= len(value) <= 200:
+        raise ValueError("App title must be plain text between 1 and 200 characters.")
+    return value
+
+
+def app_launch_url(origin, relative):
+    if not isinstance(relative, str):
+        raise ValueError("Enter a path after the domain, such as /dashboard.")
+    relative = relative.strip()
+    parts = urlsplit(relative)
+    if (
+        parts.scheme
+        or parts.netloc
+        or relative.startswith("//")
+        or "\\" in relative
+        or any(ord(char) < 32 or ord(char) == 127 for char in relative)
+    ):
+        raise ValueError("Enter a path after the domain, such as /dashboard.")
+    return home_app_url(bookmark_app_url(origin).rstrip("/") + "/" + relative.lstrip("/"))
+
+
 class Library:
     def __init__(self, path: Path, *, readonly=False):
         self.path = path
@@ -73,6 +99,10 @@ class Library:
                 );
                 CREATE TABLE IF NOT EXISTS hidden_bookmark_apps (
                     url TEXT PRIMARY KEY
+                );
+                CREATE TABLE IF NOT EXISTS home_app_icons (
+                    url TEXT PRIMARY KEY,
+                    filename TEXT NOT NULL
                 );
                 CREATE TABLE IF NOT EXISTS window_sizes (
                     kind TEXT NOT NULL,
@@ -262,7 +292,49 @@ class Library:
         """The website launchers shared by Home and the GNOME panel menu."""
         saved = self.home_apps()
         sites = {app["site"] for app in saved}
-        return saved + [app for app in self.bookmarked_apps() if app["site"] not in sites]
+        records = saved + [app for app in self.bookmarked_apps() if app["site"] not in sites]
+        with self.connect() as db:
+            icons = (
+                dict(db.execute("SELECT url, filename FROM home_app_icons"))
+                if db.execute("SELECT 1 FROM sqlite_master WHERE name='home_app_icons'").fetchone()
+                else {}
+            )
+        for record in records:
+            name = icons.get(record["url"], "")
+            if re.fullmatch(r"[a-f0-9]{64}\.png", name):
+                path = self.path.parent / "app-icons" / name
+                if path.is_file():
+                    record["icon"] = str(path)
+        return records
+
+    def edit_web_app(self, original_url, title, relative, *, icon=None):
+        original_url = home_app_url(original_url)
+        title = app_title(title)
+        url = app_launch_url(original_url, relative)
+        if icon is not None and icon != "" and not re.fullmatch(r"[a-f0-9]{64}\.png", icon):
+            raise ValueError("Choose a valid app icon.")
+        if not any(record["url"] == original_url for record in self.web_apps()):
+            raise ValueError("This app was removed. Reopen Home and try again.")
+        with self.connect() as db:
+            previous = db.execute("SELECT * FROM home_apps WHERE url=?", (original_url,)).fetchone()
+            if (
+                url != original_url
+                and db.execute("SELECT 1 FROM home_apps WHERE url=?", (url,)).fetchone()
+            ):
+                raise ValueError("Another app already opens this address. Choose a different path.")
+            old_icon = db.execute(
+                "SELECT filename FROM home_app_icons WHERE url=?", (original_url,)
+            ).fetchone()
+            db.execute("DELETE FROM home_apps WHERE url=?", (original_url,))
+            db.execute("DELETE FROM home_app_icons WHERE url=?", (original_url,))
+            db.execute(
+                "INSERT INTO home_apps (url, title, created_at) VALUES (?, ?, ?)",
+                (url, title, previous["created_at"] if previous else time.time()),
+            )
+            filename = icon if icon is not None else (old_icon[0] if old_icon else "")
+            if filename:
+                db.execute("INSERT INTO home_app_icons VALUES (?, ?)", (url, filename))
+        return next(record for record in self.web_apps() if record["url"] == url)
 
     def record_visit(self, url: str, title: str):
         visited = time.time()
@@ -293,11 +365,7 @@ class Library:
         """Save a durable Home tile without visiting the page or changing history."""
         url = home_app_url(url)
         if title is not None:
-            if not isinstance(title, str) or any(ord(char) < 32 for char in title):
-                raise ValueError("App title must be plain text between 1 and 200 characters.")
-            title = " ".join(title.split())
-            if not 1 <= len(title) <= 200:
-                raise ValueError("App title must be plain text between 1 and 200 characters.")
+            title = app_title(title)
         with self.connect() as db:
             db.execute(
                 """INSERT INTO home_apps VALUES (?, ?, ?)
@@ -322,6 +390,7 @@ class Library:
     def remove_home_app(self, url: str) -> bool:
         url = home_app_url(url)
         with self.connect() as db:
+            db.execute("DELETE FROM home_app_icons WHERE url=?", (url,))
             return db.execute("DELETE FROM home_apps WHERE url=?", (url,)).rowcount > 0
 
     def uninstall_web_app(self, url: str):
@@ -330,6 +399,7 @@ class Library:
         root = bookmark_app_url(url)
         with self.connect() as db:
             db.execute("DELETE FROM home_apps WHERE url=?", (url,))
+            db.execute("DELETE FROM home_app_icons WHERE url=?", (url,))
             db.execute("INSERT OR IGNORE INTO hidden_bookmark_apps VALUES (?)", (root,))
 
     def recent_apps(self, limit: int = 6, *, exclude_sites=()) -> list[dict]:

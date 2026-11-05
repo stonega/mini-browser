@@ -14,7 +14,6 @@ from collections import deque
 from pathlib import Path
 from urllib.parse import urlsplit
 
-ICON = Path(__file__).with_name("icons") / "deepseek.svg"
 COMMAND = (
     "npx",
     "--yes",

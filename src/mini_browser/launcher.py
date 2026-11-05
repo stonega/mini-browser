@@ -6,26 +6,40 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from .app_icons import DEEPSEEK_ICON, website_avatar
+from .site_icons import SiteIconCache
 from .storage import BOOKMARK_PRESETS, Library
 
 
-def app_catalog(library=None):
+def app_catalog(library=None, icon_cache=None):
     """Expose launch IDs and labels only, never script commands or browsing history."""
     websites = (
         library.web_apps()
         if library is not None
-        else [{"url": url, "title": title} for url, title in BOOKMARK_PRESETS]
+        else [
+            {"url": url, "site": url.rstrip("/"), "title": title} for url, title in BOOKMARK_PRESETS
+        ]
     )
     records = [
-        {"id": "web:" + app["url"], "title": app["title"], "category": "websites"}
+        {
+            "id": "web:" + app["url"],
+            "title": app["title"],
+            "category": "websites",
+            "avatar": website_avatar(app["site"]),
+        }
         for app in websites
     ]
+    icon_cache = icon_cache or SiteIconCache()
+    for app, record in zip(websites, records, strict=True):
+        path = app.get("icon") or icon_cache.path_for(app["url"])
+        if path and Path(path).is_file():
+            record["icon"] = str(path)
     records.append(
         {
             "id": "builtin:deepseek",
             "title": "DeepSeek Harness",
             "category": "scripts",
-            "icon": str(Path(__file__).with_name("icons") / "deepseek.svg"),
+            "icon": str(DEEPSEEK_ICON),
         }
     )
     if library is not None:

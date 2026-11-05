@@ -21,6 +21,7 @@ from .gtk import Adw, Gdk, Gio, GLib, GObject, Gtk, Web
 from .launcher import app_catalog
 from .navigation import address_to_uri
 from .script_apps import ScriptAppHarness, ScriptAppStore
+from .site_icons import SiteIconCache
 from .storage import Library
 from .vault import PasswordVault
 from .window import BrowserWindow
@@ -85,6 +86,7 @@ class BrowserApplication(Adw.Application):
             )
             / "mini-browser"
         )
+        self.site_icons = SiteIconCache(self.cache_dir / "site-icons")
 
     def do_startup(self):
         Adw.Application.do_startup(self)
@@ -338,7 +340,8 @@ class BrowserApplication(Adw.Application):
         return 0
 
     def launch_app(self, identifier):
-        if identifier not in {record["id"] for record in app_catalog(self.library)}:
+        catalog = app_catalog(self.library, self.site_icons)
+        if identifier not in {record["id"] for record in catalog}:
             raise ValueError("This app is no longer installed. Reopen MiniApps and try again.")
         if identifier.startswith("web:"):
             return self.new_window(identifier.removeprefix("web:"))

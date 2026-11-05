@@ -40,11 +40,27 @@
     width: 32px;
     height: 32px;
     border-radius: 16px;
-    background-color: #3584e4;
-    color: white;
+    background-gradient-direction: vertical;
     font-weight: bold;
+    font-size: 16px;
     text-align: center;
 }
+
+/* Match libadwaita's Adw.Avatar palette used on Home. */
+.mini-apps-color1 { background-gradient-start: #83b6ec; background-gradient-end: #337fdc; color: #cfe1f5; }
+.mini-apps-color2 { background-gradient-start: #7ad9f1; background-gradient-end: #0f9ac8; color: #caeaf2; }
+.mini-apps-color3 { background-gradient-start: #8de6b1; background-gradient-end: #29ae74; color: #cef8d8; }
+.mini-apps-color4 { background-gradient-start: #b5e98a; background-gradient-end: #6ab85b; color: #e6f9d7; }
+.mini-apps-color5 { background-gradient-start: #f8e359; background-gradient-end: #d29d09; color: #f9f4e1; }
+.mini-apps-color6 { background-gradient-start: #ffcb62; background-gradient-end: #d68400; color: #ffead1; }
+.mini-apps-color7 { background-gradient-start: #ffa95a; background-gradient-end: #ed5b00; color: #ffe5c5; }
+.mini-apps-color8 { background-gradient-start: #f78773; background-gradient-end: #e62d42; color: #f8d2ce; }
+.mini-apps-color9 { background-gradient-start: #e973ab; background-gradient-end: #e33b6a; color: #fac7de; }
+.mini-apps-color10 { background-gradient-start: #cb78d4; background-gradient-end: #9945b5; color: #e7c2e8; }
+.mini-apps-color11 { background-gradient-start: #9e91e8; background-gradient-end: #7a59ca; color: #d5d2f5; }
+.mini-apps-color12 { background-gradient-start: #e3cf9c; background-gradient-end: #b08952; color: #f2eade; }
+.mini-apps-color13 { background-gradient-start: #be916d; background-gradient-end: #785336; color: #e5d6ca; }
+.mini-apps-color14 { background-gradient-start: #c0bfbc; background-gradient-end: #6e6d71; color: #d8d7d3; }
 
 .mini-apps-status {
     padding: 14px 10px;

@@ -59,7 +59,7 @@ class Bridge:
                 "Could not load Chromium. Rebuild with ./scripts/build-cef."
             ) from error
         self.native.mini_cef_abi_version.restype = ctypes.c_int
-        if self.native.mini_cef_abi_version() != 8:
+        if self.native.mini_cef_abi_version() != 9:
             raise ImportError("Chromium bridge version mismatch. Run ./scripts/build-cef again.")
         signatures = {
             "abi_version": ([], ctypes.c_int),

@@ -99,6 +99,7 @@ class InstallTests(unittest.TestCase):
             )
             icon = data / "mini-browser/app/mini_browser/icons/deepseek.svg"
             self.assertIn("Copyright (c) 2026 DeepSeek", icon.read_text())
+            self.assertTrue(icon.with_suffix(".png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n"))
             app_icon = data / "mini-browser/app/mini_browser/icons/io.github.stone.MiniBrowser.svg"
             self.assertEqual(
                 app_icon.read_bytes(),

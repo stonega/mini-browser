@@ -78,7 +78,13 @@ history and Bookmark App. Window dimensions use the working folder and argument
 list as their script key. Uninstall removes the saved script record and refreshes
 Home windows; open leases keep running until released, without deleting files.
 Website tiles have a secondary-click gesture and keyboard context menu
-(Shift+F10/Menu) exposing **Uninstall** through a native `Gtk.PopoverMenu`.
+(Shift+F10/Menu) exposing **Edit** before **Uninstall** through a native `Gtk.PopoverMenu`.
+`EditWebAppDialog` edits the title, origin-relative launch path, and optional
+custom image. Save atomically updates the exact Home URL and `home_app_icons`
+mapping, preserving ordering and the source bookmarks. Duplicate destination
+URLs and paths that change the origin are rejected. Custom images are decoded,
+scaled to at most 256 pixels, and copied as immutable PNGs under private
+`app-icons` data. Cancelling the modal makes no library changes.
 The window owns one temporary popover and detaches it before rebuilding the
 grid or closing. Uninstall atomically deletes the selected exact `home_apps`
 URL and records its normalized origin root in `hidden_bookmark_apps`, suppressing
@@ -115,9 +121,24 @@ native keyboard focus. Opening the menu asynchronously runs
 `mini-browser list-apps`; `launcher.py` routes this command before GTK/CEF imports
 and reads SQLite in read-only mode without initializing, migrating, or changing
 profile permissions. It returns app IDs, labels, categories, and bundled icons, omitting
-history, credentials, script commands, and working directories. `Library.web_apps`
-shares saved-site precedence and uninstall filtering with Home. No persistent
-catalog or polling is needed; closed-browser launches work from the saved library.
+history, credentials, script commands, and working directories.
+`site_icon_capture.py` examines loaded HTTP(S) documents in an isolated Chromium
+world. It prefers web manifest icons, then Apple touch icons, declared favicons,
+and `/favicon.ico`, trying the next candidate when downloading or decoding fails.
+Manifest reads are bounded to 128 KiB and 2.5 seconds. CEF downloads images
+without sending or accepting cookies and decodes them into PNGs up to 256 pixels
+and 1 MiB. TLS verification and the sandbox stay enabled. Generation and document
+checks discard results after navigation or closure; script apps are excluded.
+`site_icons.py` atomically caches those PNGs by origin under `site-icons` in the
+app cache, using content-derived filenames so Shell never reuses an outdated
+texture. Home and the headless catalog read the same files without new network
+requests. Custom app images take precedence. Missing icons use
+`app_icons.website_avatar` and libadwaita's avatar palette; the panel loads images
+through `St.Icon`/`Gio.FileIcon`.
+Home and the panel share a 256-pixel PNG rendered from the retained DeepSeek SVG,
+so Shell does not depend on an optional GdkPixbuf SVG loader.
+`Library.web_apps` shares saved-site precedence and uninstall filtering with Home.
+No persistent catalog or polling is needed; closed-browser launches work from the saved library.
 Selecting an app passes `--launch-app ID` as an argument vector without a shell.
 The application checks that the ID is still installed and reuses the existing
 website/script launch lifecycle. Each install supplies its executable in the
@@ -594,7 +615,7 @@ including when the original manager closed while work was in progress.
 Invalid/unavailable enabled folders
 are reported and skipped at startup. Chromium validates the complete manifest.
 Before initializing CEF, the application passes validated enabled paths through
-bridge ABI 8. The browser process uses `load-extension` and
+bridge ABI 9. The browser process uses `load-extension` and
 `disable-extensions-except` with that list; with no enabled extensions it keeps
 `disable-extensions`. Changes require a complete application restart. No debugging
 port, unsafe extension debugging flag or browser-session CDP channel is exposed.

@@ -34,6 +34,7 @@ ruff format src tests scripts/install
 ./scripts/smoke --test=deepseek # synthetic local-app lifecycle checks; no npm downloads
 ./scripts/smoke --test=apps     # native Add forms and synthetic custom script apps
 ./scripts/smoke --test=launcher # MiniApps panel menu and synthetic app launches
+./scripts/smoke --test=icons    # website icon loading and the native Edit app modal
 ./scripts/smoke --test=extensions # unpacked MV3 extensions and process restarts
 ./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
 ./scripts/smoke --test=context   # contextual page menus, agent prompts and page saving
@@ -54,9 +55,9 @@ for an offline, checksum-verified build. Runtime output is `build/cef/runtime`.
 `MINI_BROWSER_CEF_RUNTIME` can select an alternate compatible runtime. The
 bridge ABI must match the Python adapter; rebuild it after changing
 `native/cef/bridge.cc`.
-Extension popup support uses bridge ABI 8; rebuild the runtime before launching an
-updated Python checkout. The Extensions window, opened from the three-line main
-menu, registers unpacked Manifest V3
+Website icon loading and extension popup support use bridge ABI 9; rebuild the
+runtime before launching an updated Python checkout. The Extensions window,
+opened from the three-line main menu, registers unpacked Manifest V3
 folders and applies changes on a full application restart. This uses CEF's
 Chrome bootstrap while retaining the existing Alloy windowless GTK surface;
 Extension popups and requested extension pages use standalone GTK windows with
@@ -116,6 +117,13 @@ activation, closed-browser startup, shared script-server cleanup, removals, long
 lists, failed catalog reads and retry, and extension disable/re-enable. An
 optional PNG filename captures the panel menu with generated app entries. It
 uses only temporary browser data and loopback pages and is in the default suite.
+
+`./scripts/smoke --test=icons` checks manifest SVG icons, declared and default
+favicons, invalid-image fallback, stale navigation results, shared Home/panel PNG
+paths, and the native Edit app modal. It covers title/path changes, origin
+validation, custom image copying and reset, persistence, and launching the edited
+URL. Optional PNG output captures the editor and Home. All sites and images are
+synthetic loopback fixtures.
 
 ### H.264/AAC web video (x86_64)
 

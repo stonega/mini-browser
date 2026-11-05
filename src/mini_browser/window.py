@@ -4,10 +4,10 @@ from datetime import datetime
 from sqlite3 import Error as DatabaseError
 
 from . import APP_NAME, autofill, permissions
-from .app_dialogs import AddAppDialog
+from .app_dialogs import AddAppDialog, EditWebAppDialog
+from .app_icons import DEEPSEEK_ICON, website_avatar
 from .audio_player import AudioPlayer
 from .deepseek import COMMAND as DEEPSEEK_COMMAND
-from .deepseek import ICON as DEEPSEEK_ICON
 from .dialogs import (
     about_dialog,
     address_dialog,
@@ -22,6 +22,7 @@ from .navigation import RETARGET, address_to_uri, is_web_url
 from .password_dialogs import fill_login, passwords_dialog
 from .permission_dialogs import permission_prompt, permissions_dialog
 from .script_loading import ScriptLoading
+from .site_icon_capture import SiteIconCapture
 from .video_player import VideoPlayer
 from .window_pin import WindowPin
 from .window_size import DEFAULT_SIZE, WindowSizeMemory, script_app_key, web_app_key
@@ -91,6 +92,9 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._permission_current = None
         self._permission_origin = None
         self.webview = Web.View(network_session=app.network_session)
+        self.site_icon_capture = SiteIconCapture(
+            self.webview, app.site_icons, self.refresh_app_windows
+        )
         self._user_content_manager = self.webview.get_user_content_manager()
         self._user_content_manager.add_script(
             Web.UserScript.new_for_world(
@@ -586,49 +590,70 @@ class BrowserWindow(Adw.ApplicationWindow):
             )
             self.app_tiles.append(button)
         for record in records:
-            host = record["site"].split("://", 1)[1].removeprefix("www.")
+            host = website_avatar(record["site"])["text"]
             title = " ".join((record["title"] or host).split())
+            icon_path = record.get("icon") or self.get_application().site_icons.path_for(
+                record["url"]
+            )
+            icon = (
+                Gtk.Image.new_from_file(str(icon_path))
+                if icon_path
+                else Adw.Avatar(size=44, text=host, show_initials=True)
+            )
+            if icon_path:
+                icon.set_pixel_size(44)
             button = self._app_tile(
                 title,
                 host,
-                Adw.Avatar(size=44, text=host, show_initials=True),
+                icon,
                 lambda _button, url=record["url"]: self.load_uri(url),
             )
             button.set_tooltip_text(f"{title}\n{record['url']}")
-            self._app_context(button, lambda url=record["url"]: self._uninstall_web_app(url))
+            self._app_context(
+                button,
+                lambda url=record["url"]: self._uninstall_web_app(url),
+                lambda record=record: self._edit_web_app(record),
+            )
             self.app_tiles.append(button)
         self._home_section_changed()
 
-    def _app_context(self, button, uninstall):
+    def _app_context(self, button, uninstall, edit=None):
         click = Gtk.GestureClick(
             button=Gdk.BUTTON_SECONDARY, propagation_phase=Gtk.PropagationPhase.CAPTURE
         )
-        click.connect("pressed", self._app_context_pressed, uninstall)
+        click.connect("pressed", self._app_context_pressed, uninstall, edit)
         button.add_controller(click)
         keys = Gtk.EventControllerKey()
-        keys.connect("key-pressed", self._app_context_key, uninstall)
+        keys.connect("key-pressed", self._app_context_key, uninstall, edit)
         button.add_controller(keys)
 
-    def _app_context_pressed(self, gesture, _count, x, y, uninstall):
+    def _app_context_pressed(self, gesture, _count, x, y, uninstall, edit=None):
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
-        self._show_app_menu(gesture.get_widget(), uninstall, x, y)
+        self._show_app_menu(gesture.get_widget(), uninstall, x, y, edit)
 
-    def _app_context_key(self, controller, keyval, _keycode, modifiers, uninstall):
+    def _app_context_key(self, controller, keyval, _keycode, modifiers, uninstall, edit=None):
         if keyval == Gdk.KEY_Menu or (
             keyval == Gdk.KEY_F10 and modifiers & Gdk.ModifierType.SHIFT_MASK
         ):
             button = controller.get_widget()
-            self._show_app_menu(button, uninstall, button.get_width() / 2, button.get_height() / 2)
+            self._show_app_menu(
+                button, uninstall, button.get_width() / 2, button.get_height() / 2, edit
+            )
             return True
         return False
 
-    def _show_app_menu(self, button, callback, x, y):
+    def _show_app_menu(self, button, callback, x, y, edit=None):
         self._dismiss_app_menu()
         actions = Gio.SimpleActionGroup()
         uninstall = Gio.SimpleAction.new("uninstall", None)
         uninstall.connect("activate", lambda *_: callback())
         actions.add_action(uninstall)
         model = Gio.Menu()
+        if edit:
+            action = Gio.SimpleAction.new("edit", None)
+            action.connect("activate", lambda *_: edit())
+            actions.add_action(action)
+            model.append("Edit", "app.edit")
         model.append("Uninstall", "app.uninstall")
         menu = Gtk.PopoverMenu.new_from_model(model)
         menu.insert_action_group("app", actions)
@@ -654,6 +679,10 @@ class BrowserWindow(Adw.ApplicationWindow):
             return
         self.refresh_app_windows()
         self.toast("App uninstalled")
+
+    def _edit_web_app(self, record):
+        self._dismiss_app_menu()
+        EditWebAppDialog(self, record).present(self)
 
     def _uninstall_script_app(self, app_id):
         self._dismiss_app_menu()
@@ -800,6 +829,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             runner.release(owner)
 
     def show_home(self):
+        self.site_icon_capture.cancel()
         self._release_script()
         self._restore_page()
         self.window_size.select(None)
@@ -1302,6 +1332,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         if self._closing:
             return
         if event == Web.LoadEvent.STARTED:
+            self.site_icon_capture.cancel()
             self._dismiss_permission_prompts()
             self.player.reset()
             self.video_player.reset()
@@ -1314,6 +1345,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._probe_video()
             uri = view.get_uri() or ""
             if is_web_url(uri) and not self.get_application().owns_script_uri(uri):
+                self.site_icon_capture.capture()
                 try:
                     self.library.record_visit(uri, view.get_title())
                     for window in self.get_application().get_windows():
@@ -1531,6 +1563,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self.toasts.add_toast(Adw.Toast(title=message, timeout=4))
 
     def _close_requested(self, *_):
+        self.site_icon_capture.cancel()
         self.window_size.close()
         self._closing = True
         self._dismiss_app_menu()

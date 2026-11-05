@@ -5,15 +5,28 @@ website or search in the home page's input bar, then press Enter or its arrow.
 Searches use Google by default, including searches from Ctrl+L and the command line.
 
 **MiniApps** is included in the app's existing **Mini Browser Pin** GNOME Shell
-extension and adds a top-panel menu beside the desktop's app controls. It uses
-a two-column launcher with **All Apps**,
+extension and adds a top-panel menu beside the desktop's app controls. The popup
+aligns with the button's left edge. It uses a two-column launcher with **All Apps**,
 **Websites**, and **Scripts** on the left and app icons and names on the right.
+Icons match Home: websites use their app icon or favicon, DeepSeek Harness uses
+its whale icon, and custom scripts use a terminal icon. Website icons are learned
+when you visit the site and cached for later launches, including while the
+browser is closed. Until an icon is available, the site's hostname badge appears.
 Click an app to open it in Mini Browser, including when the browser is closed.
 Websites share Home's saved apps, bookmarked sites, presets, and uninstall choices;
 Scripts includes DeepSeek Harness and saved script apps. Script servers retain
 the same managed lifetime as launches from Home. The menu refreshes each time it
 opens, and long lists scroll. Tab/arrow keys move focus, Enter activates an app,
 and Escape closes the menu. **Open Mini Browser** opens Home to manage apps.
+
+Right-click a website tile on Home, or focus it and press Shift+F10/Menu, then
+choose **Edit** before **Uninstall**. The modal lets you change its display title,
+default path after the domain (for example, `/dashboard?view=home`), and icon.
+The domain stays fixed. **Choose image…** copies a PNG, JPEG, WebP, or ICO image
+up to 4 MiB into Mini Browser; **Use website icon** removes that override.
+**Save** updates Home and MiniApps, and future launches use the edited path.
+**Cancel** leaves the app unchanged. Editing bookmarked sites or built-in website
+presets preserves the original bookmarks.
 
 RPM and user installations install and update MiniApps together with Mini Browser
 Pin. Existing enabled installations need no separate extension installation or

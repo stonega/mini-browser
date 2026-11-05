@@ -130,6 +130,7 @@ def run_tests(root, arguments):
         "deepseek": "deepseek_smoke.py",
         "apps": "apps_smoke.py",
         "launcher": "launcher_smoke.py",
+        "icons": "site_icons_smoke.py",
         "extensions": "extensions_smoke.py",
         "browser": "smoke.py",
         "pin": "pin_smoke.py",
@@ -148,7 +149,7 @@ def run_tests(root, arguments):
         if selected not in tests:
             raise ValueError(
                 "Choose --test=devices, deepseek, apps, launcher, extensions, browser, pin, media, "
-                "passwords, cef, resources, engine, context, agent, or codecs."
+                "passwords, cef, resources, engine, context, agent, icons, or codecs."
             )
         filenames, arguments = (tests[selected],), arguments[1:]
     log_path = root / "gnome-shell.log"
