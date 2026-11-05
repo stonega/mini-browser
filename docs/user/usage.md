@@ -11,7 +11,10 @@ aligns with the button's left edge. It uses a two-column launcher with **All App
 Icons match Home: websites use their app icon or favicon, DeepSeek Harness uses
 its whale icon, and custom scripts use a terminal icon. Website icons are learned
 when you visit the site and cached for later launches, including while the
-browser is closed. Until an icon is available, the site's hostname badge appears.
+browser is closed. Slow page images do not hold up icon discovery.
+Saved website tiles also learn their icon when the launch address redirects,
+such as `youtube.com` opening `www.youtube.com`. Until an icon
+is available, the site's hostname badge appears.
 Click an app to open it in Mini Browser, including when the browser is closed.
 Websites share Home's saved apps, bookmarked sites, presets, and uninstall choices;
 Scripts includes DeepSeek Harness and saved script apps. Script servers retain

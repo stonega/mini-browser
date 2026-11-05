@@ -56,9 +56,10 @@ for an offline, checksum-verified build. Runtime output is `build/cef/runtime`.
 bridge ABI must match the Python adapter; rebuild it after changing
 `native/cef/bridge.cc`.
 Website icon loading and extension popup support use bridge ABI 9; rebuild the
-runtime before launching an updated Python checkout. The Extensions window,
-opened from the three-line main menu, registers unpacked Manifest V3
-folders and applies changes on a full application restart. This uses CEF's
+runtime before launching an updated Python checkout. Icon discovery before full
+page load also requires the rebuilt bridge's DOM-ready event forwarding.
+The Extensions window, opened from the three-line main menu, registers unpacked
+Manifest V3 folders and applies changes on a full application restart. This uses CEF's
 Chrome bootstrap while retaining the existing Alloy windowless GTK surface;
 Extension popups and requested extension pages use standalone GTK windows with
 origin-restricted views. Chrome toolbar actions and full Chrome tab/window
@@ -120,7 +121,9 @@ uses only temporary browser data and loopback pages and is in the default suite.
 
 `./scripts/smoke --test=icons` checks manifest SVG icons, declared and default
 favicons, invalid-image fallback, stale navigation results, shared Home/panel PNG
-paths, and the native Edit app modal. It covers title/path changes, origin
+paths, icons for saved addresses that redirect to another hostname, and the
+native Edit app modal. It also verifies icons appear while a page image is
+still loading. It covers title/path changes, origin
 validation, custom image copying and reset, persistence, and launching the edited
 URL. Optional PNG output captures the editor and Home. All sites and images are
 synthetic loopback fixtures.

@@ -435,7 +435,8 @@ public:
     emit(id, code <= -200 && code >= -299 ? "tls-error" : "load-error", data);
   }
   bool OnBeforeBrowse(CefRefPtr<CefBrowser>, CefRefPtr<CefFrame> frame,
-                      CefRefPtr<CefRequest> request, bool, bool) override {
+                      CefRefPtr<CefRequest> request, bool,
+                      bool is_redirect) override {
     DismissContextMenu();
     if (frame->IsMain()) {
       dismiss_media_replies(id);
@@ -445,6 +446,11 @@ public:
         else
           emit(id, "unsupported-uri");
         return true;
+      }
+      if (!is_redirect) {
+        auto data = dict();
+        data->SetString("uri", request->GetURL());
+        emit(id, "navigation-start", data);
       }
     }
     return false;
@@ -494,6 +500,7 @@ public:
     if (name.rfind("Runtime.executionContext", 0) != 0 &&
         name != "Runtime.bindingCalled" && name != "Page.frameNavigated" &&
         name != "Page.navigatedWithinDocument" &&
+        name != "Page.domContentEventFired" &&
         name.rfind("WebAudio.context", 0) != 0 &&
         name != "Media.playerEventsAdded" &&
         name != "Media.playerPropertiesChanged")

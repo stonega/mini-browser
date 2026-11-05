@@ -121,6 +121,7 @@ class BrowserWindow(Adw.ApplicationWindow):
         self.webview.connect("close", lambda *_: self.close())
         self.webview.connect("new-window", self._new_window_requested)
         self.webview.connect("load-changed", self._load_changed)
+        self.webview.connect("document-ready", self._capture_site_icon)
         self.webview.connect("load-failed", self._load_failed)
         self.webview.connect("load-failed-with-tls-errors", self._tls_failed)
         self.webview.connect("notify::title", self._title_changed)
@@ -1345,7 +1346,7 @@ class BrowserWindow(Adw.ApplicationWindow):
             self._probe_video()
             uri = view.get_uri() or ""
             if is_web_url(uri) and not self.get_application().owns_script_uri(uri):
-                self.site_icon_capture.capture()
+                self._capture_site_icon(view)
                 try:
                     self.library.record_visit(uri, view.get_title())
                     for window in self.get_application().get_windows():
@@ -1359,6 +1360,16 @@ class BrowserWindow(Adw.ApplicationWindow):
         self._navigation_changed()
         self._audio_changed()
         self._apply_page_permissions()
+
+    def _capture_site_icon(self, view):
+        uri = view.get_uri() or ""
+        if (
+            not self._closing
+            and not self.failed
+            and is_web_url(uri)
+            and not self.get_application().owns_script_uri(uri)
+        ):
+            self.site_icon_capture.capture()
 
     def _show_error(self, uri, message):
         if self._closing:

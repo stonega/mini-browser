@@ -23,6 +23,11 @@ from mini_browser.storage import Library
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?", 1)[0]
+        if path == "/redirect":
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{self.server.server_port}/manifest")
+            self.end_headers()
+            return
         if path == "/assets/app.webmanifest":
             mime, body = (
                 "application/manifest+json",
@@ -50,6 +55,11 @@ class Handler(BaseHTTPRequestHandler):
             )
         elif path == "/not-image":
             mime, body = "text/plain", b"not an image"
+        elif path == "/early-icon.png":
+            mime, body = "image/png", png((100, 60, 180))
+        elif path == "/pending-resource":
+            self.server.release_page.wait(8)
+            mime, body = "image/png", png()
         elif path == "/slow.png":
             self.server.icon_started.set()
             self.server.release_icon.wait(8)
@@ -63,6 +73,9 @@ class Handler(BaseHTTPRequestHandler):
                 "/favicon": '<link rel="icon" href="/favicon.png">',
                 "/broken": '<link rel="icon" href="/not-image">',
                 "/slow": '<link rel="icon" href="/slow.png">',
+                "/pending": (
+                    '<link rel="icon" href="/early-icon.png"><img src="/pending-resource">'
+                ),
             }.get(path, "")
             mime, body = (
                 "text/html",
@@ -87,6 +100,7 @@ def run():
         server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         server.daemon_threads = True
         server.icon_started, server.release_icon = threading.Event(), threading.Event()
+        server.release_page = threading.Event()
         threading.Thread(target=server.serve_forever, daemon=True).start()
         origin = f"http://127.0.0.1:{server.server_port}"
         app = BrowserApplication(
@@ -209,12 +223,51 @@ def run():
             ready = time.monotonic() + 0.3
             yield from wait(lambda: time.monotonic() >= ready)
             assert color(app.site_icons.path_for(origin)) == (40, 180, 100)
+            # A saved launcher must learn the icon even when its hostname redirects.
+            redirect_origin = f"http://localhost:{server.server_port}"
+            redirected = app.library.add_home_app(redirect_origin + "/redirect", "Redirect app")
+            redirected_page = app.new_window(redirected["url"])
+            yield from wait(lambda: color(app.site_icons.path_for(origin)) == (40, 80, 200))
+            assert app.site_icons.path_for(redirect_origin), "Redirected launcher lost its icon"
+            assert color(app.site_icons.path_for(redirect_origin)) == (40, 80, 200)
+            record = next(
+                record
+                for record in app_catalog(app.library, app.site_icons)
+                if record["id"] == "web:" + redirected["url"]
+            )
+            assert record["icon"] == str(app.site_icons.path_for(redirect_origin))
+            # Later page-driven navigations must not replace the launch address's icon.
+            redirected_page.webview.evaluate_javascript(
+                "location.href = '/favicon'", -1, None, None, None, None
+            )
+            yield from wait(lambda: color(app.site_icons.path_for(origin)) == (40, 180, 100))
+            assert color(app.site_icons.path_for(redirect_origin)) == (40, 80, 200)
+            redirected_page.close()
+            page.load_uri(origin + "/pending")
+            yield from wait(lambda: color(app.site_icons.path_for(origin)) == (100, 60, 180))
+            assert page.webview.loading, "Website icons must not wait for slow page resources"
+            page.webview.evaluate_javascript(
+                "location.href = " + json.dumps(redirect_origin + "/favicon"),
+                -1,
+                None,
+                None,
+                None,
+                None,
+            )
+            yield from wait(
+                lambda: color(app.site_icons.path_for(redirect_origin)) == (40, 180, 100)
+            )
+            assert color(app.site_icons.path_for(origin)) == (100, 60, 180)
+            server.release_page.set()
+            yield from wait(lambda: not page.webview.loading)
             page.close()
             shot(home, "-home")
             state["completed"] = True
             print(
                 "PASS: manifest SVG, favicon and default fallback, shared cached PNGs, "
-                "stale navigation, Edit before Uninstall, title/path/custom icon edits, "
+                "stale navigation, redirected launcher icons, icons before full page load, "
+                "Edit before Uninstall, "
+                "title/path/custom icon edits, "
                 "reset, persistence and launch URL",
                 flush=True,
             )
@@ -240,6 +293,7 @@ def run():
             assert state["completed"] and not errors, errors
         finally:
             server.release_icon.set()
+            server.release_page.set()
             server.shutdown()
             server.server_close()
 

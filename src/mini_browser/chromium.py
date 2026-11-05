@@ -361,6 +361,7 @@ class View(Gtk.Widget):
     __gtype_name__ = "MiniBrowserChromiumView"
     __gsignals__ = {
         "load-changed": (GObject.SignalFlags.RUN_LAST, None, (int,)),
+        "document-ready": (GObject.SignalFlags.RUN_LAST, None, ()),
         "load-failed": (GObject.SignalFlags.RUN_LAST, bool, (int, str, object)),
         "load-failed-with-tls-errors": (GObject.SignalFlags.RUN_LAST, bool, (str, object, int)),
         "web-process-terminated": (GObject.SignalFlags.RUN_LAST, None, (int,)),
@@ -387,6 +388,7 @@ class View(Gtk.Widget):
         self.manager, self.history = UserContent(self), History()
         self.closed = self.prepared = self.ready = self.loading = False
         self.pending_uri = None
+        self.navigation_uri = None
         self.generation = 0
         self.contexts, self.audio_contexts = {}, {}
         self.texture = self.pending_frame = None
@@ -502,6 +504,10 @@ class View(Gtk.Widget):
                 self._history(self._finish_load)
         elif kind == "load-start" and self.prepared:
             self._start_load()
+        elif kind == "navigation-start" and self.prepared:
+            self.navigation_uri = data["uri"]
+        elif kind == "Page.domContentEventFired" and self.prepared:
+            self.emit("document-ready")
         elif kind in ("tls-error", "load-error") and self.prepared:
             self.loading = False
             if kind == "tls-error":
@@ -556,10 +562,14 @@ class View(Gtk.Widget):
             rect.width, rect.height = data["width"], data["height"]
             self.im.set_cursor_location(rect)
 
-    def _start_load(self):
+    def _start_load(self, uri=None):
         self._dismiss_context_menu()
+        if uri is not None:
+            self.navigation_uri = uri
         if self.loading:
             return
+        if uri is None:
+            self.navigation_uri = self.uri
         self.loading = True
         self.generation += 1
         self.page_clipboard.reset()
@@ -615,7 +625,7 @@ class View(Gtk.Widget):
         if not self.prepared:
             self.pending_uri = uri
             return
-        self._start_load()
+        self._start_load(uri)
         self.bridge.load(self.identifier, uri.encode())
 
     def reload(self):

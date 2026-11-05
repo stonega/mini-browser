@@ -122,16 +122,22 @@ native keyboard focus. Opening the menu asynchronously runs
 and reads SQLite in read-only mode without initializing, migrating, or changing
 profile permissions. It returns app IDs, labels, categories, and bundled icons, omitting
 history, credentials, script commands, and working directories.
-`site_icon_capture.py` examines loaded HTTP(S) documents in an isolated Chromium
-world. It prefers web manifest icons, then Apple touch icons, declared favicons,
-and `/favicon.ico`, trying the next candidate when downloading or decoding fails.
+`site_icon_capture.py` examines HTTP(S) documents in an isolated Chromium world
+at DOM readiness, with a retry when loading finishes. Discovery does not wait
+for images to finish loading. It prefers web manifest icons, then Apple
+touch icons, declared favicons, and `/favicon.ico`, trying the next candidate
+when downloading or decoding fails.
 Manifest reads are bounded to 128 KiB and 2.5 seconds. CEF downloads images
 without sending or accepting cookies and decodes them into PNGs up to 256 pixels
 and 1 MiB. TLS verification and the sandbox stay enabled. Generation and document
 checks discard results after navigation or closure; script apps are excluded.
 `site_icons.py` atomically caches those PNGs by origin under `site-icons` in the
 app cache, using content-derived filenames so Shell never reuses an outdated
-texture. Home and the headless catalog read the same files without new network
+texture. Navigations retain their requested URL across redirects, so
+the loaded icon is cached for both the final origin and the launch origin (for
+example, `youtube.com` redirecting to `www.youtube.com`). Later navigations reset
+the launch URL; unrelated origins are never grouped just by hostname similarity.
+Home and the headless catalog read the same files without new network
 requests. Custom app images take precedence. Missing icons use
 `app_icons.website_avatar` and libadwaita's avatar palette; the panel loads images
 through `St.Icon`/`Gio.FileIcon`.

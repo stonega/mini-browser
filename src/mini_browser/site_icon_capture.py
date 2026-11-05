@@ -71,6 +71,7 @@ class SiteIconCapture:
         self.cancel()
         view = self.view
         uri, generation = view.get_uri(), view.generation
+        navigation_uri = view.navigation_uri
         if not is_web_url(uri):
             return
         request = self.request = Gio.Cancellable()
@@ -82,6 +83,7 @@ class SiteIconCapture:
                 and not view.closed
                 and generation == view.generation
                 and uri == view.get_uri()
+                and navigation_uri == view.navigation_uri
             )
 
         def download(icons):
@@ -110,6 +112,12 @@ class SiteIconCapture:
                 except (ValueError, OSError):
                     download(remaining)
                     return
+                # Launch URLs can redirect to another origin (e.g. youtube.com to www).
+                if is_web_url(navigation_uri) and navigation_uri != uri:
+                    try:
+                        changed = self.cache.save(navigation_uri, png) or changed
+                    except (ValueError, OSError):
+                        pass
                 if changed:
                     self.changed()
 
