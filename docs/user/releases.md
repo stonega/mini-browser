@@ -1,5 +1,28 @@
 # Release notes
 
+## 0.4.7 — November 5, 2026
+
+- Add **Edit** before **Uninstall** in website tiles' context menu. The native
+  modal edits the display title, default path after the domain, and custom icon;
+  it preserves the domain and source bookmarks. Save updates Home and MiniApps.
+- Prefer the website's manifest app icon, Apple touch icon, or favicon. Icons
+  are learned while visiting the site and cached for both launchers, including
+  while the browser is closed. Hostname badges remain the fallback.
+- Allow custom PNG, JPEG, WebP, and ICO images, copied into the app's private
+  data. **Use website icon** restores the site's icon without changing its data.
+- Align MiniApps with the left edge of its panel button and share its website
+  initials and colors with Home. Bundle a PNG of DeepSeek's whale icon so it
+  also displays on systems without a Shell SVG loader.
+- Keep extension windows closed at startup until explicitly opened.
+- Update the bundled GNOME Shell extension to version 5 and the Chromium bridge
+  to ABI 9. Native and Python components must be updated together.
+
+Close all Mini Browser windows and reopen the app after upgrading. Sign out of
+GNOME and back in once to load the updated Shell extension. Bookmarks, history,
+website sessions and the encrypted vault are preserved. H.264/AAC remains
+available on Fedora 45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the
+stock CEF engine. Widevine/DRM is not included.
+
 ## 0.4.6 — November 4, 2026
 
 - Add **MiniApps**, a native GNOME top-panel launcher with **All Apps**,

@@ -221,8 +221,10 @@ def run_tests(root, arguments):
                     raise RuntimeError("Virtual GNOME did not start a Wayland display")
                 time.sleep(0.1)
             environment = silent_audio_environment(address)
-            enable_extension(shell, PIN_EXTENSION)
             enable_extension(shell, POINTER_EXTENSION)
+            # Keep the test helper before the pin extension in Shell's stack:
+            # disabling pinning must not temporarily rebase the helper's bus.
+            enable_extension(shell, PIN_EXTENSION)
             print("Running UI tests in virtual GNOME (1280 × 1024, silent audio)", flush=True)
             for filename in filenames:
                 if shell.poll() is not None:

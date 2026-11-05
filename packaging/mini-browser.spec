@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.6
+Version:        0.4.7
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -154,6 +154,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Thu Nov 05 2026 Mini Browser contributors - 0.4.7-1
+- Edit web app titles, relative launch paths and custom icons in a native modal.
+- Share cached website app icons and favicons between Home and MiniApps.
+- Align the MiniApps popup and fix bundled icon rendering.
+- Keep extension windows closed until explicitly opened after startup.
+
 * Wed Nov 04 2026 Mini Browser contributors - 0.4.6-1
 - Add MiniApps to the existing bundled GNOME Shell pin extension.
 - Launch saved website and script apps from a categorized native panel menu.

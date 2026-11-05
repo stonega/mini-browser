@@ -140,9 +140,11 @@ def app_menu_scenario(window, base):
     preset = window.app_tiles.get_child_at_index(1).get_child()
     yield from right_click(preset)
     menu = window._app_menu
-    assert (
-        menu.get_menu_model().get_item_attribute_value(0, "label", None).get_string() == "Uninstall"
-    )
+    model = menu.get_menu_model()
+    assert [model.get_item_attribute_value(i, "label", None).get_string() for i in range(2)] == [
+        "Edit",
+        "Uninstall",
+    ]
     if len(sys.argv) > 1:
         paintable = Gtk.WidgetPaintable.new(menu)
         yield
@@ -167,7 +169,9 @@ def app_menu_scenario(window, base):
     saved = app.library.add_home_app(base + "/installed", "Installed web app")
     window.refresh_recents()
     other = app.new_window()
+    yield from wait(other.get_mapped)
     window.present()
+    yield from wait(window.is_active)
     yield from wait(lambda: window.app_tiles.get_child_at_index(1).get_child().get_width() > 0)
     tile = window.app_tiles.get_child_at_index(1).get_child()
     yield from right_click(tile)

@@ -3,5 +3,5 @@
     "name": "Mini Browser Pin",
     "description": "Launch Mini Browser apps from MiniApps, keep windows on top and visible on all workspaces, and return Home at the app window's position.",
     "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
-    "version": 4
+    "version": 5
 }
