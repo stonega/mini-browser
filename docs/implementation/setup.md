@@ -18,7 +18,7 @@ the CLI's authenticated readiness URL. See the
 On Fedora:
 
 ```sh
-sudo dnf install python3-gobject gtk4 libadwaita python3-cryptography ruff cmake ninja-build gcc-c++ \
+sudo dnf install python3-gobject gtk4 libadwaita gobject-introspection python3-cryptography ruff cmake ninja-build gcc-c++ \
   gtk3 nss alsa-lib mesa-libgbm cups-libs systemd-libs
 ./scripts/build-cef
 ./scripts/run

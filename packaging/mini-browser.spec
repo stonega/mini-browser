@@ -44,6 +44,7 @@ BuildRequires:  python3 >= 3.11
 BuildRequires:  python3-gobject
 BuildRequires:  gtk4 >= 4.12
 BuildRequires:  libadwaita >= 1.5
+BuildRequires:  gobject-introspection
 BuildRequires:  python3-cryptography >= 44
 BuildRequires:  desktop-file-utils
 BuildRequires:  ruff
@@ -66,6 +67,7 @@ Requires:       python3 >= 3.11
 Requires:       python3-gobject
 Requires:       gtk4 >= 4.12
 Requires:       libadwaita >= 1.5
+Requires:       gobject-introspection
 Requires:       nss
 Requires:       nspr
 Requires:       alsa-lib
@@ -160,6 +162,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 - Fix dropped website shortcuts and key/modifier translation into Chromium.
 - Preserve desktop clipboard shortcuts and add real Wayland keyboard coverage.
 - Learn website icons across redirects and before slow pages finish loading.
+- Declare the GTK introspection metadata required by the app and checks.
 
 * Thu Nov 05 2026 Mini Browser contributors - 0.4.7-1
 - Edit web app titles, relative launch paths and custom icons in a native modal.
