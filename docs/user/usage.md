@@ -140,6 +140,12 @@ Ctrl+F5) to fetch its resources again. This keeps cookies and saved sign-ins;
 it does not reset the website's stored data.
 Choose **About Mini Browser** in the same menu to see the app version and license.
 
+Website shortcuts work while the page has keyboard focus. Browser shortcuts
+listed under F1 keep their Mini Browser actions; other combinations, including
+Ctrl+I, Ctrl+K, Ctrl+P and Ctrl+Shift+C, go to the website. Tab and Shift+Tab move
+between page controls. Ctrl+C, Ctrl+X, Ctrl+V and Ctrl+Shift+V use the desktop text
+clipboard; paste inserts plain text.
+
 Right-click a page to open its native context menu. It includes Back, Forward,
 Reload, Reload Without Cache, Select All, Copy Page Address, Bookmark App, page
 saving, printing, PDF export, page source, zoom and site permissions. Unavailable

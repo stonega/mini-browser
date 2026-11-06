@@ -35,6 +35,9 @@ const XML = `<node><interface name="${NAME}">
         <arg type="d" direction="in"/><arg type="d" direction="in"/>
         <arg type="u" direction="in"/>
     </method>
+    <method name="Keys">
+        <arg type="o" direction="in"/><arg type="au" direction="in"/>
+    </method>
     <method name="Flags">
         <arg type="o" direction="in"/>
         <arg type="b" direction="out"/><arg type="b" direction="out"/>
@@ -64,11 +67,12 @@ export default class PointerTests extends Extension {
             Gio.DBus.session, NAME, Gio.BusNameOwnerFlags.NONE, null, null);
         this._timer = 0;
         this._pressed = false;
+        this._keys = [];
     }
 
     _window(path, invocation) {
         const window = global.get_window_actors().map(actor => actor.meta_window).find(w =>
-            ['MediaSmoke', 'PinSmoke', 'EngineSmoke', 'Smoke', 'AppsSmoke', 'ExtensionSmoke'].some(kind =>
+            ['MediaSmoke', 'PinSmoke', 'EngineSmoke', 'Smoke', 'AppsSmoke', 'ExtensionSmoke', 'KeyboardSmoke'].some(kind =>
                 w.get_gtk_application_id()?.startsWith(`io.github.stone.MiniBrowser.${kind}.`)) &&
             w.get_gtk_unique_bus_name() === invocation.get_sender() &&
             w.get_gtk_window_object_path() === path);
@@ -124,6 +128,35 @@ export default class PointerTests extends Extension {
 
     ClickAsync([path, x, y, button], invocation) {
         this._interact(path, x, y, 0, 0, 0, invocation, button);
+    }
+
+    KeysAsync([path, keys], invocation) {
+        const window = this._window(path, invocation);
+        if (!window)
+            return;
+        if (this._timer || !keys.length || keys.length > 4) {
+            invocation.return_dbus_error('org.freedesktop.DBus.Error.InvalidArgs', 'Invalid test keys.');
+            return;
+        }
+        Main.overview.hide();
+        window.activate(global.get_current_time());
+        const events = [
+            ...keys.map(key => [key, Clutter.KeyState.PRESSED]),
+            ...keys.toReversed().map(key => [key, Clutter.KeyState.RELEASED]),
+        ];
+        this._timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+            const event = events.shift();
+            if (!event) {
+                this._timer = 0;
+                invocation.return_value(new GLib.Variant('()', []));
+                return GLib.SOURCE_REMOVE;
+            }
+            const [key, state] = event;
+            this._keyboard.notify_keyval(GLib.get_monotonic_time(), key, state);
+            this._keys = state === Clutter.KeyState.PRESSED
+                ? [...this._keys, key] : this._keys.filter(value => value !== key);
+            return GLib.SOURCE_CONTINUE;
+        });
     }
 
     async MiniAppsAsync([path, action, value], invocation) {
@@ -245,6 +278,8 @@ export default class PointerTests extends Extension {
             GLib.source_remove(this._timer);
         if (this._pressed)
             this._pointer.notify_button(GLib.get_monotonic_time(), this._pressed, Clutter.ButtonState.RELEASED);
+        for (const key of this._keys.toReversed())
+            this._keyboard.notify_keyval(GLib.get_monotonic_time(), key, Clutter.KeyState.RELEASED);
         Gio.bus_unown_name(this._name);
         this._export.unexport();
         this._keyboard = this._pointer = this._export = null;

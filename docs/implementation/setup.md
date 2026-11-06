@@ -38,6 +38,7 @@ ruff format src tests scripts/install
 ./scripts/smoke --test=extensions # unpacked MV3 extensions and process restarts
 ./scripts/smoke --test=resources # static/hidden CPU and framebuffer lifecycle
 ./scripts/smoke --test=context   # contextual page menus, agent prompts and page saving
+./scripts/smoke --test=keyboard  # real Wayland page shortcuts, focus and editing
 ./scripts/build-rpm
 ```
 
@@ -74,6 +75,12 @@ rejection, both refresh actions, page Copy buttons reaching the native clipboard
 and cookies/storage across a process restart. Clipboard checks use a real pointer
 click in the disposable desktop and synthetic text only. The default
 smoke suite also tests the Chromium-backed navigation, media and password flows.
+
+`./scripts/smoke --test=keyboard` injects native key combinations into a synthetic
+page in the disposable GNOME desktop. It checks website shortcuts such as Ctrl+I,
+Ctrl+K and Ctrl+Shift+C, punctuation and function-key values, modifier state,
+Tab/Shift+Tab navigation, select-all, undo/redo, copy/cut/paste, and the native
+Ctrl+L address dialog. This check is included in the default smoke suite.
 
 `./scripts/smoke --test=resources` checks process CPU time against elapsed time
 on a static synthetic page, then verifies hidden views release frame storage,
@@ -240,9 +247,10 @@ and reopening phone windows, script restarts with new local ports, and preservin
 the Full page dimensions when closing a compact player. Unit tests also verify
 library upgrades, persistence across library reopen, separate app namespaces,
 invalid dimensions, and storage failure handling.
-The runner also loads a test-only pointer extension in that disposable desktop.
-It only accepts owned MediaSmoke, PinSmoke and EngineSmoke windows, reads/changes independent
-compositor flags, injects real pointer drags/clicks, and checks compositor window
+The runner also loads a test-only input extension in that disposable desktop.
+It only accepts supported smoke-test windows owned by the calling process,
+reads/changes independent compositor flags, injects real pointer drags/clicks and
+keyboard combinations, and checks compositor window
 positions. Media checks cover draggable audio/video surfaces, clickable playback
 controls, the video control strip, normal page
 interaction, and Back restoring Full page without navigation. This helper is

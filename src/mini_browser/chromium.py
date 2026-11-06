@@ -942,18 +942,56 @@ class View(Gtk.Widget):
         special = {
             Gdk.KEY_BackSpace: 8,
             Gdk.KEY_Tab: 9,
+            Gdk.KEY_ISO_Left_Tab: 9,
             Gdk.KEY_Return: 13,
+            Gdk.KEY_KP_Enter: 13,
+            Gdk.KEY_Shift_L: 16,
+            Gdk.KEY_Shift_R: 16,
+            Gdk.KEY_Control_L: 17,
+            Gdk.KEY_Control_R: 17,
+            Gdk.KEY_Alt_L: 18,
+            Gdk.KEY_Alt_R: 18,
+            Gdk.KEY_Pause: 19,
+            Gdk.KEY_Caps_Lock: 20,
             Gdk.KEY_Escape: 27,
             Gdk.KEY_Left: 37,
             Gdk.KEY_Up: 38,
             Gdk.KEY_Right: 39,
             Gdk.KEY_Down: 40,
             Gdk.KEY_Delete: 46,
+            Gdk.KEY_Insert: 45,
+            Gdk.KEY_Print: 44,
             Gdk.KEY_Home: 36,
             Gdk.KEY_End: 35,
             Gdk.KEY_Page_Up: 33,
             Gdk.KEY_Page_Down: 34,
+            Gdk.KEY_Super_L: 91,
+            Gdk.KEY_Super_R: 92,
+            Gdk.KEY_Menu: 93,
+            Gdk.KEY_Num_Lock: 144,
+            Gdk.KEY_Scroll_Lock: 145,
+            Gdk.KEY_ISO_Level3_Shift: 225,
         }
+        if Gdk.KEY_F1 <= value <= Gdk.KEY_F24:
+            return 112 + value - Gdk.KEY_F1
+        # CEF expects Windows virtual keys, not the Unicode values of punctuation.
+        for characters, virtual in (
+            (";:", 186),
+            ("=+", 187),
+            (",<", 188),
+            ("-_", 189),
+            (".>", 190),
+            ("/?", 191),
+            ("`~", 192),
+            ("[{", 219),
+            ("\\|", 220),
+            ("]}", 221),
+            ("'\"", 222),
+        ):
+            if value in map(ord, characters):
+                return virtual
+        if value in map(ord, "!@#$%^&*()"):
+            return ord("1234567890"["!@#$%^&*()".index(chr(value))])
         return special.get(value, Gdk.keyval_to_unicode(Gdk.keyval_to_upper(value)))
 
     @staticmethod
@@ -962,18 +1000,40 @@ class View(Gtk.Widget):
             (2 if state & Gdk.ModifierType.SHIFT_MASK else 0)
             | (4 if state & Gdk.ModifierType.CONTROL_MASK else 0)
             | (8 if state & Gdk.ModifierType.ALT_MASK else 0)
+            | (128 if state & (Gdk.ModifierType.SUPER_MASK | Gdk.ModifierType.META_MASK) else 0)
+            | (1 if state & Gdk.ModifierType.LOCK_MASK else 0)
         )
+
+    @staticmethod
+    def _key_state(value, state, released=False):
+        modifier = {
+            Gdk.KEY_Shift_L: Gdk.ModifierType.SHIFT_MASK,
+            Gdk.KEY_Shift_R: Gdk.ModifierType.SHIFT_MASK,
+            Gdk.KEY_Control_L: Gdk.ModifierType.CONTROL_MASK,
+            Gdk.KEY_Control_R: Gdk.ModifierType.CONTROL_MASK,
+            Gdk.KEY_Alt_L: Gdk.ModifierType.ALT_MASK,
+            Gdk.KEY_Alt_R: Gdk.ModifierType.ALT_MASK,
+            Gdk.KEY_Super_L: Gdk.ModifierType.SUPER_MASK,
+            Gdk.KEY_Super_R: Gdk.ModifierType.SUPER_MASK,
+        }.get(value, 0)
+        # GDK reports the state before this modifier press/release; DOM uses after.
+        return state & ~modifier if released else state | modifier
 
     @staticmethod
     def _host_shortcut(value, state):
         lower = Gdk.keyval_to_lower(value)
-        return (
-            value in (Gdk.KEY_F1, Gdk.KEY_F5, Gdk.KEY_F10, Gdk.KEY_Escape)
-            or state & Gdk.ModifierType.ALT_MASK
-            and value in (Gdk.KEY_Home, Gdk.KEY_Left, Gdk.KEY_Right)
-            or state & Gdk.ModifierType.CONTROL_MASK
-            and lower
-            in (
+        state &= Gtk.accelerator_get_default_mod_mask()
+        control, shift, alt = (
+            Gdk.ModifierType.CONTROL_MASK,
+            Gdk.ModifierType.SHIFT_MASK,
+            Gdk.ModifierType.ALT_MASK,
+        )
+        if not state:
+            return value in (Gdk.KEY_F1, Gdk.KEY_F5, Gdk.KEY_F10, Gdk.KEY_Escape)
+        if state == alt:
+            return value in (Gdk.KEY_Home, Gdk.KEY_Left, Gdk.KEY_Right)
+        if state == control:
+            return lower in (
                 Gdk.KEY_n,
                 Gdk.KEY_q,
                 Gdk.KEY_l,
@@ -982,30 +1042,46 @@ class View(Gtk.Widget):
                 Gdk.KEY_b,
                 Gdk.KEY_h,
                 Gdk.KEY_d,
-                Gdk.KEY_p,
-                Gdk.KEY_i,
-                Gdk.KEY_k,
                 Gdk.KEY_comma,
                 Gdk.KEY_plus,
                 Gdk.KEY_equal,
                 Gdk.KEY_minus,
                 Gdk.KEY_0,
                 Gdk.KEY_question,
+                Gdk.KEY_F5,
             )
-        )
+        if state == control | shift:
+            return lower in (
+                Gdk.KEY_r,
+                Gdk.KEY_i,
+                Gdk.KEY_p,
+                Gdk.KEY_l,
+                Gdk.KEY_k,
+                Gdk.KEY_plus,
+                Gdk.KEY_question,
+            )
+        return False
 
     def _key_pressed(self, controller, value, code, state):
         if self._host_shortcut(value, state):
             return False
         self.page_clipboard.user_input()
-        if state & Gdk.ModifierType.CONTROL_MASK:
+        shortcut_state = state & Gtk.accelerator_get_default_mod_mask()
+        operation = None
+        if shortcut_state == Gdk.ModifierType.CONTROL_MASK:
             operation = {Gdk.KEY_c: "copy", Gdk.KEY_x: "cut", Gdk.KEY_v: "paste"}.get(
                 Gdk.keyval_to_lower(value)
             )
-            if operation:
-                self._clipboard(operation)
-                return True
-        self.bridge.key(self.identifier, self._key_code(value), code, self._modifiers(state), 0)
+        elif (
+            shortcut_state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
+            and Gdk.keyval_to_lower(value) == Gdk.KEY_v
+        ):
+            operation = "paste"  # The GTK integration already pastes plain text.
+        if operation:
+            self._clipboard(operation)
+            return True
+        modifiers = self._modifiers(self._key_state(value, state))
+        self.bridge.key(self.identifier, self._key_code(value), code, modifiers, 0)
         event = controller.get_current_event()
         if event:
             self.im.filter_keypress(event)
@@ -1013,7 +1089,8 @@ class View(Gtk.Widget):
 
     def _key_released(self, controller, value, code, state):
         if not self._host_shortcut(value, state):
-            self.bridge.key(self.identifier, self._key_code(value), code, self._modifiers(state), 1)
+            modifiers = self._modifiers(self._key_state(value, state, released=True))
+            self.bridge.key(self.identifier, self._key_code(value), code, modifiers, 1)
             event = controller.get_current_event()
             if event:
                 self.im.filter_keypress(event)

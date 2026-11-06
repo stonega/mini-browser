@@ -504,6 +504,16 @@ source to poll continuously with a zero timeout between pumps, consuming a CPU
 core even on static pages. External message pumping alone did not remove that
 source's behavior.
 
+The GTK key controller translates keyvals to Windows virtual-key codes for CEF,
+including punctuation, function keys, modifiers and ISO Shift+Tab. Modifier
+press/release events use the state after that event, as DOM KeyboardEvent expects.
+Only the registered browser accelerator combinations bypass the page controller;
+unregistered combinations such as Ctrl+I, Ctrl+K and Ctrl+P reach Chromium. The
+GTK clipboard override applies to Ctrl+C/X/V and plain-text paste Ctrl+Shift+V,
+leaving other combinations with additional modifiers available to pages.
+A disposable-desktop keyboard test sends real Wayland key events through GTK and
+checks page events and editing behavior.
+
 Paint callbacks copy at most one pending BGRA frame per view under a lock and
 schedule GTK presentation on the main thread. Protocol events and results also
 reach GTK through idle callbacks. Hidden views, compact audio layouts and
