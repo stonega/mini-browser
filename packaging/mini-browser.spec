@@ -42,6 +42,8 @@ BuildRequires:  cups-libs
 BuildRequires:  systemd-libs
 BuildRequires:  python3 >= 3.11
 BuildRequires:  python3-gobject
+BuildRequires:  gtk4 >= 4.12
+BuildRequires:  libadwaita >= 1.5
 BuildRequires:  python3-cryptography >= 44
 BuildRequires:  desktop-file-utils
 BuildRequires:  ruff
