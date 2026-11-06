@@ -1,5 +1,23 @@
 # Release notes
 
+## 0.4.8 — November 6, 2026
+
+- Fix dropped website shortcuts such as Ctrl+I, Ctrl+K, Ctrl+P and Ctrl+Shift+C.
+  Match browser shortcuts by their exact modifier combinations so unrelated
+  website commands reach Chromium.
+- Send correct key values for Shift+Tab, function keys, punctuation and modifier
+  keys. Report modifier presses and releases with the state expected by websites.
+- Preserve desktop copy/cut/paste and Ctrl+Shift+V plain-text paste. Add real
+  Wayland regression coverage for page shortcuts, focus navigation, editing,
+  clipboard operations and the native Ctrl+L address dialog.
+- Learn website icons across redirects and before slow pages finish loading,
+  keeping Home and MiniApps icons available for redirected app addresses.
+
+Close all Mini Browser windows and reopen the app after upgrading. Bookmarks,
+history, website sessions and the encrypted vault are preserved. H.264/AAC remains
+available on Fedora 45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the
+stock CEF engine. Widevine/DRM is not included.
+
 ## 0.4.7 — November 5, 2026
 
 - Add **Edit** before **Uninstall** in website tiles' context menu. The native

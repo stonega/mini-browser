@@ -30,10 +30,9 @@ See [agent commands, Codex setup and UI testing](docs/user/agents.md).
 Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-Version 0.4.7 adds a native web app editor for display titles, launch paths and
-custom icons. Home and MiniApps share cached website app icons and favicons.
-The MiniApps popup aligns with its panel button and reliably displays bundled icons.
-Sign out and back in once after updating to load the new Shell extension.
+Version 0.4.8 fixes website keyboard shortcuts, modifier and function keys,
+punctuation, and Shift+Tab navigation. Home and MiniApps learn website icons
+across redirects and before slow pages finish loading.
 H.264/AAC playback remains available on Fedora 45+ x86_64.
 
 ## Fedora RPM
@@ -52,7 +51,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.7-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.8-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 

@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.7
+Version:        0.4.8
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -154,6 +154,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Fri Nov 06 2026 Mini Browser contributors - 0.4.8-1
+- Fix dropped website shortcuts and key/modifier translation into Chromium.
+- Preserve desktop clipboard shortcuts and add real Wayland keyboard coverage.
+- Learn website icons across redirects and before slow pages finish loading.
+
 * Thu Nov 05 2026 Mini Browser contributors - 0.4.7-1
 - Edit web app titles, relative launch paths and custom icons in a native modal.
 - Share cached website app icons and favicons between Home and MiniApps.
