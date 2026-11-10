@@ -1076,7 +1076,7 @@ class View(Gtk.Widget):
             shortcut_state == Gdk.ModifierType.CONTROL_MASK | Gdk.ModifierType.SHIFT_MASK
             and Gdk.keyval_to_lower(value) == Gdk.KEY_v
         ):
-            operation = "paste"  # The GTK integration already pastes plain text.
+            operation = "paste-plain"
         if operation:
             self._clipboard(operation)
             return True
@@ -1097,18 +1097,8 @@ class View(Gtk.Widget):
 
     def _clipboard(self, operation):
         clipboard = self.get_clipboard()
-        if operation == "paste":
-            generation = self.generation
-
-            def pasted(clipboard, result):
-                try:
-                    text = clipboard.read_text_finish(result)
-                    if text and not self.closed and generation == self.generation:
-                        self.command("Input.insertText", {"text": text})
-                except GLib.Error:
-                    pass
-
-            clipboard.read_text_async(None, pasted)
+        if operation in ("paste", "paste-plain"):
+            self.page_clipboard.paste(plain=operation == "paste-plain")
         else:
 
             def copied(_view, result):

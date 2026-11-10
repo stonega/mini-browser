@@ -511,6 +511,7 @@ Only the registered browser accelerator combinations bypass the page controller;
 unregistered combinations such as Ctrl+I, Ctrl+K and Ctrl+P reach Chromium. The
 GTK clipboard override applies to Ctrl+C/X/V and plain-text paste Ctrl+Shift+V,
 leaving other combinations with additional modifiers available to pages.
+Normal Paste prefers a clipboard image when available; Ctrl+Shift+V keeps only text.
 A disposable-desktop keyboard test sends real Wayland key events through GTK and
 checks page events and editing behavior.
 
@@ -581,8 +582,10 @@ native command IDs to `page_menu.py`, which presents a scrollable GTK popover.
 CEF retains only its custom-menu continuation, not context parameter/model
 references. Commands return through that continuation to preserve the originating
 frame for editing; desktop Copy/Cut use the permitted selection snapshot and
-Paste uses GTK's clipboard with the adapter's navigation guard. Password fields
-cannot contribute selection text. Dismissal, navigation, renderer termination
+Paste uses GTK's clipboard with the adapter's navigation and focus guards. Copy Image
+reads the originating frame's loaded image resource through DevTools and exports
+a native texture, preserving its dimensions and supporting cross-origin resources.
+Password fields cannot contribute selection text. Dismissal, navigation, renderer termination
 and window closure release the continuation and popover. Page archives and PDFs
 use typed DevTools calls and asynchronous private GIO writes through a native
 destination picker. Printing hands a private temporary PDF to GTK's system print
@@ -678,18 +681,36 @@ with its verified ID. The smoke tests never fetch or execute third-party package
 
 `page_clipboard.py` connects page Copy buttons to the native GTK clipboard.
 Windowless Chromium's clipboard does not provide that desktop integration.
-A main-world `writeText` adapter passes text to an isolated world, which checks
-transient user activation and invokes Chromium's original Clipboard API first.
+A main-world `writeText`/`write` adapter passes text and PNG data to an isolated
+world, which checks transient user activation and invokes Chromium's original
+Clipboard API first. The `write` adapter also preserves Chromium's validation of
+the original ClipboardItems before forwarding supported representations.
 Successful writes use a named DevTools binding to reach GTK. The host additionally
 checks the main frame, exact secure origin, document identity, navigation
 generation, mapped/focused view, active window and a recent native mouse/key
-event. Writes are limited to 1 MiB of UTF-8 text. Replies use typed protocol
-arguments, and clipboard contents are never logged or inserted into script
-source. No desktop clipboard reads are exposed to pages.
+event. Legacy `execCommand('copy'/'cut')` buttons forward the selected text or
+the final plain-text clipboard-event data only after the native command succeeds;
+the isolated world additionally requires a trusted copy/cut event. This legacy
+path also supports ordinary HTTP, with the same origin and user-action checks.
+Writes are limited to 1 MiB of UTF-8 text and 16 MiB of PNG data, with a decoded
+image limit of 32 megapixels. PNG headers and decoding are validated before
+replacing the clipboard. Mixed text/image copies publish both representations
+atomically. Texture providers explicitly advertise `Gdk.Texture`, rather than
+the concrete memory-texture subclass, so GTK can serialize images for other apps.
+Replies use typed protocol arguments, and clipboard contents are never logged or inserted into script
+source. No general desktop clipboard reads are exposed to pages.
+Only an explicit native Paste reads a desktop image. GTK decodes it and exports
+PNG into the current document's isolated world using typed arguments. After
+Chromium accepts that clipboard write, a native editing command produces a trusted
+paste event with image files and normal contenteditable insertion. Reads and
+callbacks are discarded after navigation, context replacement, focus loss or a
+newer paste request. Ctrl+Shift+V retains plain-text insertion. Image paste requires
+a secure context (HTTPS, loopback HTTP, or the view's trusted extension).
 Popup views additionally permit their exact extension origin, explicitly bound
 when the view is created. Ordinary web views cannot opt into extension origins.
 The same main-frame, document, focus and recent-user-input checks still apply;
-only text writes cross into GTK. HTTPS and loopback HTTP support this path: loopback is already a
+text and PNG writes cross into GTK. HTTPS and loopback HTTP support the Clipboard
+API path: loopback is already a
 [potentially trustworthy origin](https://www.w3.org/TR/secure-contexts/#is-origin-trustworthy),
 so the local DeepSeek server needs no certificate or security override.
 

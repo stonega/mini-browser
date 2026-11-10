@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.8
+Version:        0.4.9
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -158,6 +158,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Tue Nov 10 2026 Mini Browser contributors - 0.4.9-1
+- Bridge modern and legacy page Copy buttons to the desktop clipboard.
+- Add PNG clipboard copying, Copy Image, and native image pasting into pages.
+- Preserve mixed text/image data and Ctrl+Shift+V plain-text paste.
+- Verify clipboard transfers between separate apps on an isolated GNOME desktop.
+
 * Fri Nov 06 2026 Mini Browser contributors - 0.4.8-1
 - Fix dropped website shortcuts and key/modifier translation into Chromium.
 - Preserve desktop clipboard shortcuts and add real Wayland keyboard coverage.

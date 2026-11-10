@@ -1,5 +1,28 @@
 # Release notes
 
+## 0.4.9 — November 10, 2026
+
+- Fix page Copy buttons that reported success without updating the desktop
+  clipboard. Support `Clipboard.write`, `writeText`, legacy selection copies
+  and custom plain-text copy handlers.
+- Copy PNG images from page buttons and add **Copy Image** to the native image
+  context menu. Preserve both representations when a page copies text and an
+  image together, and export images in a format other desktop apps can read.
+- Paste desktop images into supported HTTPS/local pages and extension popups
+  using **Ctrl+V** or the native Paste menu. Websites receive trusted paste events
+  with image files; editable pages retain normal image insertion. **Ctrl+Shift+V**
+  continues to paste only plain text.
+- Retain origin, document, focus and user-action checks. Reject malformed or
+  oversized image data, and discard delayed pastes after navigation or focus loss.
+- Add generated-image regression tests that verify image pixels across separate
+  desktop processes, both clipboard directions, mixed content and plain-text paste.
+
+Close all Mini Browser windows and reopen the app after upgrading. Bookmarks,
+history, website sessions and the encrypted vault are preserved. Text copies are
+limited to 1 MiB and PNG images to 16 MiB and 32 megapixels. H.264/AAC remains
+available on Fedora 45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the
+stock CEF engine. Widevine/DRM is not included.
+
 ## 0.4.8 — November 6, 2026
 
 - Fix dropped website shortcuts such as Ctrl+I, Ctrl+K, Ctrl+P and Ctrl+Shift+C.

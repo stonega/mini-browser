@@ -143,18 +143,22 @@ Choose **About Mini Browser** in the same menu to see the app version and licens
 Website shortcuts work while the page has keyboard focus. Browser shortcuts
 listed under F1 keep their Mini Browser actions; other combinations, including
 Ctrl+I, Ctrl+K, Ctrl+P and Ctrl+Shift+C, go to the website. Tab and Shift+Tab move
-between page controls. Ctrl+C, Ctrl+X, Ctrl+V and Ctrl+Shift+V use the desktop text
-clipboard; paste inserts plain text.
+between page controls. Ctrl+C and Ctrl+X copy text to the desktop clipboard.
+Ctrl+V pastes text or an image into a page that accepts it; Ctrl+Shift+V pastes
+only plain text. Image paste works on HTTPS pages, local loopback pages and
+extension popups. Desktop images are converted to PNG for websites.
 
 Right-click a page to open its native context menu. It includes Back, Forward,
 Reload, Reload Without Cache, Select All, Copy Page Address, Bookmark App, page
 saving, printing, PDF export, page source, zoom and site permissions. Unavailable
 navigation and editing actions are disabled. Links and images/audio/video add their own
-open-in-new-window, copy-address and Save As actions. Selected text adds Copy and
+open-in-new-window, copy-address and Save As actions. Images also offer **Copy Image**,
+which copies the image itself to the desktop clipboard. Selected text adds Copy and
 Search Selected Text; editable fields offer Undo, Redo, Cut, Copy, Paste, Delete
-and Select All according to Chromium's edit state. Clipboard Paste inserts plain
-text. Page saving creates a self-contained `.mhtml` archive; PDF export uses the
-page's print layout. Print opens the system print dialog on GTK 4.14 or newer;
+and Select All according to Chromium's edit state. Clipboard Paste accepts text
+and images where the page supports them. Page saving creates a self-contained
+`.mhtml` archive; PDF export uses the page's print layout. Print opens the system
+print dialog on GTK 4.14 or newer;
 older GTK versions can use Save as PDF. Page Source shows the current document's
 HTML in a read-only native dialog. Opening and saving addresses supports HTTP and
 HTTPS.
@@ -201,8 +205,10 @@ reopening the popup keeps that storage. Extension-requested pages open in
 standalone windows while a popup from the same extension is open. Background
 settings and welcome pages are suppressed at startup; use **Open popup** to
 access an extension's interface.
-Copy buttons can write text to the native clipboard after a click in the active
-popup. Background clipboard writes and native clipboard reads are not exposed.
+Copy buttons can write text and PNG images to the native clipboard after a click
+in the active popup. Native Paste can supply a desktop image to a popup that accepts
+image pastes. Background clipboard writes and general native clipboard reads are
+not exposed.
 
 Each popup stays within its own extension origin. Website links open in ordinary
 browser windows, and pages from another extension are blocked. Popup pages are
@@ -297,10 +303,13 @@ DeepSeek keeps its own settings and sessions in its usual location (`~/.dsh`,
 or `DSH_HOME` when set). Mini Browser starts it from your home directory and does
 not delete that data. DeepSeek pages do not create website apps or history entries.
 
-Text Copy buttons work with GNOME's clipboard, including DeepSeek's local HTTP
+Text and PNG Copy buttons work with GNOME's clipboard, including DeepSeek's local HTTP
 page. Keep the page active and click its Copy button, then paste into another
 app normally. HTTPS and loopback HTTP support this; the local server does not
-need HTTPS. Pages cannot read the desktop clipboard through this integration.
+need HTTPS. Older text Copy buttons using `execCommand` also work on ordinary HTTP.
+Text is limited to 1 MiB and PNG images to 16 MiB and 32 megapixels. Mixed
+text/image copies preserve both. Pages cannot read the desktop clipboard through
+this integration without an explicit native Paste action.
 
 ## Phone apps
 

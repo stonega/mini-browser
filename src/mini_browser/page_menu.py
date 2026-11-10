@@ -83,6 +83,14 @@ class PageMenu:
                 agent_prompt(context, title=view.get_title(), page_id=view.identifier)
             )
             self.toast("Agent prompt copied")
+        elif action == "copy-image":
+            view.page_clipboard.copy_image(
+                context["source_url"],
+                context.get("frame_url") or context.get("page_url", ""),
+                lambda success: self.toast(
+                    "Image copied" if success else "Could not copy the image. Try Save Image As…"
+                ),
+            )
         elif action.startswith("copy-"):
             key = {"copy-page": "page_url", "copy-link": "link_url", "copy-media": "source_url"}
             view.get_clipboard().set(context.get(key[action], ""))

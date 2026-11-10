@@ -72,8 +72,12 @@ and TLS verification enabled; it has no insecure fallback.
 `./scripts/smoke --test=cef` checks the main application's rendered pixels,
 renderer sandbox, native input, resize, reload and live video frames. `./scripts/smoke --test=engine` verifies native upload/download, certificate
 rejection, both refresh actions, page Copy buttons reaching the native clipboard,
-and cookies/storage across a process restart. Clipboard checks use a real pointer
-click in the disposable desktop and synthetic text only. The default
+and cookies/storage across a process restart. Clipboard checks exercise `writeText`,
+`Clipboard.write`, legacy selection copies and custom copy handlers. Generated PNGs
+are copied to a separate GTK process and pasted from another process using real
+Ctrl+V input, checking pixel values, trusted file-paste events, normal editable
+insertion, mixed text/image data and Ctrl+Shift+V. All clipboard data is synthetic,
+and these checks run only in the disposable desktop. The default
 smoke suite also tests the Chromium-backed navigation, media and password flows.
 
 `./scripts/smoke --test=keyboard` injects native key combinations into a synthetic
@@ -113,8 +117,10 @@ the native Installed tab and additional `-market.png` and `-popup.png` images. T
 included in the default smoke suite.
 
 `./scripts/smoke --test=context` uses real secondary pointer clicks on synthetic
-pages to verify page, link, image, selection, editable-field and iframe menus;
-agent clipboard prompts; password-field exclusion; page/PDF export; native
+pages to verify page, link, image, selection, editable-field and iframe menus.
+Copy Image preserves the loaded image dimensions, and Paste accepts images in
+editable content. The checks also cover agent clipboard prompts; password-field
+exclusion; page/PDF export; native
 printing handoff (with a synthetic printer); downloads; and menu cleanup across
 navigation and window closure. It is included in the default smoke suite.
 
@@ -298,7 +304,7 @@ To build a local package instead:
 ```sh
 sudo dnf install rpm-build desktop-file-utils python3-cryptography ruff cmake ninja-build gcc-c++
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.8-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.9-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 
@@ -317,7 +323,7 @@ enabled target succeeds before announcing repository availability:
 
 ```sh
 ./scripts/build-rpm --source-only
-copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.8-1.fc45.src.rpm
+copr-cli build --nowait stonegate/mini-browser dist/mini-browser-0.4.9-1.fc45.src.rpm
 copr-cli list-builds stonegate/mini-browser
 ```
 

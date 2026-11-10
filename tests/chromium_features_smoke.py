@@ -21,7 +21,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from mini_browser.application import BrowserApplication
-from mini_browser.gtk import Gio, GLib
+from mini_browser.gtk import Gdk, Gio, GLib
+from mini_browser.page_clipboard import write_clipboard
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -36,10 +37,41 @@ class Handler(BaseHTTPRequestHandler):
                 b"<!doctype html><title>Engine fixture</title>"
                 b'<input type=file id=upload onchange="document.title=this.files[0].name">'
                 b'<button style="position:absolute;left:20px;top:80px;width:240px;height:40px" '
-                b"onclick=\"navigator.clipboard.writeText('synthetic page copy"
-                b"\\n\\u526a\\u8cbc\\u7c3f')"
-                b".then(()=>document.title='copy complete')"
-                b".catch(e=>document.title='copy failed:'+e.name)\">Copy text</button>"
+                b'onclick="copyText()">Copy text</button>'
+                b'<div id=imageEdit contenteditable style="position:absolute;top:150px;'
+                b'left:20px;width:250px;min-height:100px">Paste here</div>'
+                b"<script>let mode='writeText',pasted=null,interceptPaste=true;"
+                b"document.addEventListener('paste',async event=>{"
+                b"const file=event.clipboardData.files[0];if(!file)return;"
+                b"if(interceptPaste)event.preventDefault();const trusted=event.isTrusted;"
+                b"const image=await createImageBitmap(file);"
+                b"const canvas=document.createElement('canvas');"
+                b"canvas.width=image.width;canvas.height=image.height;"
+                b"const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);"
+                b"pasted={trusted,type:file.type,width:image.width,height:image.height,"
+                b"pixel:Array.from(ctx.getImageData(0,0,1,1).data)};});"
+                b"async function copyText(){try{"
+                b"const text='synthetic '+mode+' copy\\n\\u526a\\u8cbc\\u7c3f';"
+                b"if(mode==='writeText')await navigator.clipboard.writeText(text);"
+                b"else if(mode==='write')await navigator.clipboard.write([new ClipboardItem({"
+                b"'text/plain':new Blob([text],{type:'text/plain'}),"
+                b"'text/html':new Blob(['<b>rich copy</b>'],{type:'text/html'})})]);"
+                b"else if(['png','mixed'].includes(mode)){"
+                b"const canvas=document.createElement('canvas');canvas.width=3;canvas.height=2;"
+                b"const ctx=canvas.getContext('2d');ctx.fillStyle='#259baf';ctx.fillRect(0,0,3,2);"
+                b"const png=await new Promise(resolve=>canvas.toBlob(resolve));"
+                b"const content={'image/png':png};if(mode==='mixed')"
+                b"content['text/plain']=new Blob([text],{type:'text/plain'});"
+                b"await navigator.clipboard.write([new ClipboardItem(content)]);}"
+                b"else {const field=document.createElement('textarea');"
+                b"field.value=text;document.body.append(field);field.select();"
+                b"if(mode==='custom')document.addEventListener('copy',event=>{"
+                b"event.clipboardData.setData('text/plain',text+' custom handler');"
+                b"event.preventDefault();},{once:true});"
+                b"const copied=document.execCommand('copy');field.remove();"
+                b"if(!copied)throw new Error('copy denied');}"
+                b"document.title='copy complete';"
+                b"}catch(e){document.title='copy failed:'+e.name}}</script>"
             )
         )
         self.send_response(200)
@@ -163,6 +195,41 @@ def run(root, origin, secure=None, *, persistence_only=False):
         yield from wait("native clipboard", lambda: bool(copied))
         return copied[0]
 
+    def clipboard_image(window):
+        copied = []
+
+        def read_clipboard(clipboard, result):
+            copied.append(clipboard.read_texture_finish(result))
+
+        window.webview.get_clipboard().read_texture_async(None, read_clipboard)
+        yield from wait("native image clipboard", lambda: bool(copied))
+        return copied[0]
+
+    def paste_keys(window, *, plain=False):
+        pressed = []
+
+        def finished(connection, result):
+            connection.call_finish(result)
+            pressed.append(True)
+
+        keys = [Gdk.KEY_Control_L]
+        if plain:
+            keys.append(Gdk.KEY_Shift_L)
+        keys.append(Gdk.KEY_v)
+        app.get_dbus_connection().call(
+            "io.github.stone.MiniBrowser.TestPointer",
+            "/io/github/stone/MiniBrowser/TestPointer",
+            "io.github.stone.MiniBrowser.TestPointer",
+            "Keys",
+            GLib.Variant("(oau)", (window.pin.path, keys)),
+            None,
+            Gio.DBusCallFlags.NONE,
+            3000,
+            None,
+            finished,
+        )
+        yield from wait("real paste keys", lambda: bool(pressed))
+
     def scenario(window):
         window.load_uri(origin)
         yield from wait("page", lambda: not window.webview.is_loading())
@@ -191,10 +258,23 @@ def run(root, origin, secure=None, *, persistence_only=False):
                 window, "({secure:isSecureContext,clipboard:!!navigator.clipboard})"
             )
             assert capabilities == {"secure": True, "clipboard": True}, capabilities
-            yield from click_copy(window)
-            assert window.webview.get_title() == "copy complete", window.webview.get_title()
-            expected = "synthetic page copy\n剪貼簿"
-            assert (yield from clipboard_text(window)) == expected
+            for mode in ("writeText", "write", "legacy", "custom"):
+                yield from javascript(window, f"mode='{mode}';document.title='ready';true")
+                window.webview.get_clipboard().set("unchanged fixture clipboard")
+                yield from click_copy(window)
+                assert window.webview.get_title() == "copy complete", window.webview.get_title()
+                expected = f"synthetic {mode} copy\n剪貼簿"
+                if mode == "custom":
+                    expected += " custom handler"
+                # Legacy execCommand returns synchronously; the host write is asynchronous.
+                # Poll through the same GTK clipboard another desktop app reads.
+                deadline = time.monotonic() + 3
+                while time.monotonic() < deadline:
+                    actual = yield from clipboard_text(window)
+                    if actual == expected:
+                        break
+                    yield from wait("copy bridge", lambda: True)
+                assert actual == expected, (mode, actual)
             window.webview.page_clipboard.reset()
             denied = yield from javascript(
                 window, "navigator.clipboard.writeText('background').then(()=>true,e=>e.name)"
@@ -210,6 +290,87 @@ def run(root, origin, secure=None, *, persistence_only=False):
             yield from click_copy(window)
             assert window.webview.get_title() == "copy failed:NotAllowedError"
             assert (yield from clipboard_text(window)) == expected
+            window.load_uri(origin)
+            yield from wait("image clipboard page", lambda: not window.webview.is_loading())
+            for mode in ("png", "mixed"):
+                yield from javascript(window, f"mode='{mode}';document.title='ready';true")
+                yield from click_copy(window)
+                assert window.webview.get_title() == "copy complete", window.webview.get_title()
+                texture = yield from clipboard_image(window)
+                assert (texture.get_width(), texture.get_height()) == (3, 2)
+                pixel = Gdk.pixbuf_get_from_texture(texture).get_pixels()[:4]
+                assert pixel == bytes([37, 155, 175, 255]), pixel
+                external = subprocess.Popen(
+                    [sys.executable, str(Path(__file__).with_name("clipboard_helper.py")), "read"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                yield from wait(
+                    "another application reading the image",
+                    lambda external=external: external.poll() is not None,
+                )
+                output, diagnostics = external.communicate()
+                assert external.returncode == 0, diagnostics
+                assert output.strip(), diagnostics
+                assert json.loads(output) == {
+                    "width": 3,
+                    "height": 2,
+                    "pixel": [37, 155, 175, 255],
+                }, output
+                if mode == "mixed":
+                    assert (yield from clipboard_text(window)) == "synthetic mixed copy\n剪貼簿"
+                else:
+                    assert (yield from clipboard_text(window)) is None
+            # Simulate another desktop application supplying an image of a different size/color.
+            marker = root / "clipboard-supplier-ready"
+            supplier = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(Path(__file__).with_name("clipboard_helper.py")),
+                    "supply",
+                    str(marker),
+                ],
+            )
+            yield from wait("another application supplying the image", marker.exists)
+            yield from wait(
+                "desktop clipboard ownership transfer",
+                lambda: window.is_active() and not window.webview.get_clipboard().is_local(),
+            )
+            texture = yield from clipboard_image(window)
+            assert (texture.get_width(), texture.get_height()) == (5, 4), (
+                "external image dimensions"
+            )
+            for intercept in (True, False):
+                yield from javascript(
+                    window,
+                    "pasted=null;imageEdit.innerHTML='';imageEdit.focus();"
+                    f"interceptPaste={str(intercept).lower()};true",
+                )
+                yield from paste_keys(window)
+                deadline = time.monotonic() + 5
+                while not (pasted := (yield from javascript(window, "pasted"))):
+                    assert time.monotonic() < deadline, "image paste event"
+                assert pasted == {
+                    "trusted": True,
+                    "type": "image/png",
+                    "width": 5,
+                    "height": 4,
+                    "pixel": [7, 180, 61, 255],
+                }, pasted
+                if not intercept:
+                    assert (yield from javascript(window, "!!imageEdit.querySelector('img')"))
+            supplier.terminate()
+            supplier.wait(timeout=5)
+            write_clipboard(
+                window.webview.get_clipboard(),
+                "plain fallback",
+                texture.save_to_png_bytes().get_data(),
+            )
+            yield from javascript(window, "imageEdit.innerHTML='';imageEdit.focus();true")
+            yield from paste_keys(window, plain=True)
+            assert (yield from javascript(window, "imageEdit.innerText")) == "plain fallback"
+            assert not (yield from javascript(window, "!!imageEdit.querySelector('img')"))
             destination, upload = root / "download.txt", root / "upload.txt"
             upload.write_text("synthetic upload")
 
@@ -291,7 +452,8 @@ def main():
                 timeout=30,
             )
             print(
-                "PASS: page Copy to GTK clipboard, background/read/policy guards, "
+                "PASS: text/PNG clipboard copies, trusted native image paste, plain-text paste, "
+                "background/read/policy guards, "
                 "both refresh actions, native upload/download, TLS rejection, "
                 "cookies and local storage across restart",
                 flush=True,

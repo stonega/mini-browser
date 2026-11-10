@@ -37,6 +37,8 @@ def menu_groups(context):
                 Item(f"Save {media} As…", "save-media", is_web_url(source)),
             ]
         )
+        if media == "Image":
+            groups[-1].insert(1, Item("Copy Image", "copy-image"))
     native = []
     for item in context.get("items", []):
         if item.get("separator"):

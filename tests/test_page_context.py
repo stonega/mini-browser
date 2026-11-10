@@ -19,6 +19,7 @@ class PageContextTests(unittest.TestCase):
             self.assertFalse(items[action].enabled)
         self.assertTrue(items["copy-link"].enabled)
         self.assertTrue(items["copy-media"].enabled)
+        self.assertTrue(items["copy-image"].enabled)
         self.assertTrue(items["agent"].enabled)
 
     def test_editable_field_has_agent_and_native_edit_state_without_page_saving(self):

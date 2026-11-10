@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from mini_browser.application import BrowserApplication
-from mini_browser.gtk import Gio, GLib, Gtk
+from mini_browser.gtk import Gdk, Gio, GLib, GObject, Gtk
 from mini_browser.page_context import COPY, CUT, PASTE
 
 PAGE = b"""<!doctype html><title>Context fixture</title><style>
@@ -21,10 +21,12 @@ input {position:absolute;left:20px;top:100px;width:220px}
 #password {top:150px} a {position:absolute;left:20px;top:200px}
 img {position:absolute;left:20px;top:260px;width:100px;height:60px}
 iframe {position:absolute;left:20px;top:350px;width:240px;height:100px}
+#imageEdit {position:absolute;left:20px;top:500px;width:240px;min-height:100px}
+#imageEdit img {position:static;width:auto;height:auto}
 </style><p id=selection>Synthetic selected text</p><input id=edit value='Synthetic editable'>
 <input id=password type=password value='synthetic-secret'>
 <a href='/target'>Synthetic link</a><img src='/image.svg'>
-<iframe src='/frame'></iframe>"""
+<iframe src='/frame'></iframe><div id=imageEdit contenteditable>Paste image here</div>"""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -169,6 +171,21 @@ def run(root, origin):
         assert image.context["media_type"] == 1, image.context
         choose(image, "agent")
         assert f'"image_url": "{origin}image.svg"' in (yield from clipboard(view))
+        image = yield from menu(view, 60, 280)
+        choose(image, "copy-image")
+        yield from wait(
+            "image clipboard", lambda: view.get_clipboard().get_formats().contain_gtype(Gdk.Texture)
+        )
+        images = []
+
+        def image_ready(clipboard, result):
+            images.append(clipboard.read_texture_finish(result))
+
+        view.get_clipboard().read_texture_async(None, image_ready)
+        yield from wait("read copied image", lambda: bool(images))
+        texture = images[0]
+        assert (texture.get_width(), texture.get_height()) == (100, 60)
+        assert Gdk.pixbuf_get_from_texture(texture).get_pixels()[:4] == bytes([0, 128, 128, 255])
         yield from script(view, "document.querySelector('#edit').focus();edit.select();true")
         editable = yield from menu(view, 70, 110)
         assert editable.context["editable"]
@@ -185,7 +202,15 @@ def run(root, origin):
         deadline = time.monotonic() + 10
         while (yield from script(view, "edit.value")) != "Pasted synthetic text":
             assert time.monotonic() < deadline, "paste completed"
-        yield from script(view, "password.focus();password.select();true")
+        view.get_clipboard().set(GObject.Value(Gdk.Texture, texture))
+        yield from script(view, "imageEdit.innerHTML='';imageEdit.focus();true")
+        editable = yield from menu(view, 70, 520)
+        choose(editable, PASTE)
+        deadline = time.monotonic() + 5
+        while not (yield from script(view, "!!imageEdit.querySelector('img')")):
+            assert time.monotonic() < deadline, "context-menu image paste"
+        assert (yield from script(view, "imageEdit.querySelector('img').naturalWidth")) == 100
+        yield from script(view, "scrollTo(0,0);password.focus();password.select();true")
         password_menu = yield from menu(view, 70, 160)
         assert not password_menu.context.get("selection"), password_menu.context
         assert not password_menu.buttons[COPY].get_sensitive()
