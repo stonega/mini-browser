@@ -96,14 +96,19 @@ def run():
                     assert launched.stack.get_visible_child_name() == "script-loading"
                     assert launched._script_pending
                     loading = launched.script_loading
-                    assert loading.output.get_text() == "▌"
+                    assert loading.text == "▌"
                     assert loading.output.has_css_class("monospace")
                     assert not any(
                         isinstance(widget, (Gtk.Spinner, Gtk.Frame)) for widget in widgets(loading)
                     )
                     assert [
                         widget for widget in widgets(loading) if isinstance(widget, Gtk.Label)
-                    ] == [loading.output]
+                    ] == loading.rows
+                    assert len(loading.rows) == 3
+                    assert all(row.get_wrap() for row in loading.rows)
+                    assert all(
+                        row.get_justify() == Gtk.Justification.CENTER for row in loading.rows
+                    )
                     assert launched.get_title() == "DeepSeek Harness"
                     assert first.stack.get_visible_child_name() == "home"
                     launched._test_paintable = Gtk.WidgetPaintable.new(launched)
@@ -114,9 +119,9 @@ def run():
                 elif phase == 12:
                     launched = state["first"]
                     loading = launched.script_loading
-                    output = loading.output.get_text()
+                    output = loading.text
                     assert "private-fixture-token" not in output
-                    if 1 < len(output) < len(loading._target):
+                    if "Installing synthetic package" in output and "[redacted]" not in output:
                         state["typed"] = True
                         assert output.endswith("▌")
                     if "[redacted]" not in output:
@@ -125,7 +130,7 @@ def run():
                     assert "Installing synthetic package" in output
                     assert "[redacted]" in output
                     assert output[-1] in {"▌", "\u00a0"}
-                    valid, bounds = loading.scroll.compute_bounds(loading)
+                    valid, bounds = loading.lines.compute_bounds(loading)
                     assert valid
                     assert (
                         abs(bounds.get_y() + bounds.get_height() / 2 - loading.get_height() / 2) < 2
@@ -140,7 +145,7 @@ def run():
                     state["ready"] = time.monotonic() + 0.6
                     state["phase"] = 13
                 elif phase == 13 and time.monotonic() >= state["ready"]:
-                    output = state["first"].script_loading.output.get_text()
+                    output = state["first"].script_loading.text
                     assert output[-1] != state["cursor"], "The end cursor must blink while idle"
                     if len(sys.argv) > 1:
                         target = Path(sys.argv[1])
@@ -149,7 +154,7 @@ def run():
                 elif phase == 2 and loaded(state["first"]) and loaded(state["second"]):
                     for window in (state["first"], state["second"]):
                         assert window.script_loading._animation_source == 0
-                        assert window.script_loading.output.get_text() == ""
+                        assert window.script_loading.text == ""
                         assert window._script_log_source == 0
                     assert len(runs(helpers)) == 1, "DeepSeek windows must share one server"
                     assert app.library.search("history") == []
@@ -221,7 +226,7 @@ def run():
                     cancelled.close()
                     assert cancelled._script_owner is None
                     assert cancelled._script_log_source == 0
-                    assert cancelled.script_loading.output.get_text() == ""
+                    assert cancelled.script_loading.text == ""
                     assert cancelled.script_loading._animation_source == 0
                     state["phase"] = 9
                 elif phase == 9 and not any(running(item["pid"]) for item in runs(helpers)):

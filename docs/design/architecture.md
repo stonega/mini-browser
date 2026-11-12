@@ -343,10 +343,12 @@ CLI package and metadata are reused from npm's cache when available, avoiding a
 registry check on every launch; npm still downloads missing dependencies. The official
 `dsh web:` announcement provides the authenticated startup URL; only loopback
 root URLs are accepted. Output is continuously drained. Each tile click opens
-a separate browser window immediately, displaying only a centered monospace startup
-log with a typing animation and blinking end cursor until the server announces
-readiness. The borderless log scrolls as it grows; animation catches up with bursts
-and stops and clears on every exit from loading. The worker retains at most 80 sanitized
+a separate browser window immediately, displaying only a monospace startup log
+with a typing animation and blinking end cursor until the server announces
+readiness. The log keeps the newest three lines in separate labels, wraps long
+lines to the window, and reveals each new line through a brief blur; there is no
+scroller or scrollbar. Animation catches up with bursts and stops and clears on
+every exit from loading. The worker retains at most 80 sanitized
 lines of 1,000 characters; GTK polls snapshots every 100 ms so verbose output
 cannot flood the main loop. Terminal escape sequences, common credential fields
 and URL query parameters are removed or redacted before display. The log is

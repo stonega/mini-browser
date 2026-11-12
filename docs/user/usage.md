@@ -285,11 +285,12 @@ Open **DeepSeek Harness** under **Apps** to start its local web server
 and open it inside Mini Browser. The tile uses DeepSeek's official whale icon.
 Node.js and npm's `npx` must be available on the desktop session's PATH. On first
 launch, npx downloads the official package; starting it can take a few minutes.
-The tile immediately opens a separate window with a centered monospace startup
-log, a typing animation, and a blinking cursor at the end. Longer logs scroll
-to the newest output. When the server is ready, the app opens in that same
-window. Startup output stays in memory only; common credential fields and URL
-query parameters are redacted. Closing the loading window cancels its launch.
+The tile immediately opens a separate window with a monospace startup log
+that keeps only the newest three lines. Long lines wrap to the window, new
+lines blur into focus, and a typing animation ends with a blinking cursor.
+When the server is ready, the app opens in that same window. Startup output
+stays in memory only; common credential fields and URL query parameters are
+redacted. Closing the loading window cancels its launch.
 Configure models and choose a workspace in DeepSeek's own interface.
 
 DeepSeek windows share one server. Returning Home, navigating to another site,
