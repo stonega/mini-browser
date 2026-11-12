@@ -30,9 +30,8 @@ See [agent commands, Codex setup and UI testing](docs/user/agents.md).
 Save a Home tile with `mini-browser agent add-app https://example.com --title 'Example'`.
 
 Built with Python, GTK 4, libadwaita, and sandboxed Chromium (CEF).
-Version 0.4.9 fixes website Copy buttons and adds image clipboard support in both
-directions, including **Copy Image**, native image paste, mixed text/image copies,
-and **Ctrl+Shift+V** plain-text paste.
+Version 0.4.10 keeps only the newest three lines of a script app's startup log,
+centers and wraps them, and blurs each new line into focus without a scrollbar.
 H.264/AAC playback remains available on Fedora 45+ x86_64.
 
 ## Fedora RPM
@@ -51,7 +50,7 @@ Or build and install the native system package locally:
 
 ```sh
 ./scripts/build-rpm
-sudo dnf install ./dist/mini-browser-0.4.9-1.fc45.x86_64.rpm
+sudo dnf install ./dist/mini-browser-0.4.10-1.fc45.x86_64.rpm
 /usr/bin/mini-browser
 ```
 

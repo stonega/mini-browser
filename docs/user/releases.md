@@ -1,5 +1,20 @@
 # Release notes
 
+## 0.4.10 — November 12, 2026
+
+- Replace the scrolling startup transcript with the newest three log lines.
+  Each line is a centered label that wraps long output to the window instead
+  of clipping it at the edge.
+- Reveal every new line through a short blur that sharpens into focus, keeping
+  the typing animation and blinking end cursor.
+- Drop the loading scrollbar; redaction, cancellation, failure, retry and
+  shared-server behaviour stay unchanged.
+
+Close all Mini Browser windows and reopen the app after upgrading. Bookmarks,
+history, website sessions and the encrypted vault are preserved. H.264/AAC remains
+available on Fedora 45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the
+stock CEF engine. Widevine/DRM is not included.
+
 ## 0.4.9 — November 10, 2026
 
 - Fix page Copy buttons that reported success without updating the desktop
