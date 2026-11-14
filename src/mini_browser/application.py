@@ -102,6 +102,12 @@ class BrowserApplication(Adw.Application):
                 box-shadow: none;
             }
             .phone-screen { background: black; }
+            popover.page-context-menu > contents { padding: 4px; }
+            popover.page-context-menu button {
+                min-height: 20px;
+                padding: 2px 8px;
+                font-weight: normal;
+            }
         """)
         Gtk.StyleContext.add_provider_for_display(
             Gdk.Display.get_default(), styles, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION

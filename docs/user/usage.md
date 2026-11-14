@@ -148,9 +148,10 @@ Ctrl+V pastes text or an image into a page that accepts it; Ctrl+Shift+V pastes
 only plain text. Image paste works on HTTPS pages, local loopback pages and
 extension popups. Desktop images are converted to PNG for websites.
 
-Right-click a page to open its native context menu. It includes Back, Forward,
-Reload, Reload Without Cache, Select All, Copy Page Address, Bookmark App, page
-saving, printing, PDF export, page source, zoom and site permissions. Unavailable
+Right-click a page to open its compact native context menu without an arrow.
+It includes Back, Forward, Reload, Reload Without Cache, Select All, Copy Page
+Address, Bookmark App, page saving, printing, PDF export, page source, zoom and
+site permissions. Unavailable
 navigation and editing actions are disabled. Links and images/audio/video add their own
 open-in-new-window, copy-address and Save As actions. Images also offer **Copy Image**,
 which copies the image itself to the desktop clipboard. Selected text adds Copy and

@@ -14,11 +14,11 @@ class PageMenu:
         self.generation = view.generation
         self.answered = False
         self.buttons = {}
-        self.popover = Gtk.Popover()
+        self.popover = Gtk.Popover(has_arrow=False, css_classes=["page-context-menu"])
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         for index, group in enumerate(menu_groups(context)):
             if index:
-                box.append(Gtk.Separator(margin_top=4, margin_bottom=4))
+                box.append(Gtk.Separator(margin_top=3, margin_bottom=3))
             for item in group:
                 button = Gtk.Button(label=item.label, css_classes=["flat"])
                 button.get_child().set_xalign(0)

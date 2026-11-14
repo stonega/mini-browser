@@ -580,7 +580,9 @@ pinned input; native-library loading is checked in each buildroot before packagi
 
 `page_context.py` builds contextual choices and agent prompts without GTK.
 CEF's context-menu handler supplies hit-test URLs, selected text, edit flags and
-native command IDs to `page_menu.py`, which presents a scrollable GTK popover.
+native command IDs to `page_menu.py`, which presents a scrollable GTK popover
+without an arrow. Scoped CSS keeps its rows and padding compact, with regular-weight
+labels and small gaps between action groups.
 CEF retains only its custom-menu continuation, not context parameter/model
 references. Commands return through that continuation to preserve the originating
 frame for editing; desktop Copy/Cut use the permitted selection snapshot and
