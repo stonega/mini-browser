@@ -1,5 +1,16 @@
 # Release notes
 
+## 0.4.11 — November 14, 2026
+
+- Make page context menus more compact with shorter rows, smaller padding,
+  and tighter gaps between action groups.
+- Remove the popover arrow and use regular-weight labels.
+
+Close all Mini Browser windows and reopen the app after upgrading. Bookmarks,
+history, website sessions and the encrypted vault are preserved. H.264/AAC remains
+available on Fedora 45 and Rawhide x86_64; Fedora 43/44 and aarch64 retain the
+stock CEF engine. Widevine/DRM is not included.
+
 ## 0.4.10 — November 12, 2026
 
 - Replace the scrolling startup transcript with the newest three log lines.

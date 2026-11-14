@@ -1,5 +1,5 @@
 Name:           mini-browser
-Version:        0.4.10
+Version:        0.4.11
 Release:        1%{?dist}
 Summary:        A small native GNOME web browser
 License:        GPL-3.0-or-later AND Apache-2.0 AND BSD-3-Clause AND MIT AND BSD-2-Clause AND IJG AND Zlib
@@ -158,6 +158,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.stone.MiniB
 %{_datadir}/gnome-shell/extensions/mini-browser-pin@io.github.stone/
 
 %changelog
+* Sat Nov 14 2026 Mini Browser contributors - 0.4.11-1
+- Make page context menus compact with tighter rows and action-group spacing.
+- Remove the popover arrow and use regular-weight menu labels.
+
 * Thu Nov 12 2026 Mini Browser contributors - 0.4.10-1
 - Show the newest three script startup log lines with wrapped, centered text.
 - Blur each new log line into focus and drop the loading scrollbar.
